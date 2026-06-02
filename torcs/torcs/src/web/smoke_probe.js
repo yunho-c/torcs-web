@@ -22,6 +22,7 @@ createModule()
 			track: module.ccall("torcs_web_get_module_name", "string", ["string"], ["track"]),
 			fps: module.ccall("torcs_web_get_capture_fps", "number", [], []),
 			staticModuleRegistry: module.ccall("torcs_web_check_static_module_registry", "number", [], []),
+			trackModule: module.ccall("torcs_web_check_track_module", "number", [], []),
 		};
 
 		console.log(JSON.stringify(result));
@@ -32,7 +33,8 @@ createModule()
 			result.simu !== "simuv2" ||
 			result.track !== "track" ||
 			result.fps !== 25 ||
-			result.staticModuleRegistry !== 0
+			result.staticModuleRegistry !== 0 ||
+			result.trackModule !== 0
 		) {
 			fail("TORCS WASM probe smoke test failed", result);
 		}

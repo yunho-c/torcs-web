@@ -38,6 +38,9 @@ Emscripten shell. The initial scaffold in this repository builds:
 - `torcs_txml`: the XML parser sources from `src/libs/txml`.
 - `torcs_tgf`: parameter, directory, module facade, logging, profiler, and hash
   support from `src/libs/tgf`.
+- `torcs_robottools`: the `rttrack.cpp` geometry helpers needed by the track
+  loader interface.
+- `torcs_track`: the real track loader module sources from `src/modules/track`.
 - `torcs_web_probe`: a tiny executable in `src/web` that preloads
   `raceengine.xml` and verifies `GfParmReadFile()`, `GfParmGetStr()`, and
   `GfParmGetNum()` in Emscripten's virtual filesystem.
@@ -58,9 +61,11 @@ functions via `ccall`/`cwrap`. The `torcs_web_probe_smoke` target runs
 `src/web/smoke_probe.js` from the generated output directory. The smoke test now
 also verifies the browser static module provider by resolving a linked probe
 module through `GfModInfo()` and `GfModLoad()` instead of native `dlopen()`.
-Use the same working-directory rule, or configure `locateFile` in browser code,
-because the generated JavaScript loads the `.wasm` and `.data` files relative to
-the current runtime location.
+It also registers the real `track(tModInfo*)` entry point and verifies that its
+`tTrackItf` function table initializes inside WASM. Use the same
+working-directory rule, or configure `locateFile` in browser code, because the
+generated JavaScript loads the `.wasm` and `.data` files relative to the current
+runtime location.
 
 On this macOS/Homebrew setup, `EMSDK_PYTHON` avoids the system Python 3.9
 interpreter and `EM_CACHE` avoids writes to the read-only Homebrew Emscripten
@@ -75,9 +80,9 @@ symbols instead of filesystem shared libraries. The initial provider lives in
 `GfOs` module callbacks. This preserves the public `GfModInfo()` and
 `GfModLoad()` APIs while replacing the browser-hostile platform implementation.
 
-The first production registry should expose:
+The registry now exposes `track(tModInfo*)` from `src/modules/track`. The next
+production entries should expose:
 
-- `track(tModInfo*)` from `src/modules/track`.
 - `simuv2(tModInfo*)` from `src/modules/simu/simuv2`.
 - One simple AI driver module, then the human driver once browser input exists.
 

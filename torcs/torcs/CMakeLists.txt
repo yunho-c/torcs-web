@@ -7,16 +7,29 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(TORCS_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
+set(TORCS_GENERATED_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/include")
+
+file(MAKE_DIRECTORY "${TORCS_GENERATED_INCLUDE_DIR}/tmath")
+foreach(TORCS_MATH_HEADER linalg_t.h straight2_t.h v2_t.h v3_t.h v4_t.h)
+	configure_file(
+		"${TORCS_ROOT}/src/libs/math/${TORCS_MATH_HEADER}"
+		"${TORCS_GENERATED_INCLUDE_DIR}/tmath/${TORCS_MATH_HEADER}"
+		COPYONLY
+	)
+endforeach()
 
 function(torcs_common_includes target)
 	target_include_directories(${target}
 		PUBLIC
+			"${TORCS_GENERATED_INCLUDE_DIR}"
 			"${TORCS_ROOT}"
 			"${TORCS_ROOT}/src/interfaces"
 			"${TORCS_ROOT}/src/libs/portability"
+			"${TORCS_ROOT}/src/libs/robottools"
 			"${TORCS_ROOT}/src/libs/tgf"
 			"${TORCS_ROOT}/src/libs/txml"
 			"${TORCS_ROOT}/src/linux"
+			"${TORCS_ROOT}/src/windows/include"
 	)
 	target_compile_definitions(${target} PUBLIC HAVE_CONFIG_H)
 endfunction()
@@ -43,11 +56,27 @@ add_library(torcs_tgf STATIC
 torcs_common_includes(torcs_tgf)
 target_link_libraries(torcs_tgf PUBLIC torcs_txml)
 
+add_library(torcs_robottools STATIC
+	src/libs/robottools/rttrack.cpp
+)
+torcs_common_includes(torcs_robottools)
+target_link_libraries(torcs_robottools PUBLIC torcs_tgf)
+
+add_library(torcs_track STATIC
+	src/modules/track/track.cpp
+	src/modules/track/trackitf.cpp
+	src/modules/track/trackutil.cpp
+	src/modules/track/track3.cpp
+	src/modules/track/track4.cpp
+)
+torcs_common_includes(torcs_track)
+target_link_libraries(torcs_track PUBLIC torcs_tgf torcs_robottools)
+
 add_executable(torcs_web_probe
 	src/web/torcs_web_platform.cpp
 	src/web/torcs_web_probe.cpp
 )
-target_link_libraries(torcs_web_probe PRIVATE torcs_tgf)
+target_link_libraries(torcs_web_probe PRIVATE torcs_tgf torcs_track)
 
 if(EMSCRIPTEN)
 	target_link_options(torcs_web_probe
@@ -57,7 +86,7 @@ if(EMSCRIPTEN)
 			"-sMODULARIZE=1"
 			"-sEXPORT_NAME=TorcsWebProbe"
 			"-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap']"
-			"-sEXPORTED_FUNCTIONS=['_main','_torcs_web_probe','_torcs_web_get_module_name','_torcs_web_get_capture_fps','_torcs_web_check_static_module_registry']"
+			"-sEXPORTED_FUNCTIONS=['_main','_torcs_web_probe','_torcs_web_get_module_name','_torcs_web_get_capture_fps','_torcs_web_check_static_module_registry','_torcs_web_check_track_module']"
 	)
 	set_target_properties(torcs_web_probe PROPERTIES SUFFIX ".js")
 

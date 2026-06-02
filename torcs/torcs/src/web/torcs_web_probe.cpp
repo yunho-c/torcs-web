@@ -26,6 +26,7 @@
 #endif
 
 #include <tgf.h>
+#include <track.h>
 
 #include "torcs_web_platform.h"
 
@@ -33,6 +34,8 @@ static const char *RaceEngineConfig = "/torcs/config/raceengine.xml";
 static const char *ModulesSection = "Modules";
 static const char *MovieCaptureSection = "Movie Capture";
 static void *RaceEngineHandle = NULL;
+
+extern "C" int track(tModInfo *modInfo);
 
 static int
 webProbeModuleInit(int /* index */, void * /* moduleInfo */)
@@ -57,7 +60,8 @@ initWebProbe(void)
 {
 	static int initialized = 0;
 	static const tTorcsWebModule WebModules[] = {
-		{ "web_probe_module", web_probe_module }
+		{ "web_probe_module", web_probe_module },
+		{ "track", track }
 	};
 
 	if (!initialized) {
@@ -150,6 +154,44 @@ torcs_web_check_static_module_registry(void)
 	}
 
 	GfModUnloadList(&loadList);
+	return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int
+torcs_web_check_track_module(void)
+{
+	tModList *infoList = NULL;
+	tTrackItf trackItf;
+	char moduleName[] = "track.so";
+
+	initWebProbe();
+
+	if (GfModInfo(TRK_IDENT, moduleName, &infoList) < 0 || !infoList) {
+		return -1;
+	}
+
+	memset(&trackItf, 0, sizeof(trackItf));
+
+	if (!infoList->modInfo[0].name ||
+		strcmp(infoList->modInfo[0].name, "trackv1") != 0 ||
+		infoList->modInfo[0].gfId != TRK_IDENT ||
+		!infoList->modInfo[0].fctInit ||
+		infoList->modInfo[0].fctInit(0, &trackItf) != 0 ||
+		!trackItf.trkBuild ||
+		!trackItf.trkBuildEx ||
+		!trackItf.trkHeightG ||
+		!trackItf.trkHeightL ||
+		!trackItf.trkGlobal2Local ||
+		!trackItf.trkLocal2Global ||
+		!trackItf.trkSideNormal ||
+		!trackItf.trkSurfaceNormal ||
+		!trackItf.trkShutdown) {
+		GfModFreeInfoList(&infoList);
+		return -1;
+	}
+
+	GfModFreeInfoList(&infoList);
 	return 0;
 }
 
