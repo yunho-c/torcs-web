@@ -46,9 +46,10 @@ Emscripten shell. The initial scaffold in this repository builds:
 - `torcs_simuv2`: the real simulation module sources from
   `src/modules/simu/simuv2`.
 - `torcs_web_probe`: a tiny executable in `src/web` that preloads
-  `raceengine.xml`, E-Track 1, and the shared track surface/object entity files,
-  then verifies `GfParmReadFile()`, `GfParmGetStr()`, and `GfParmGetNum()` in
-  Emscripten's virtual filesystem.
+  `raceengine.xml`, E-Track 1, `g-track-1` (CG Speedway number 1), two car XML
+  files, and the shared track surface/object entity files, then verifies
+  `GfParmReadFile()`, `GfParmGetStr()`, and `GfParmGetNum()` in Emscripten's
+  virtual filesystem.
 
 Build command:
 
@@ -82,11 +83,13 @@ the loaded track, exercising the simulator and collision setup path. The smoke
 path also preloads the `kc-2000gt` car XML, configures one car on E-Track 1,
 runs one fixed `RCM_MAX_DT_SIMU` update, and validates the resulting car state.
 The probe also exposes a small persistent runtime API so browser JavaScript can
-start the one-car headless session, set controls, step simulation time, read
-time/position/yaw/speed/fuel/drivetrain snapshots, read car dimensions and body
-corners, read local track-position scalars, read one-car race progress
-telemetry, sample the loaded track's center/right/left boundaries for browser
-rendering, and shut the session down without using raw TORCS pointers.
+start the one-car headless session with default paths or explicit preloaded
+track/car XML paths, set controls, step simulation time, read selected
+track/car names, read time/position/yaw/speed/fuel/drivetrain snapshots, read
+car dimensions and body corners, read local track-position scalars, read
+one-car race progress telemetry, sample the loaded track's center/right/left
+boundaries for browser rendering, and shut the session down without using raw
+TORCS pointers.
 Drivetrain telemetry currently includes active gear, engine revs, engine
 redline, and per-wheel spin/slip scalars. Local track-position telemetry
 currently includes segment id/type, `toStart`, `toRight`, `toMiddle`, and
@@ -99,8 +102,9 @@ geometry, mirrors keyboard driving input into the same control path as the
 sliders, and shows the live drivetrain, track-position, and race-progress
 fields. The Node smoke path also runs a short first-gear full-throttle segment
 to verify that the browser control defaults can move the simulated car and
-advance distance-raced telemetry. Use the same working-directory rule, or
-configure
+advance distance-raced telemetry, and starts a separate `g-track-1`/A110
+session through the path-based API to validate selectable runtime startup. Use
+the same working-directory rule, or configure
 `locateFile` in browser code, because the generated JavaScript loads the
 `.wasm` and `.data` files relative to the current runtime location.
 
@@ -133,11 +137,10 @@ browser-hostile dependency on `dlopen()`.
 
 Compile enough of `raceengineclient`, `track`, `robottools`, `simuv2`, SOLID,
 and car/track data to run a scripted race without graphics. The current scaffold
-can load E-Track 1, configure one `kc-2000gt`, and execute one headless `simuv2`
-update through exported start/control/step/snapshot functions. The next
-browser-facing API should expose:
+can load E-Track 1 or `g-track-1`, configure one preloaded car XML, and execute
+one headless `simuv2` update through exported start/control/step/snapshot
+functions. The next browser-facing API should expose:
 
-- configurable race/track/car selection
 - multi-car loading and driver selection
 - broader snapshots of `tSituation`, car transforms, wheel state, and race
   events

@@ -154,6 +154,16 @@
 			padding: 0 10px;
 		}
 
+		select {
+			width: 100%;
+			min-height: 38px;
+			border: 1px solid var(--line);
+			border-radius: 4px;
+			background: #0f120e;
+			color: var(--ink);
+			padding: 0 10px;
+		}
+
 		.telemetry {
 			display: grid;
 			grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -288,6 +298,21 @@
 			</div>
 
 			<label>
+				Track
+				<select id="track-select">
+					<option value="/torcs/data/tracks/e-track-1/e-track-1.xml">E-Track 1</option>
+					<option value="/torcs/data/tracks/g-track-1/g-track-1.xml">CG Speedway 1</option>
+				</select>
+			</label>
+			<label>
+				Car
+				<select id="car-select">
+					<option value="/torcs/data/cars/models/kc-2000gt/kc-2000gt.xml">kc-2000gt</option>
+					<option value="/torcs/data/cars/models/kc-a110/kc-a110.xml">kc-a110</option>
+				</select>
+			</label>
+
+			<label>
 				Steer
 				<input id="steer" type="range" min="-1" max="1" step="0.01" value="0">
 			</label>
@@ -346,6 +371,8 @@
 			step: document.getElementById("step"),
 			run: document.getElementById("run"),
 			shutdown: document.getElementById("shutdown"),
+			trackSelect: document.getElementById("track-select"),
+			carSelect: document.getElementById("car-select"),
 			steer: document.getElementById("steer"),
 			accel: document.getElementById("accel"),
 			brake: document.getElementById("brake"),
@@ -751,7 +778,12 @@
 		}
 
 		async function startRuntime() {
-			const rc = call("torcs_web_runtime_start", "number");
+			const rc = call(
+				"torcs_web_runtime_start_with_files",
+				"number",
+				["string", "string"],
+				[els.trackSelect.value, els.carSelect.value],
+			);
 			active = rc === 0;
 			running = false;
 			els.run.textContent = "Run";

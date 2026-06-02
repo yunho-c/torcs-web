@@ -33,7 +33,8 @@
 #include "torcs_web_platform.h"
 
 static const char *RaceEngineConfig = "/torcs/config/raceengine.xml";
-static const char *CarConfig = "/torcs/data/cars/models/kc-2000gt/kc-2000gt.xml";
+static const char *DefaultTrackConfig = "/torcs/data/tracks/e-track-1/e-track-1.xml";
+static const char *DefaultCarConfig = "/torcs/data/cars/models/kc-2000gt/kc-2000gt.xml";
 static const char *ModulesSection = "Modules";
 static const char *MovieCaptureSection = "Movie Capture";
 static void *RaceEngineHandle = NULL;
@@ -129,8 +130,46 @@ loadRaceEngineConfig(void)
 	return RaceEngineHandle;
 }
 
+static const char *
+fallbackPath(const char *path, const char *fallback)
+{
+	return path && path[0] != '\0' ? path : fallback;
+}
+
+static void
+copyModelNameFromPath(const char *path, char *name, size_t nameSize, const char *fallback)
+{
+	const char *start;
+	const char *slash;
+	const char *backslash;
+	const char *dot;
+	size_t len;
+
+	if (!name || nameSize == 0) {
+		return;
+	}
+
+	start = fallbackPath(path, fallback);
+	slash = strrchr(start, '/');
+	backslash = strrchr(start, '\\');
+	if (slash && (!backslash || slash > backslash)) {
+		start = slash + 1;
+	} else if (backslash) {
+		start = backslash + 1;
+	}
+
+	dot = strrchr(start, '.');
+	len = dot && dot > start ? (size_t)(dot - start) : strlen(start);
+	if (len >= nameSize) {
+		len = nameSize - 1;
+	}
+
+	memcpy(name, start, len);
+	name[len] = '\0';
+}
+
 static int
-positionCarOnTrack(tCarElt *car, tTrack *track)
+positionCarOnTrack(tCarElt *car, tTrack *track, const char *carName)
 {
 	tTrackSeg *seg;
 
@@ -141,7 +180,8 @@ positionCarOnTrack(tCarElt *car, tTrack *track)
 	memset(car, 0, sizeof(*car));
 	car->index = 0;
 	strcpy(car->_name, "webprobe");
-	strcpy(car->_carName, "kc-2000gt");
+	strncpy(car->_carName, carName && carName[0] != '\0' ? carName : "kc-2000gt", MAX_NAME_LEN - 1);
+	car->_carName[MAX_NAME_LEN - 1] = '\0';
 	car->_skillLevel = 0;
 	car->_speed_x = 0.0f;
 	car->_commitBestLapTime = true;
@@ -602,6 +642,7 @@ torcs_web_check_headless_sim_update(void)
 	tCarElt *cars[1];
 	tSituation situation;
 	tRmInfo reInfo;
+	char carName[MAX_NAME_LEN];
 	char trackModuleName[] = "track.so";
 	char simModuleName[] = "simuv2.so";
 	char trackFile[] = "/torcs/data/tracks/e-track-1/e-track-1.xml";
@@ -631,12 +672,13 @@ torcs_web_check_headless_sim_update(void)
 	}
 
 	trackData = trackItf.trkBuild(trackFile);
-	carHandle = GfParmReadFile(CarConfig, GFPARM_RMODE_STD | GFPARM_RMODE_REREAD);
+	carHandle = GfParmReadFile(DefaultCarConfig, GFPARM_RMODE_STD | GFPARM_RMODE_REREAD);
 	if (!trackData || !trackData->seg || !carHandle) {
 		goto cleanup;
 	}
 
-	if (positionCarOnTrack(&car, trackData) != 0) {
+	copyModelNameFromPath(DefaultCarConfig, carName, sizeof(carName), "kc-2000gt");
+	if (positionCarOnTrack(&car, trackData, carName) != 0) {
 		goto cleanup;
 	}
 	car._carHandle = carHandle;
@@ -691,11 +733,13 @@ cleanup:
 
 EMSCRIPTEN_KEEPALIVE
 int
-torcs_web_runtime_start(void)
+torcs_web_runtime_start_with_files(const char *trackFile, const char *carFile)
 {
 	char trackModuleName[] = "track.so";
 	char simModuleName[] = "simuv2.so";
-	char trackFile[] = "/torcs/data/tracks/e-track-1/e-track-1.xml";
+	char carName[MAX_NAME_LEN];
+	const char *selectedTrackFile = fallbackPath(trackFile, DefaultTrackConfig);
+	const char *selectedCarFile = fallbackPath(carFile, DefaultCarConfig);
 
 	shutdownRuntime();
 	initWebProbe();
@@ -720,10 +764,11 @@ torcs_web_runtime_start(void)
 		return -1;
 	}
 
-	Runtime.trackData = Runtime.trackItf.trkBuild(trackFile);
-	Runtime.carHandle = GfParmReadFile(CarConfig, GFPARM_RMODE_STD | GFPARM_RMODE_REREAD);
+	Runtime.trackData = Runtime.trackItf.trkBuild((char *)selectedTrackFile);
+	Runtime.carHandle = GfParmReadFile(selectedCarFile, GFPARM_RMODE_STD | GFPARM_RMODE_REREAD);
+	copyModelNameFromPath(selectedCarFile, carName, sizeof(carName), "kc-2000gt");
 	if (!Runtime.trackData || !Runtime.trackData->seg || !Runtime.carHandle ||
-		positionCarOnTrack(&(Runtime.car), Runtime.trackData) != 0) {
+		positionCarOnTrack(&(Runtime.car), Runtime.trackData, carName) != 0) {
 		shutdownRuntime();
 		return -1;
 	}
@@ -748,6 +793,13 @@ torcs_web_runtime_start(void)
 	Runtime.active = 1;
 	initRuntimeRaceProgress();
 	return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int
+torcs_web_runtime_start(void)
+{
+	return torcs_web_runtime_start_with_files(DefaultTrackConfig, DefaultCarConfig);
 }
 
 EMSCRIPTEN_KEEPALIVE
@@ -806,6 +858,20 @@ double
 torcs_web_runtime_get_time(void)
 {
 	return Runtime.active ? Runtime.situation.currentTime : 0.0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+const char *
+torcs_web_runtime_get_track_name(void)
+{
+	return Runtime.active && Runtime.trackData && Runtime.trackData->name ? Runtime.trackData->name : "";
+}
+
+EMSCRIPTEN_KEEPALIVE
+const char *
+torcs_web_runtime_get_car_name(void)
+{
+	return Runtime.active ? Runtime.car._carName : "";
 }
 
 EMSCRIPTEN_KEEPALIVE

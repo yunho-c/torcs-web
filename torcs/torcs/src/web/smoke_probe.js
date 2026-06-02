@@ -26,6 +26,8 @@ createModule()
 		);
 		runtime.step = module.ccall("torcs_web_runtime_step", "number", ["number"], [1 / 60]);
 		runtime.time = module.ccall("torcs_web_runtime_get_time", "number", [], []);
+		runtime.trackName = module.ccall("torcs_web_runtime_get_track_name", "string", [], []);
+		runtime.carName = module.ccall("torcs_web_runtime_get_car_name", "string", [], []);
 		runtime.x = module.ccall("torcs_web_runtime_get_car_x", "number", [], []);
 		runtime.y = module.ccall("torcs_web_runtime_get_car_y", "number", [], []);
 		runtime.z = module.ccall("torcs_web_runtime_get_car_z", "number", [], []);
@@ -155,6 +157,28 @@ createModule()
 		drive.topSpeed = module.ccall("torcs_web_runtime_get_top_speed", "number", [], []);
 		module.ccall("torcs_web_runtime_shutdown", null, [], []);
 
+		const selected = {
+			start: module.ccall(
+				"torcs_web_runtime_start_with_files",
+				"number",
+				["string", "string"],
+				[
+					"/torcs/data/tracks/g-track-1/g-track-1.xml",
+					"/torcs/data/cars/models/kc-a110/kc-a110.xml",
+				],
+			),
+		};
+		selected.step = module.ccall("torcs_web_runtime_step", "number", ["number"], [1 / 60]);
+		selected.trackName = module.ccall("torcs_web_runtime_get_track_name", "string", [], []);
+		selected.carName = module.ccall("torcs_web_runtime_get_car_name", "string", [], []);
+		selected.trackLength = module.ccall("torcs_web_runtime_get_track_length", "number", [], []);
+		selected.trackSamples = module.ccall("torcs_web_runtime_get_track_sample_count", "number", [], []);
+		selected.dimensionX = module.ccall("torcs_web_runtime_get_car_dimension_x", "number", [], []);
+		selected.dimensionY = module.ccall("torcs_web_runtime_get_car_dimension_y", "number", [], []);
+		selected.lapProgress = module.ccall("torcs_web_runtime_get_lap_progress", "number", [], []);
+		selected.time = module.ccall("torcs_web_runtime_get_time", "number", [], []);
+		module.ccall("torcs_web_runtime_shutdown", null, [], []);
+
 		const result = {
 			rc: module.ccall("torcs_web_probe", "number", [], []),
 			rc2: module.ccall("torcs_web_probe", "number", [], []),
@@ -169,6 +193,7 @@ createModule()
 			headlessSimUpdate: module.ccall("torcs_web_check_headless_sim_update", "number", [], []),
 			runtime,
 			drive,
+			selected,
 		};
 
 		console.log(JSON.stringify(result));
@@ -188,6 +213,8 @@ createModule()
 			runtime.start !== 0 ||
 			runtime.setControls !== 0 ||
 			runtime.step !== 0 ||
+			runtime.trackName !== "E-Track 1" ||
+			runtime.carName !== "kc-2000gt" ||
 			runtime.time <= 0 ||
 			runtime.fuel <= 0 ||
 			runtime.dimensionX <= 0 ||
@@ -250,6 +277,18 @@ createModule()
 			drive.distanceRaced <= runtime.distanceRaced ||
 			drive.currentLapTime < 9.9 ||
 			drive.topSpeed < drive.speed ||
+			selected.start !== 0 ||
+			selected.step !== 0 ||
+			selected.trackName !== "CG Speedway number 1" ||
+			selected.carName !== "kc-a110" ||
+			selected.trackLength <= 0 ||
+			selected.trackLength === runtime.trackLength ||
+			selected.trackSamples <= 0 ||
+			selected.dimensionX <= 0 ||
+			selected.dimensionY <= 0 ||
+			selected.lapProgress <= 0 ||
+			selected.lapProgress >= 1 ||
+			selected.time <= 0 ||
 			Math.hypot(drive.x - drive.startX, drive.y - drive.startY) <= 5
 		) {
 			fail("TORCS WASM probe smoke test failed", result);
