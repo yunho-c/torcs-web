@@ -219,6 +219,49 @@ torcs_web_check_track_module(void)
 
 EMSCRIPTEN_KEEPALIVE
 int
+torcs_web_check_track_build(void)
+{
+	tModList *infoList = NULL;
+	tTrackItf trackItf;
+	tTrack *trackData;
+	char moduleName[] = "track.so";
+	char trackFile[] = "/torcs/data/tracks/e-track-1/e-track-1.xml";
+	int result = -1;
+
+	initWebProbe();
+
+	if (GfModInfo(TRK_IDENT, moduleName, &infoList) < 0 || !infoList) {
+		return -1;
+	}
+
+	memset(&trackItf, 0, sizeof(trackItf));
+	if (!infoList->modInfo[0].fctInit || infoList->modInfo[0].fctInit(0, &trackItf) != 0 || !trackItf.trkBuild) {
+		GfModFreeInfoList(&infoList);
+		return -1;
+	}
+
+	trackData = trackItf.trkBuild(trackFile);
+	if (trackData &&
+		trackData->seg &&
+		trackData->name &&
+		strcmp(trackData->name, "E-Track 1") == 0 &&
+		trackData->version == 4 &&
+		trackData->nseg > 0 &&
+		trackData->length > 0.0f &&
+		trackData->width > 0.0f) {
+		result = 0;
+	}
+
+	if (trackData && trackData->seg && trackItf.trkShutdown) {
+		trackItf.trkShutdown();
+	}
+
+	GfModFreeInfoList(&infoList);
+	return result;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int
 torcs_web_check_simuv2_module(void)
 {
 	tModList *infoList = NULL;

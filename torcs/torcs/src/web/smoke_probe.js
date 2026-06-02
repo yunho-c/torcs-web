@@ -23,6 +23,7 @@ createModule()
 			fps: module.ccall("torcs_web_get_capture_fps", "number", [], []),
 			staticModuleRegistry: module.ccall("torcs_web_check_static_module_registry", "number", [], []),
 			trackModule: module.ccall("torcs_web_check_track_module", "number", [], []),
+			trackBuild: module.ccall("torcs_web_check_track_build", "number", [], []),
 			simuv2Module: module.ccall("torcs_web_check_simuv2_module", "number", [], []),
 		};
 
@@ -36,6 +37,7 @@ createModule()
 			result.fps !== 25 ||
 			result.staticModuleRegistry !== 0 ||
 			result.trackModule !== 0 ||
+			result.trackBuild !== 0 ||
 			result.simuv2Module !== 0
 		) {
 			fail("TORCS WASM probe smoke test failed", result);

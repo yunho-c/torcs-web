@@ -46,8 +46,9 @@ Emscripten shell. The initial scaffold in this repository builds:
 - `torcs_simuv2`: the real simulation module sources from
   `src/modules/simu/simuv2`.
 - `torcs_web_probe`: a tiny executable in `src/web` that preloads
-  `raceengine.xml` and verifies `GfParmReadFile()`, `GfParmGetStr()`, and
-  `GfParmGetNum()` in Emscripten's virtual filesystem.
+  `raceengine.xml`, E-Track 1, and the shared track surface/object entity files,
+  then verifies `GfParmReadFile()`, `GfParmGetStr()`, and `GfParmGetNum()` in
+  Emscripten's virtual filesystem.
 
 Build command:
 
@@ -67,11 +68,13 @@ also verifies the browser static module provider by resolving a linked probe
 module through `GfModInfo()` and `GfModLoad()` instead of native `dlopen()`.
 It also registers the real `track(tModInfo*)` entry point and verifies that its
 `tTrackItf` function table initializes inside WASM. The same smoke path now
-registers `simuv2(tModInfo*)` and verifies that its simulator function table
-initializes after linking SOLID and the PLIB SG math helper. Use the same
-working-directory rule, or configure `locateFile` in browser code, because the
-generated JavaScript loads the `.wasm` and `.data` files relative to the current
-runtime location.
+uses that interface to build `/torcs/data/tracks/e-track-1/e-track-1.xml`
+headlessly and assert the parsed name, version, segment count, length, and
+width. It also registers `simuv2(tModInfo*)` and verifies that its simulator
+function table initializes after linking SOLID and the PLIB SG math helper. Use
+the same working-directory rule, or configure `locateFile` in browser code,
+because the generated JavaScript loads the `.wasm` and `.data` files relative to
+the current runtime location.
 
 On this macOS/Homebrew setup, `EMSDK_PYTHON` avoids the system Python 3.9
 interpreter and `EM_CACHE` avoids writes to the read-only Homebrew Emscripten

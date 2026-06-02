@@ -138,10 +138,14 @@ if(EMSCRIPTEN)
 		PRIVATE
 			"--preload-file=${TORCS_ROOT}/src/libs/raceengineclient/raceengine.xml@/torcs/config/raceengine.xml"
 			"--preload-file=${TORCS_ROOT}/src/libs/tgf/params.dtd@/torcs/tgf/params.dtd"
+			"--preload-file=${TORCS_ROOT}/src/libs/tgf/params.dtd@/torcs/src/libs/tgf/params.dtd"
+			"--preload-file=${TORCS_ROOT}/data/tracks/e-track-1/e-track-1.xml@/torcs/data/tracks/e-track-1/e-track-1.xml"
+			"--preload-file=${TORCS_ROOT}/data/data/tracks/objects.xml@/torcs/data/tracks/objects.xml"
+			"--preload-file=${TORCS_ROOT}/data/data/tracks/surfaces.xml@/torcs/data/tracks/surfaces.xml"
 			"-sMODULARIZE=1"
 			"-sEXPORT_NAME=TorcsWebProbe"
 			"-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap']"
-			"-sEXPORTED_FUNCTIONS=['_main','_torcs_web_probe','_torcs_web_get_module_name','_torcs_web_get_capture_fps','_torcs_web_check_static_module_registry','_torcs_web_check_track_module','_torcs_web_check_simuv2_module']"
+			"-sEXPORTED_FUNCTIONS=['_main','_torcs_web_probe','_torcs_web_get_module_name','_torcs_web_get_capture_fps','_torcs_web_check_static_module_registry','_torcs_web_check_track_module','_torcs_web_check_simuv2_module','_torcs_web_check_track_build']"
 	)
 	set_target_properties(torcs_web_probe PROPERTIES SUFFIX ".js")
 
