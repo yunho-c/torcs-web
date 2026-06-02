@@ -758,6 +758,49 @@ torcs_web_runtime_get_car_fuel(void)
 
 EMSCRIPTEN_KEEPALIVE
 double
+torcs_web_runtime_get_car_dimension_x(void)
+{
+	return Runtime.active ? Runtime.car._dimension_x : 0.0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+double
+torcs_web_runtime_get_car_dimension_y(void)
+{
+	return Runtime.active ? Runtime.car._dimension_y : 0.0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+double
+torcs_web_runtime_get_car_dimension_z(void)
+{
+	return Runtime.active ? Runtime.car._dimension_z : 0.0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+double
+torcs_web_runtime_get_car_corner_x(int cornerIndex)
+{
+	if (!Runtime.active || cornerIndex < 0 || cornerIndex >= 4) {
+		return 0.0;
+	}
+
+	return Runtime.car._corner_x(cornerIndex);
+}
+
+EMSCRIPTEN_KEEPALIVE
+double
+torcs_web_runtime_get_car_corner_y(int cornerIndex)
+{
+	if (!Runtime.active || cornerIndex < 0 || cornerIndex >= 4) {
+		return 0.0;
+	}
+
+	return Runtime.car._corner_y(cornerIndex);
+}
+
+EMSCRIPTEN_KEEPALIVE
+double
 torcs_web_runtime_get_engine_rpm(void)
 {
 	return Runtime.active ? Runtime.car._enginerpm : 0.0;

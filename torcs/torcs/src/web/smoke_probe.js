@@ -32,6 +32,13 @@ createModule()
 		runtime.yaw = module.ccall("torcs_web_runtime_get_car_yaw", "number", [], []);
 		runtime.speed = module.ccall("torcs_web_runtime_get_car_speed", "number", [], []);
 		runtime.fuel = module.ccall("torcs_web_runtime_get_car_fuel", "number", [], []);
+		runtime.dimensionX = module.ccall("torcs_web_runtime_get_car_dimension_x", "number", [], []);
+		runtime.dimensionY = module.ccall("torcs_web_runtime_get_car_dimension_y", "number", [], []);
+		runtime.dimensionZ = module.ccall("torcs_web_runtime_get_car_dimension_z", "number", [], []);
+		runtime.corner0X = module.ccall("torcs_web_runtime_get_car_corner_x", "number", ["number"], [0]);
+		runtime.corner0Y = module.ccall("torcs_web_runtime_get_car_corner_y", "number", ["number"], [0]);
+		runtime.corner1X = module.ccall("torcs_web_runtime_get_car_corner_x", "number", ["number"], [1]);
+		runtime.corner1Y = module.ccall("torcs_web_runtime_get_car_corner_y", "number", ["number"], [1]);
 		runtime.engineRpm = module.ccall("torcs_web_runtime_get_engine_rpm", "number", [], []);
 		runtime.engineRedline = module.ccall("torcs_web_runtime_get_engine_redline", "number", [], []);
 		runtime.gear = module.ccall("torcs_web_runtime_get_gear", "number", [], []);
@@ -129,6 +136,14 @@ createModule()
 			runtime.step !== 0 ||
 			runtime.time <= 0 ||
 			runtime.fuel <= 0 ||
+			runtime.dimensionX <= 0 ||
+			runtime.dimensionY <= 0 ||
+			runtime.dimensionZ <= 0 ||
+			!Number.isFinite(runtime.corner0X) ||
+			!Number.isFinite(runtime.corner0Y) ||
+			!Number.isFinite(runtime.corner1X) ||
+			!Number.isFinite(runtime.corner1Y) ||
+			Math.hypot(runtime.corner0X - runtime.corner1X, runtime.corner0Y - runtime.corner1Y) <= 0.1 ||
 			runtime.engineRpm <= 0 ||
 			runtime.engineRedline <= 0 ||
 			runtime.gear !== 0 ||
