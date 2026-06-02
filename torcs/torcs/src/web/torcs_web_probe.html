@@ -356,6 +356,31 @@
 		let active = false;
 		let raf = 0;
 		let car = { x: 0, y: 0, z: 0, yaw: 0, speed: 0, fuel: 0, time: 0 };
+		const keys = new Set();
+		const controlKeyCodes = new Set([
+			"ArrowLeft",
+			"ArrowRight",
+			"ArrowUp",
+			"ArrowDown",
+			"KeyA",
+			"KeyD",
+			"KeyW",
+			"KeyS",
+			"Space",
+			"KeyQ",
+			"KeyE",
+		]);
+		const movementKeyCodes = new Set([
+			"ArrowLeft",
+			"ArrowRight",
+			"ArrowUp",
+			"ArrowDown",
+			"KeyA",
+			"KeyD",
+			"KeyW",
+			"KeyS",
+			"Space",
+		]);
 		let track = {
 			center: [],
 			right: [],
@@ -380,6 +405,54 @@
 			els.step.disabled = !enabled;
 			els.run.disabled = !enabled;
 			els.shutdown.disabled = !enabled;
+		}
+
+		function setInputValue(input, value) {
+			input.value = String(value);
+		}
+
+		function changeGear(delta) {
+			const min = Number(els.gear.min);
+			const max = Number(els.gear.max);
+			const next = Math.max(min, Math.min(max, Number(els.gear.value) + delta));
+			setInputValue(els.gear, next);
+			applyControls();
+		}
+
+		function syncKeyboardControls() {
+			const left = keys.has("ArrowLeft") || keys.has("KeyA");
+			const right = keys.has("ArrowRight") || keys.has("KeyD");
+			const throttle = keys.has("ArrowUp") || keys.has("KeyW");
+			const brake = keys.has("ArrowDown") || keys.has("KeyS") || keys.has("Space");
+
+			setInputValue(els.steer, left === right ? 0 : (left ? -1 : 1));
+			setInputValue(els.accel, throttle ? 1 : 0);
+			setInputValue(els.brake, brake ? 1 : 0);
+			applyControls();
+		}
+
+		function handleKey(event, pressed) {
+			if (!controlKeyCodes.has(event.code)) {
+				return;
+			}
+			event.preventDefault();
+
+			if (pressed) {
+				keys.add(event.code);
+				if (!event.repeat && event.code === "KeyE") {
+					changeGear(1);
+					return;
+				} else if (!event.repeat && event.code === "KeyQ") {
+					changeGear(-1);
+					return;
+				}
+			} else {
+				keys.delete(event.code);
+			}
+
+			if (movementKeyCodes.has(event.code)) {
+				syncKeyboardControls();
+			}
 		}
 
 		function applyControls() {
@@ -645,6 +718,8 @@
 		for (const input of [els.steer, els.accel, els.brake, els.clutch, els.gear]) {
 			input.addEventListener("input", applyControls);
 		}
+		window.addEventListener("keydown", (event) => handleKey(event, true));
+		window.addEventListener("keyup", (event) => handleKey(event, false));
 		window.addEventListener("resize", draw);
 
 		setEnabled(false);

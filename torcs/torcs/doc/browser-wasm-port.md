@@ -86,7 +86,8 @@ start the one-car headless session, set controls, step simulation time, read
 time/position/yaw/speed/fuel snapshots, sample the loaded track's center/right/
 left boundaries for browser rendering, and shut the session down without using
 raw TORCS pointers. The browser harness now draws E-Track 1 from these sampled
-TORCS track coordinates instead of a placeholder map. Use the same
+TORCS track coordinates instead of a placeholder map, and mirrors keyboard
+driving input into the same control path as the sliders. Use the same
 working-directory rule, or configure
 `locateFile` in browser code, because the generated JavaScript loads the
 `.wasm` and `.data` files relative to the current runtime location.
