@@ -36,6 +36,27 @@ static const char *MovieCaptureSection = "Movie Capture";
 static void *RaceEngineHandle = NULL;
 
 extern "C" int track(tModInfo *modInfo);
+extern "C" int simuv2(tModInfo *modInfo);
+
+#define TORCS_WEB_SIM_IDENT 0
+
+struct CarElt;
+struct RmInfo;
+struct Situation;
+
+typedef void (*tfTorcsWebSimInit)(int nbCars, tTrack *track, tdble fuelFactor, tdble damageFactor, tdble tireFactor);
+typedef void (*tfTorcsWebSimConfig)(struct CarElt *carElt, struct RmInfo *reInfo);
+typedef void (*tfTorcsWebSimReConfig)(struct CarElt *carElt);
+typedef void (*tfTorcsWebSimUpdate)(struct Situation *s, double deltaTime, int telemetry);
+typedef void (*tfTorcsWebSimShutdown)(void);
+
+typedef struct TorcsWebSimItf {
+	tfTorcsWebSimInit		init;
+	tfTorcsWebSimConfig		config;
+	tfTorcsWebSimReConfig	reconfig;
+	tfTorcsWebSimUpdate		update;
+	tfTorcsWebSimShutdown	shutdown;
+} tTorcsWebSimItf;
 
 static int
 webProbeModuleInit(int /* index */, void * /* moduleInfo */)
@@ -61,7 +82,8 @@ initWebProbe(void)
 	static int initialized = 0;
 	static const tTorcsWebModule WebModules[] = {
 		{ "web_probe_module", web_probe_module },
-		{ "track", track }
+		{ "track", track },
+		{ "simuv2", simuv2 }
 	};
 
 	if (!initialized) {
@@ -187,6 +209,40 @@ torcs_web_check_track_module(void)
 		!trackItf.trkSideNormal ||
 		!trackItf.trkSurfaceNormal ||
 		!trackItf.trkShutdown) {
+		GfModFreeInfoList(&infoList);
+		return -1;
+	}
+
+	GfModFreeInfoList(&infoList);
+	return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int
+torcs_web_check_simuv2_module(void)
+{
+	tModList *infoList = NULL;
+	tTorcsWebSimItf simItf;
+	char moduleName[] = "simuv2.so";
+
+	initWebProbe();
+
+	if (GfModInfo(TORCS_WEB_SIM_IDENT, moduleName, &infoList) < 0 || !infoList) {
+		return -1;
+	}
+
+	memset(&simItf, 0, sizeof(simItf));
+
+	if (!infoList->modInfo[0].name ||
+		strcmp(infoList->modInfo[0].name, "simu") != 0 ||
+		infoList->modInfo[0].gfId != TORCS_WEB_SIM_IDENT ||
+		!infoList->modInfo[0].fctInit ||
+		infoList->modInfo[0].fctInit(0, &simItf) != 0 ||
+		!simItf.init ||
+		!simItf.config ||
+		!simItf.reconfig ||
+		!simItf.update ||
+		!simItf.shutdown) {
 		GfModFreeInfoList(&infoList);
 		return -1;
 	}

@@ -8,6 +8,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(TORCS_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
 set(TORCS_GENERATED_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/include")
+set(TORCS_PLIB_DIR "${TORCS_ROOT}/src/windows/dependencies/vs2022_win32/plib-code-r2173-trunk-vsproj")
+set(TORCS_SIMUV2_DIR "${TORCS_ROOT}/src/modules/simu/simuv2")
+set(TORCS_SOLID_DIR "${TORCS_SIMUV2_DIR}/SOLID-2.0")
 
 file(MAKE_DIRECTORY "${TORCS_GENERATED_INCLUDE_DIR}/tmath")
 foreach(TORCS_MATH_HEADER linalg_t.h straight2_t.h v2_t.h v3_t.h v4_t.h)
@@ -29,6 +32,8 @@ function(torcs_common_includes target)
 			"${TORCS_ROOT}/src/libs/tgf"
 			"${TORCS_ROOT}/src/libs/txml"
 			"${TORCS_ROOT}/src/linux"
+			"${TORCS_SIMUV2_DIR}"
+			"${TORCS_SOLID_DIR}/include"
 			"${TORCS_ROOT}/src/windows/include"
 	)
 	target_compile_definitions(${target} PUBLIC HAVE_CONFIG_H)
@@ -72,11 +77,61 @@ add_library(torcs_track STATIC
 torcs_common_includes(torcs_track)
 target_link_libraries(torcs_track PUBLIC torcs_tgf torcs_robottools)
 
+add_library(torcs_plibsg STATIC
+	src/windows/dependencies/vs2022_win32/plib-code-r2173-trunk-vsproj/src/sg/sg.cxx
+)
+torcs_common_includes(torcs_plibsg)
+target_include_directories(torcs_plibsg
+	PUBLIC
+		"${TORCS_PLIB_DIR}/src/sg"
+		"${TORCS_PLIB_DIR}/src/util"
+)
+
+add_library(torcs_solid STATIC
+	src/modules/simu/simuv2/SOLID-2.0/src/BBoxTree.cpp
+	src/modules/simu/simuv2/SOLID-2.0/src/Box.cpp
+	src/modules/simu/simuv2/SOLID-2.0/src/C-api.cpp
+	src/modules/simu/simuv2/SOLID-2.0/src/Complex.cpp
+	src/modules/simu/simuv2/SOLID-2.0/src/Cone.cpp
+	src/modules/simu/simuv2/SOLID-2.0/src/Convex.cpp
+	src/modules/simu/simuv2/SOLID-2.0/src/Cylinder.cpp
+	src/modules/simu/simuv2/SOLID-2.0/src/Endpoint.cpp
+	src/modules/simu/simuv2/SOLID-2.0/src/Object.cpp
+	src/modules/simu/simuv2/SOLID-2.0/src/Polygon.cpp
+	src/modules/simu/simuv2/SOLID-2.0/src/Polyhedron.cpp
+	src/modules/simu/simuv2/SOLID-2.0/src/RespTable.cpp
+	src/modules/simu/simuv2/SOLID-2.0/src/Response.cpp
+	src/modules/simu/simuv2/SOLID-2.0/src/Simplex.cpp
+	src/modules/simu/simuv2/SOLID-2.0/src/Sphere.cpp
+	src/modules/simu/simuv2/SOLID-2.0/src/Transform.cpp
+)
+torcs_common_includes(torcs_solid)
+
+add_library(torcs_simuv2 STATIC
+	src/modules/simu/simuv2/aero.cpp
+	src/modules/simu/simuv2/atmosphere.cpp
+	src/modules/simu/simuv2/axle.cpp
+	src/modules/simu/simuv2/brake.cpp
+	src/modules/simu/simuv2/car.cpp
+	src/modules/simu/simuv2/categories.cpp
+	src/modules/simu/simuv2/collide.cpp
+	src/modules/simu/simuv2/differential.cpp
+	src/modules/simu/simuv2/engine.cpp
+	src/modules/simu/simuv2/simu.cpp
+	src/modules/simu/simuv2/simuitf.cpp
+	src/modules/simu/simuv2/steer.cpp
+	src/modules/simu/simuv2/susp.cpp
+	src/modules/simu/simuv2/transmission.cpp
+	src/modules/simu/simuv2/wheel.cpp
+)
+torcs_common_includes(torcs_simuv2)
+target_link_libraries(torcs_simuv2 PUBLIC torcs_tgf torcs_robottools torcs_plibsg torcs_solid)
+
 add_executable(torcs_web_probe
 	src/web/torcs_web_platform.cpp
 	src/web/torcs_web_probe.cpp
 )
-target_link_libraries(torcs_web_probe PRIVATE torcs_tgf torcs_track)
+target_link_libraries(torcs_web_probe PRIVATE torcs_tgf torcs_track torcs_simuv2)
 
 if(EMSCRIPTEN)
 	target_link_options(torcs_web_probe
@@ -86,7 +141,7 @@ if(EMSCRIPTEN)
 			"-sMODULARIZE=1"
 			"-sEXPORT_NAME=TorcsWebProbe"
 			"-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap']"
-			"-sEXPORTED_FUNCTIONS=['_main','_torcs_web_probe','_torcs_web_get_module_name','_torcs_web_get_capture_fps','_torcs_web_check_static_module_registry','_torcs_web_check_track_module']"
+			"-sEXPORTED_FUNCTIONS=['_main','_torcs_web_probe','_torcs_web_get_module_name','_torcs_web_get_capture_fps','_torcs_web_check_static_module_registry','_torcs_web_check_track_module','_torcs_web_check_simuv2_module']"
 	)
 	set_target_properties(torcs_web_probe PROPERTIES SUFFIX ".js")
 

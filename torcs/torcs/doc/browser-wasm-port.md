@@ -41,6 +41,10 @@ Emscripten shell. The initial scaffold in this repository builds:
 - `torcs_robottools`: the `rttrack.cpp` geometry helpers needed by the track
   loader interface.
 - `torcs_track`: the real track loader module sources from `src/modules/track`.
+- `torcs_solid`: the bundled SOLID 2.0 collision library used by `simuv2`.
+- `torcs_plibsg`: PLIB SG math helpers needed by `simuv2` transforms.
+- `torcs_simuv2`: the real simulation module sources from
+  `src/modules/simu/simuv2`.
 - `torcs_web_probe`: a tiny executable in `src/web` that preloads
   `raceengine.xml` and verifies `GfParmReadFile()`, `GfParmGetStr()`, and
   `GfParmGetNum()` in Emscripten's virtual filesystem.
@@ -62,7 +66,9 @@ functions via `ccall`/`cwrap`. The `torcs_web_probe_smoke` target runs
 also verifies the browser static module provider by resolving a linked probe
 module through `GfModInfo()` and `GfModLoad()` instead of native `dlopen()`.
 It also registers the real `track(tModInfo*)` entry point and verifies that its
-`tTrackItf` function table initializes inside WASM. Use the same
+`tTrackItf` function table initializes inside WASM. The same smoke path now
+registers `simuv2(tModInfo*)` and verifies that its simulator function table
+initializes after linking SOLID and the PLIB SG math helper. Use the same
 working-directory rule, or configure `locateFile` in browser code, because the
 generated JavaScript loads the `.wasm` and `.data` files relative to the current
 runtime location.
@@ -80,10 +86,13 @@ symbols instead of filesystem shared libraries. The initial provider lives in
 `GfOs` module callbacks. This preserves the public `GfModInfo()` and
 `GfModLoad()` APIs while replacing the browser-hostile platform implementation.
 
-The registry now exposes `track(tModInfo*)` from `src/modules/track`. The next
-production entries should expose:
+The registry now exposes:
 
+- `track(tModInfo*)` from `src/modules/track`.
 - `simuv2(tModInfo*)` from `src/modules/simu/simuv2`.
+
+The next production entries should expose:
+
 - One simple AI driver module, then the human driver once browser input exists.
 
 This keeps the existing race-engine module interface while removing the
