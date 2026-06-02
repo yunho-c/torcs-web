@@ -63,15 +63,20 @@ The generated target is `build-wasm/torcs_web_probe.js` with a companion
 `.wasm` and `.data` file. It uses Emscripten `MODULARIZE` and `EXPORT_NAME`, so
 JavaScript can instantiate it as `TorcsWebProbe(...)` and call exported probe
 functions via `ccall`/`cwrap`. The `torcs_web_probe_smoke` target runs
-`src/web/smoke_probe.js` from the generated output directory. The smoke test now
-also verifies the browser static module provider by resolving a linked probe
-module through `GfModInfo()` and `GfModLoad()` instead of native `dlopen()`.
-It also registers the real `track(tModInfo*)` entry point and verifies that its
-`tTrackItf` function table initializes inside WASM. The same smoke path now
-uses that interface to build `/torcs/data/tracks/e-track-1/e-track-1.xml`
-headlessly and assert the parsed name, version, segment count, length, and
-width. It also registers `simuv2(tModInfo*)` and verifies that its simulator
-function table initializes after linking SOLID and the PLIB SG math helper. A
+`src/web/smoke_probe.js` from the generated output directory and copies
+`src/web/torcs_web_probe.html` beside the generated JS/WASM/data files. Serve
+`build-wasm/` over HTTP and open `torcs_web_probe.html` to drive the runtime in
+a browser.
+
+The smoke test now also verifies the browser static module provider by resolving
+a linked probe module through `GfModInfo()` and `GfModLoad()` instead of native
+`dlopen()`. It also registers the real `track(tModInfo*)` entry point and
+verifies that its `tTrackItf` function table initializes inside WASM. The same
+smoke path now uses that interface to build
+`/torcs/data/tracks/e-track-1/e-track-1.xml` headlessly and assert the parsed
+name, version, segment count, length, and width. It also registers
+`simuv2(tModInfo*)` and verifies that its simulator function table initializes
+after linking SOLID and the PLIB SG math helper. A
 zero-car headless initialization check then calls `simuv2` init/shutdown against
 the loaded track, exercising the simulator and collision setup path. The smoke
 path also preloads the `kc-2000gt` car XML, configures one car on E-Track 1,

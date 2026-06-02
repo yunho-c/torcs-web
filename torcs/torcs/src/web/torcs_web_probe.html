@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>TORCS WASM Probe</title>
+	<style>
+		:root {
+			color-scheme: dark;
+			--bg: #10110f;
+			--panel: #181a17;
+			--panel-2: #20231f;
+			--ink: #f0eee5;
+			--muted: #9ba190;
+			--line: #3a4037;
+			--red: #d24c3f;
+			--green: #81b66f;
+			--cyan: #79b8bd;
+			--shadow: rgba(0, 0, 0, 0.36);
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
+		html,
+		body {
+			margin: 0;
+			min-height: 100%;
+			background: var(--bg);
+			color: var(--ink);
+			font-family: "Aptos Mono", "SFMono-Regular", "Menlo", monospace;
+			letter-spacing: 0;
+		}
+
+		body {
+			padding: 18px;
+		}
+
+		button,
+		input {
+			font: inherit;
+		}
+
+		.shell {
+			display: grid;
+			grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+			gap: 14px;
+			max-width: 1280px;
+			margin: 0 auto;
+		}
+
+		header {
+			grid-column: 1 / -1;
+			display: flex;
+			align-items: end;
+			justify-content: space-between;
+			gap: 16px;
+			border-bottom: 1px solid var(--line);
+			padding-bottom: 12px;
+		}
+
+		h1 {
+			margin: 0;
+			font-family: "DIN Condensed", "Aptos Display", "Arial Narrow", sans-serif;
+			font-size: clamp(2rem, 7vw, 5rem);
+			font-weight: 700;
+			line-height: 0.85;
+			letter-spacing: 0;
+			text-transform: uppercase;
+		}
+
+		.status {
+			display: grid;
+			gap: 4px;
+			min-width: 170px;
+			text-align: right;
+			color: var(--muted);
+			font-size: 0.8rem;
+			text-transform: uppercase;
+		}
+
+		.status strong {
+			color: var(--green);
+			font-size: 1.15rem;
+		}
+
+		.panel {
+			background: var(--panel);
+			border: 1px solid var(--line);
+			border-radius: 6px;
+			box-shadow: 0 16px 38px var(--shadow);
+		}
+
+		.controls {
+			display: grid;
+			gap: 14px;
+			padding: 14px;
+		}
+
+		.toolbar {
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 8px;
+		}
+
+		button {
+			min-height: 42px;
+			border: 1px solid var(--line);
+			border-radius: 4px;
+			background: var(--panel-2);
+			color: var(--ink);
+			cursor: pointer;
+			text-transform: uppercase;
+		}
+
+		button:disabled {
+			color: #676d60;
+			cursor: not-allowed;
+		}
+
+		button.primary {
+			background: var(--red);
+			border-color: var(--red);
+			color: #fff7ef;
+		}
+
+		button.active {
+			background: var(--green);
+			border-color: var(--green);
+			color: #071006;
+		}
+
+		label {
+			display: grid;
+			gap: 6px;
+			color: var(--muted);
+			font-size: 0.76rem;
+			text-transform: uppercase;
+		}
+
+		input[type="range"] {
+			width: 100%;
+			accent-color: var(--cyan);
+		}
+
+		input[type="number"] {
+			width: 100%;
+			min-height: 38px;
+			border: 1px solid var(--line);
+			border-radius: 4px;
+			background: #0f120e;
+			color: var(--ink);
+			padding: 0 10px;
+		}
+
+		.telemetry {
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			border-top: 1px solid var(--line);
+		}
+
+		.metric {
+			min-height: 78px;
+			padding: 12px;
+			border-right: 1px solid var(--line);
+			border-bottom: 1px solid var(--line);
+		}
+
+		.metric:nth-child(2n) {
+			border-right: 0;
+		}
+
+		.metric span {
+			display: block;
+			color: var(--muted);
+			font-size: 0.72rem;
+			text-transform: uppercase;
+		}
+
+		.metric strong {
+			display: block;
+			margin-top: 8px;
+			font-size: clamp(1.35rem, 3vw, 2.5rem);
+			font-weight: 700;
+			line-height: 1;
+			color: var(--ink);
+		}
+
+		.stage {
+			position: relative;
+			min-height: 620px;
+			overflow: hidden;
+		}
+
+		canvas {
+			display: block;
+			width: 100%;
+			height: 100%;
+			min-height: 620px;
+			background:
+				linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+				linear-gradient(0deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+				#0b0d0b;
+			background-size: 28px 28px;
+		}
+
+		.strip {
+			position: absolute;
+			left: 14px;
+			right: 14px;
+			bottom: 14px;
+			display: grid;
+			grid-template-columns: repeat(4, minmax(0, 1fr));
+			border: 1px solid var(--line);
+			background: rgba(16, 17, 15, 0.84);
+			backdrop-filter: blur(6px);
+		}
+
+		.strip div {
+			padding: 10px;
+			border-right: 1px solid var(--line);
+			color: var(--muted);
+			font-size: 0.72rem;
+			text-transform: uppercase;
+		}
+
+		.strip div:last-child {
+			border-right: 0;
+		}
+
+		.strip strong {
+			display: block;
+			margin-top: 5px;
+			color: var(--ink);
+			font-size: 1rem;
+		}
+
+		@media (max-width: 840px) {
+			body {
+				padding: 10px;
+			}
+
+			.shell {
+				grid-template-columns: 1fr;
+			}
+
+			header {
+				align-items: start;
+				flex-direction: column;
+			}
+
+			.status {
+				text-align: left;
+			}
+
+			.stage,
+			canvas {
+				min-height: 420px;
+			}
+
+			.strip {
+				grid-template-columns: repeat(2, minmax(0, 1fr));
+			}
+
+			.strip div:nth-child(2n) {
+				border-right: 0;
+			}
+		}
+	</style>
+</head>
+<body>
+	<main class="shell">
+		<header>
+			<h1>TORCS WASM</h1>
+			<div class="status">
+				<span>Runtime</span>
+				<strong id="runtime-state">loading</strong>
+			</div>
+		</header>
+
+		<section class="panel controls" aria-label="Controls">
+			<div class="toolbar">
+				<button class="primary" id="start">Start</button>
+				<button id="step">Step</button>
+				<button id="run">Run</button>
+				<button id="shutdown">Shutdown</button>
+			</div>
+
+			<label>
+				Steer
+				<input id="steer" type="range" min="-1" max="1" step="0.01" value="0">
+			</label>
+			<label>
+				Throttle
+				<input id="accel" type="range" min="0" max="1" step="0.01" value="0">
+			</label>
+			<label>
+				Brake
+				<input id="brake" type="range" min="0" max="1" step="0.01" value="0">
+			</label>
+			<label>
+				Clutch
+				<input id="clutch" type="range" min="0" max="1" step="0.01" value="1">
+			</label>
+			<label>
+				Gear
+				<input id="gear" type="number" min="-1" max="5" step="1" value="0">
+			</label>
+
+			<div class="telemetry" aria-label="Telemetry">
+				<div class="metric"><span>Time</span><strong id="time">0.000</strong></div>
+				<div class="metric"><span>Speed</span><strong id="speed">0.000</strong></div>
+				<div class="metric"><span>Fuel</span><strong id="fuel">0.000</strong></div>
+				<div class="metric"><span>Yaw</span><strong id="yaw">0.000</strong></div>
+			</div>
+		</section>
+
+		<section class="panel stage" aria-label="Simulation viewport">
+			<canvas id="viewport" width="1100" height="720"></canvas>
+			<div class="strip">
+				<div>X<strong id="pos-x">0.000</strong></div>
+				<div>Y<strong id="pos-y">0.000</strong></div>
+				<div>Z<strong id="pos-z">0.000</strong></div>
+				<div>State<strong id="state">idle</strong></div>
+			</div>
+		</section>
+	</main>
+
+	<script src="./torcs_web_probe.js"></script>
+	<script>
+		const els = {
+			state: document.getElementById("state"),
+			runtimeState: document.getElementById("runtime-state"),
+			start: document.getElementById("start"),
+			step: document.getElementById("step"),
+			run: document.getElementById("run"),
+			shutdown: document.getElementById("shutdown"),
+			steer: document.getElementById("steer"),
+			accel: document.getElementById("accel"),
+			brake: document.getElementById("brake"),
+			clutch: document.getElementById("clutch"),
+			gear: document.getElementById("gear"),
+			time: document.getElementById("time"),
+			speed: document.getElementById("speed"),
+			fuel: document.getElementById("fuel"),
+			yaw: document.getElementById("yaw"),
+			x: document.getElementById("pos-x"),
+			y: document.getElementById("pos-y"),
+			z: document.getElementById("pos-z"),
+			canvas: document.getElementById("viewport"),
+		};
+
+		let moduleInstance = null;
+		let running = false;
+		let active = false;
+		let raf = 0;
+		let car = { x: 0, y: 0, z: 0, yaw: 0, speed: 0, fuel: 0, time: 0 };
+
+		function call(name, returnType, argTypes = [], args = []) {
+			return moduleInstance.ccall(name, returnType, argTypes, args);
+		}
+
+		function setStatus(value) {
+			els.runtimeState.textContent = value;
+			els.state.textContent = value;
+		}
+
+		function setEnabled(enabled) {
+			els.start.disabled = !moduleInstance;
+			els.step.disabled = !enabled;
+			els.run.disabled = !enabled;
+			els.shutdown.disabled = !enabled;
+		}
+
+		function applyControls() {
+			if (!active) {
+				return;
+			}
+			call(
+				"torcs_web_runtime_set_controls",
+				"number",
+				["number", "number", "number", "number", "number"],
+				[
+					Number(els.steer.value),
+					Number(els.accel.value),
+					Number(els.brake.value),
+					Number(els.clutch.value),
+					Number(els.gear.value),
+				],
+			);
+		}
+
+		function sample() {
+			if (!active) {
+				return;
+			}
+			car = {
+				time: call("torcs_web_runtime_get_time", "number"),
+				x: call("torcs_web_runtime_get_car_x", "number"),
+				y: call("torcs_web_runtime_get_car_y", "number"),
+				z: call("torcs_web_runtime_get_car_z", "number"),
+				yaw: call("torcs_web_runtime_get_car_yaw", "number"),
+				speed: call("torcs_web_runtime_get_car_speed", "number"),
+				fuel: call("torcs_web_runtime_get_car_fuel", "number"),
+			};
+			els.time.textContent = car.time.toFixed(3);
+			els.speed.textContent = car.speed.toFixed(3);
+			els.fuel.textContent = car.fuel.toFixed(3);
+			els.yaw.textContent = car.yaw.toFixed(3);
+			els.x.textContent = car.x.toFixed(3);
+			els.y.textContent = car.y.toFixed(3);
+			els.z.textContent = car.z.toFixed(3);
+		}
+
+		function step() {
+			if (!active) {
+				return;
+			}
+			applyControls();
+			call("torcs_web_runtime_step", "number", ["number"], [1 / 60]);
+			sample();
+			draw();
+		}
+
+		function draw() {
+			const canvas = els.canvas;
+			const ctx = canvas.getContext("2d");
+			const w = canvas.width;
+			const h = canvas.height;
+			ctx.clearRect(0, 0, w, h);
+
+			ctx.strokeStyle = "rgba(240, 238, 229, 0.08)";
+			ctx.lineWidth = 1;
+			for (let x = 0; x <= w; x += 44) {
+				ctx.beginPath();
+				ctx.moveTo(x, 0);
+				ctx.lineTo(x, h);
+				ctx.stroke();
+			}
+			for (let y = 0; y <= h; y += 44) {
+				ctx.beginPath();
+				ctx.moveTo(0, y);
+				ctx.lineTo(w, y);
+				ctx.stroke();
+			}
+
+			const cx = w / 2;
+			const cy = h / 2;
+			ctx.strokeStyle = "#3a4037";
+			ctx.lineWidth = 2;
+			ctx.beginPath();
+			ctx.arc(cx, cy, 170, 0, Math.PI * 2);
+			ctx.stroke();
+			ctx.beginPath();
+			ctx.moveTo(cx - 220, cy);
+			ctx.lineTo(cx + 220, cy);
+			ctx.moveTo(cx, cy - 220);
+			ctx.lineTo(cx, cy + 220);
+			ctx.stroke();
+
+			ctx.save();
+			ctx.translate(cx, cy);
+			ctx.rotate(car.yaw);
+			ctx.fillStyle = "#d24c3f";
+			ctx.strokeStyle = "#f0eee5";
+			ctx.lineWidth = 2;
+			ctx.beginPath();
+			ctx.moveTo(26, 0);
+			ctx.lineTo(-18, -13);
+			ctx.lineTo(-10, 0);
+			ctx.lineTo(-18, 13);
+			ctx.closePath();
+			ctx.fill();
+			ctx.stroke();
+			ctx.restore();
+
+			ctx.fillStyle = "#79b8bd";
+			ctx.fillRect(cx - 2, cy - 2, 4, 4);
+		}
+
+		async function startRuntime() {
+			const rc = call("torcs_web_runtime_start", "number");
+			active = rc === 0;
+			running = false;
+			els.run.textContent = "Run";
+			els.run.classList.remove("active");
+			setStatus(active ? "ready" : "failed");
+			setEnabled(active);
+			applyControls();
+			sample();
+			draw();
+		}
+
+		function shutdownRuntime() {
+			running = false;
+			active = false;
+			els.run.textContent = "Run";
+			els.run.classList.remove("active");
+			if (moduleInstance) {
+				call("torcs_web_runtime_shutdown", null);
+			}
+			setStatus("stopped");
+			setEnabled(false);
+			draw();
+		}
+
+		function loop() {
+			if (running) {
+				step();
+				raf = requestAnimationFrame(loop);
+			}
+		}
+
+		els.start.addEventListener("click", startRuntime);
+		els.step.addEventListener("click", step);
+		els.run.addEventListener("click", () => {
+			if (!active) {
+				return;
+			}
+			running = !running;
+			els.run.textContent = running ? "Pause" : "Run";
+			els.run.classList.toggle("active", running);
+			cancelAnimationFrame(raf);
+			if (running) {
+				loop();
+			}
+		});
+		els.shutdown.addEventListener("click", shutdownRuntime);
+		for (const input of [els.steer, els.accel, els.brake, els.clutch, els.gear]) {
+			input.addEventListener("input", applyControls);
+		}
+
+		setEnabled(false);
+		draw();
+
+		TorcsWebProbe({ locateFile: (path) => path })
+			.then((loaded) => {
+				moduleInstance = loaded;
+				setStatus("loaded");
+				setEnabled(false);
+				els.start.disabled = false;
+			})
+			.catch((error) => {
+				console.error(error);
+				setStatus("failed");
+			});
+	</script>
+</body>
+</html>
