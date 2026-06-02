@@ -71,10 +71,12 @@ It also registers the real `track(tModInfo*)` entry point and verifies that its
 uses that interface to build `/torcs/data/tracks/e-track-1/e-track-1.xml`
 headlessly and assert the parsed name, version, segment count, length, and
 width. It also registers `simuv2(tModInfo*)` and verifies that its simulator
-function table initializes after linking SOLID and the PLIB SG math helper. Use
-the same working-directory rule, or configure `locateFile` in browser code,
-because the generated JavaScript loads the `.wasm` and `.data` files relative to
-the current runtime location.
+function table initializes after linking SOLID and the PLIB SG math helper. A
+zero-car headless initialization check then calls `simuv2` init/shutdown against
+the loaded track, exercising the simulator and collision setup path without
+drivers yet. Use the same working-directory rule, or configure `locateFile` in
+browser code, because the generated JavaScript loads the `.wasm` and `.data`
+files relative to the current runtime location.
 
 On this macOS/Homebrew setup, `EMSDK_PYTHON` avoids the system Python 3.9
 interpreter and `EM_CACHE` avoids writes to the read-only Homebrew Emscripten
@@ -104,8 +106,9 @@ browser-hostile dependency on `dlopen()`.
 ### Stage 3: headless race step
 
 Compile enough of `raceengineclient`, `track`, `robottools`, `simuv2`, SOLID,
-and car/track data to run a scripted race without graphics. The browser-facing
-API should expose:
+and car/track data to run a scripted race without graphics. The current scaffold
+can load E-Track 1 and initialize/shutdown `simuv2` with zero cars. The next
+browser-facing API should expose:
 
 - load race config
 - load track and cars

@@ -294,6 +294,62 @@ torcs_web_check_simuv2_module(void)
 	return 0;
 }
 
+EMSCRIPTEN_KEEPALIVE
+int
+torcs_web_check_headless_sim_init(void)
+{
+	tModList *trackInfoList = NULL;
+	tModList *simInfoList = NULL;
+	tTrackItf trackItf;
+	tTorcsWebSimItf simItf;
+	tTrack *trackData = NULL;
+	char trackModuleName[] = "track.so";
+	char simModuleName[] = "simuv2.so";
+	char trackFile[] = "/torcs/data/tracks/e-track-1/e-track-1.xml";
+	int result = -1;
+
+	initWebProbe();
+	memset(&trackItf, 0, sizeof(trackItf));
+	memset(&simItf, 0, sizeof(simItf));
+
+	if (GfModInfo(TRK_IDENT, trackModuleName, &trackInfoList) < 0 || !trackInfoList ||
+		GfModInfo(TORCS_WEB_SIM_IDENT, simModuleName, &simInfoList) < 0 || !simInfoList) {
+		goto cleanup;
+	}
+
+	if (!trackInfoList->modInfo[0].fctInit ||
+		trackInfoList->modInfo[0].fctInit(0, &trackItf) != 0 ||
+		!trackItf.trkBuild ||
+		!trackItf.trkShutdown ||
+		!simInfoList->modInfo[0].fctInit ||
+		simInfoList->modInfo[0].fctInit(0, &simItf) != 0 ||
+		!simItf.init ||
+		!simItf.shutdown) {
+		goto cleanup;
+	}
+
+	trackData = trackItf.trkBuild(trackFile);
+	if (!trackData || !trackData->seg) {
+		goto cleanup;
+	}
+
+	simItf.init(0, trackData, 1.0f, 1.0f, 1.0f);
+	simItf.shutdown();
+	result = 0;
+
+cleanup:
+	if (trackData && trackData->seg && trackItf.trkShutdown) {
+		trackItf.trkShutdown();
+	}
+	if (trackInfoList) {
+		GfModFreeInfoList(&trackInfoList);
+	}
+	if (simInfoList) {
+		GfModFreeInfoList(&simInfoList);
+	}
+	return result;
+}
+
 }
 
 int

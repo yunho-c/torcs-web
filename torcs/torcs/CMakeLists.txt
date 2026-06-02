@@ -145,7 +145,7 @@ if(EMSCRIPTEN)
 			"-sMODULARIZE=1"
 			"-sEXPORT_NAME=TorcsWebProbe"
 			"-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap']"
-			"-sEXPORTED_FUNCTIONS=['_main','_torcs_web_probe','_torcs_web_get_module_name','_torcs_web_get_capture_fps','_torcs_web_check_static_module_registry','_torcs_web_check_track_module','_torcs_web_check_simuv2_module','_torcs_web_check_track_build']"
+			"-sEXPORTED_FUNCTIONS=['_main','_torcs_web_probe','_torcs_web_get_module_name','_torcs_web_get_capture_fps','_torcs_web_check_static_module_registry','_torcs_web_check_track_module','_torcs_web_check_simuv2_module','_torcs_web_check_track_build','_torcs_web_check_headless_sim_init']"
 	)
 	set_target_properties(torcs_web_probe PROPERTIES SUFFIX ".js")
 
