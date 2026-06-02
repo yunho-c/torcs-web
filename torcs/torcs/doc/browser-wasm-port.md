@@ -55,10 +55,12 @@ The generated target is `build-wasm/torcs_web_probe.js` with a companion
 `.wasm` and `.data` file. It uses Emscripten `MODULARIZE` and `EXPORT_NAME`, so
 JavaScript can instantiate it as `TorcsWebProbe(...)` and call exported probe
 functions via `ccall`/`cwrap`. The `torcs_web_probe_smoke` target runs
-`src/web/smoke_probe.js` from the generated output directory. Use the same
-working-directory rule, or configure `locateFile` in browser code, because the
-generated JavaScript loads the `.wasm` and `.data` files relative to the current
-runtime location.
+`src/web/smoke_probe.js` from the generated output directory. The smoke test now
+also verifies the browser static module provider by resolving a linked probe
+module through `GfModInfo()` and `GfModLoad()` instead of native `dlopen()`.
+Use the same working-directory rule, or configure `locateFile` in browser code,
+because the generated JavaScript loads the `.wasm` and `.data` files relative to
+the current runtime location.
 
 On this macOS/Homebrew setup, `EMSDK_PYTHON` avoids the system Python 3.9
 interpreter and `EM_CACHE` avoids writes to the read-only Homebrew Emscripten
@@ -67,7 +69,13 @@ cache.
 ### Stage 2: static module registry
 
 Add a WASM-specific module provider that fills `tModList` entries from linked
-symbols instead of filesystem shared libraries. The first registry should expose:
+symbols instead of filesystem shared libraries. The initial provider lives in
+`src/web/torcs_web_platform.cpp`; callers install an explicit
+`tTorcsWebModule` table with `TorcsWebInitPlatform()`, which fills the existing
+`GfOs` module callbacks. This preserves the public `GfModInfo()` and
+`GfModLoad()` APIs while replacing the browser-hostile platform implementation.
+
+The first production registry should expose:
 
 - `track(tModInfo*)` from `src/modules/track`.
 - `simuv2(tModInfo*)` from `src/modules/simu/simuv2`.

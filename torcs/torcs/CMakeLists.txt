@@ -44,6 +44,7 @@ torcs_common_includes(torcs_tgf)
 target_link_libraries(torcs_tgf PUBLIC torcs_txml)
 
 add_executable(torcs_web_probe
+	src/web/torcs_web_platform.cpp
 	src/web/torcs_web_probe.cpp
 )
 target_link_libraries(torcs_web_probe PRIVATE torcs_tgf)
@@ -56,7 +57,7 @@ if(EMSCRIPTEN)
 			"-sMODULARIZE=1"
 			"-sEXPORT_NAME=TorcsWebProbe"
 			"-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap']"
-			"-sEXPORTED_FUNCTIONS=['_main','_torcs_web_probe','_torcs_web_get_module_name','_torcs_web_get_capture_fps']"
+			"-sEXPORTED_FUNCTIONS=['_main','_torcs_web_probe','_torcs_web_get_module_name','_torcs_web_get_capture_fps','_torcs_web_check_static_module_registry']"
 	)
 	set_target_properties(torcs_web_probe PROPERTIES SUFFIX ".js")
 
