@@ -211,7 +211,7 @@
 			right: 14px;
 			bottom: 14px;
 			display: grid;
-			grid-template-columns: repeat(4, minmax(0, 1fr));
+			grid-template-columns: repeat(6, minmax(0, 1fr));
 			border: 1px solid var(--line);
 			background: rgba(16, 17, 15, 0.84);
 			backdrop-filter: blur(6px);
@@ -323,7 +323,9 @@
 			<div class="strip">
 				<div>X<strong id="pos-x">0.000</strong></div>
 				<div>Y<strong id="pos-y">0.000</strong></div>
-				<div>Z<strong id="pos-z">0.000</strong></div>
+				<div>Segment<strong id="segment">0</strong></div>
+				<div>Line<strong id="track-distance">0.000</strong></div>
+				<div>Offset<strong id="track-offset">0.000</strong></div>
 				<div>State<strong id="state">idle</strong></div>
 			</div>
 		</section>
@@ -351,7 +353,9 @@
 			wheelSpin: document.getElementById("wheel-spin"),
 			x: document.getElementById("pos-x"),
 			y: document.getElementById("pos-y"),
-			z: document.getElementById("pos-z"),
+			segment: document.getElementById("segment"),
+			trackDistance: document.getElementById("track-distance"),
+			trackOffset: document.getElementById("track-offset"),
 			canvas: document.getElementById("viewport"),
 		};
 
@@ -371,6 +375,9 @@
 			gear: 0,
 			wheelSpin: 0,
 			corners: [],
+			trackSegmentId: 0,
+			trackDistanceFromStart: 0,
+			trackToMiddle: 0,
 		};
 		const keys = new Set();
 		const controlKeyCodes = new Set([
@@ -508,6 +515,9 @@
 					x: call("torcs_web_runtime_get_car_corner_x", "number", ["number"], [index]),
 					y: call("torcs_web_runtime_get_car_corner_y", "number", ["number"], [index]),
 				})),
+				trackSegmentId: call("torcs_web_runtime_get_car_track_segment_id", "number"),
+				trackDistanceFromStart: call("torcs_web_runtime_get_car_track_distance_from_start", "number"),
+				trackToMiddle: call("torcs_web_runtime_get_car_track_to_middle", "number"),
 			};
 			els.time.textContent = car.time.toFixed(3);
 			els.speed.textContent = car.speed.toFixed(3);
@@ -517,7 +527,9 @@
 			els.wheelSpin.textContent = car.wheelSpin.toFixed(1);
 			els.x.textContent = car.x.toFixed(3);
 			els.y.textContent = car.y.toFixed(3);
-			els.z.textContent = car.z.toFixed(3);
+			els.segment.textContent = String(car.trackSegmentId);
+			els.trackDistance.textContent = car.trackDistanceFromStart.toFixed(3);
+			els.trackOffset.textContent = car.trackToMiddle.toFixed(3);
 		}
 
 		function sampleTrack() {

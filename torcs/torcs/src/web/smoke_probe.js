@@ -39,6 +39,17 @@ createModule()
 		runtime.corner0Y = module.ccall("torcs_web_runtime_get_car_corner_y", "number", ["number"], [0]);
 		runtime.corner1X = module.ccall("torcs_web_runtime_get_car_corner_x", "number", ["number"], [1]);
 		runtime.corner1Y = module.ccall("torcs_web_runtime_get_car_corner_y", "number", ["number"], [1]);
+		runtime.trackSegmentId = module.ccall("torcs_web_runtime_get_car_track_segment_id", "number", [], []);
+		runtime.trackSegmentType = module.ccall("torcs_web_runtime_get_car_track_segment_type", "number", [], []);
+		runtime.trackToStart = module.ccall("torcs_web_runtime_get_car_track_to_start", "number", [], []);
+		runtime.trackToRight = module.ccall("torcs_web_runtime_get_car_track_to_right", "number", [], []);
+		runtime.trackToMiddle = module.ccall("torcs_web_runtime_get_car_track_to_middle", "number", [], []);
+		runtime.trackDistanceFromStart = module.ccall(
+			"torcs_web_runtime_get_car_track_distance_from_start",
+			"number",
+			[],
+			[],
+		);
 		runtime.engineRpm = module.ccall("torcs_web_runtime_get_engine_rpm", "number", [], []);
 		runtime.engineRedline = module.ccall("torcs_web_runtime_get_engine_redline", "number", [], []);
 		runtime.gear = module.ccall("torcs_web_runtime_get_gear", "number", [], []);
@@ -122,6 +133,12 @@ createModule()
 		drive.speed = module.ccall("torcs_web_runtime_get_car_speed", "number", [], []);
 		drive.gear = module.ccall("torcs_web_runtime_get_gear", "number", [], []);
 		drive.engineRpm = module.ccall("torcs_web_runtime_get_engine_rpm", "number", [], []);
+		drive.trackDistanceFromStart = module.ccall(
+			"torcs_web_runtime_get_car_track_distance_from_start",
+			"number",
+			[],
+			[],
+		);
 		module.ccall("torcs_web_runtime_shutdown", null, [], []);
 
 		const result = {
@@ -167,6 +184,13 @@ createModule()
 			!Number.isFinite(runtime.corner1X) ||
 			!Number.isFinite(runtime.corner1Y) ||
 			Math.hypot(runtime.corner0X - runtime.corner1X, runtime.corner0Y - runtime.corner1Y) <= 0.1 ||
+			runtime.trackSegmentId < 0 ||
+			![1, 2, 3].includes(runtime.trackSegmentType) ||
+			!Number.isFinite(runtime.trackToStart) ||
+			!Number.isFinite(runtime.trackToRight) ||
+			!Number.isFinite(runtime.trackToMiddle) ||
+			runtime.trackDistanceFromStart <= 0 ||
+			runtime.trackDistanceFromStart >= runtime.trackLength ||
 			runtime.engineRpm <= 0 ||
 			runtime.engineRedline <= 0 ||
 			runtime.gear !== 0 ||
@@ -196,6 +220,7 @@ createModule()
 			drive.speed <= 2 ||
 			drive.gear !== 1 ||
 			drive.engineRpm <= runtime.engineRpm ||
+			drive.trackDistanceFromStart <= runtime.trackDistanceFromStart ||
 			Math.hypot(drive.x - drive.startX, drive.y - drive.startY) <= 5
 		) {
 			fail("TORCS WASM probe smoke test failed", result);

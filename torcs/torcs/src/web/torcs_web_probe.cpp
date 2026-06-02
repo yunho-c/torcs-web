@@ -800,6 +800,57 @@ torcs_web_runtime_get_car_corner_y(int cornerIndex)
 }
 
 EMSCRIPTEN_KEEPALIVE
+int
+torcs_web_runtime_get_car_track_segment_id(void)
+{
+	return Runtime.active && Runtime.car._trkPos.seg ? Runtime.car._trkPos.seg->id : -1;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int
+torcs_web_runtime_get_car_track_segment_type(void)
+{
+	return Runtime.active && Runtime.car._trkPos.seg ? Runtime.car._trkPos.seg->type : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+double
+torcs_web_runtime_get_car_track_to_start(void)
+{
+	return Runtime.active ? Runtime.car._trkPos.toStart : 0.0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+double
+torcs_web_runtime_get_car_track_to_right(void)
+{
+	return Runtime.active ? Runtime.car._trkPos.toRight : 0.0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+double
+torcs_web_runtime_get_car_track_to_middle(void)
+{
+	return Runtime.active ? Runtime.car._trkPos.toMiddle : 0.0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+double
+torcs_web_runtime_get_car_track_distance_from_start(void)
+{
+	tTrackSeg *seg;
+	tdble segmentDistance;
+
+	if (!Runtime.active || !Runtime.car._trkPos.seg) {
+		return 0.0;
+	}
+
+	seg = Runtime.car._trkPos.seg;
+	segmentDistance = seg->type == TR_STR ? Runtime.car._trkPos.toStart : Runtime.car._trkPos.toStart * seg->radius;
+	return seg->lgfromstart + segmentDistance;
+}
+
+EMSCRIPTEN_KEEPALIVE
 double
 torcs_web_runtime_get_engine_rpm(void)
 {
