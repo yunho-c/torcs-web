@@ -91,7 +91,9 @@ redline, and per-wheel spin/slip scalars. The browser harness now draws E-Track
 1 from these sampled TORCS track coordinates instead of a placeholder map, uses
 the simulated car footprint instead of guessed display geometry, mirrors
 keyboard driving input into the same control path as the sliders, and shows the
-live drivetrain fields. Use the same
+live drivetrain fields. The Node smoke path also runs a short first-gear
+full-throttle segment to verify that the browser control defaults can move the
+simulated car. Use the same
 working-directory rule, or configure
 `locateFile` in browser code, because the generated JavaScript loads the
 `.wasm` and `.data` files relative to the current runtime location.

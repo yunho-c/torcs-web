@@ -102,6 +102,28 @@ createModule()
 		);
 		module.ccall("torcs_web_runtime_shutdown", null, [], []);
 
+		const drive = {
+			start: module.ccall("torcs_web_runtime_start", "number", [], []),
+		};
+		drive.setControls = module.ccall(
+			"torcs_web_runtime_set_controls",
+			"number",
+			["number", "number", "number", "number", "number"],
+			[0.0, 1.0, 0.0, 0.0, 1],
+		);
+		drive.startX = module.ccall("torcs_web_runtime_get_car_x", "number", [], []);
+		drive.startY = module.ccall("torcs_web_runtime_get_car_y", "number", [], []);
+		for (let i = 0; i < 600; i += 1) {
+			drive.step = module.ccall("torcs_web_runtime_step", "number", ["number"], [1 / 60]);
+		}
+		drive.time = module.ccall("torcs_web_runtime_get_time", "number", [], []);
+		drive.x = module.ccall("torcs_web_runtime_get_car_x", "number", [], []);
+		drive.y = module.ccall("torcs_web_runtime_get_car_y", "number", [], []);
+		drive.speed = module.ccall("torcs_web_runtime_get_car_speed", "number", [], []);
+		drive.gear = module.ccall("torcs_web_runtime_get_gear", "number", [], []);
+		drive.engineRpm = module.ccall("torcs_web_runtime_get_engine_rpm", "number", [], []);
+		module.ccall("torcs_web_runtime_shutdown", null, [], []);
+
 		const result = {
 			rc: module.ccall("torcs_web_probe", "number", [], []),
 			rc2: module.ccall("torcs_web_probe", "number", [], []),
@@ -115,6 +137,7 @@ createModule()
 			headlessSimInit: module.ccall("torcs_web_check_headless_sim_init", "number", [], []),
 			headlessSimUpdate: module.ccall("torcs_web_check_headless_sim_update", "number", [], []),
 			runtime,
+			drive,
 		};
 
 		console.log(JSON.stringify(result));
@@ -165,7 +188,15 @@ createModule()
 			!Number.isFinite(runtime.y) ||
 			!Number.isFinite(runtime.z) ||
 			!Number.isFinite(runtime.yaw) ||
-			!Number.isFinite(runtime.speed)
+			!Number.isFinite(runtime.speed) ||
+			drive.start !== 0 ||
+			drive.setControls !== 0 ||
+			drive.step !== 0 ||
+			drive.time < 9.9 ||
+			drive.speed <= 2 ||
+			drive.gear !== 1 ||
+			drive.engineRpm <= runtime.engineRpm ||
+			Math.hypot(drive.x - drive.startX, drive.y - drive.startY) <= 5
 		) {
 			fail("TORCS WASM probe smoke test failed", result);
 		}
