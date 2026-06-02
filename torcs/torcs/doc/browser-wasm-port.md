@@ -83,8 +83,11 @@ path also preloads the `kc-2000gt` car XML, configures one car on E-Track 1,
 runs one fixed `RCM_MAX_DT_SIMU` update, and validates the resulting car state.
 The probe also exposes a small persistent runtime API so browser JavaScript can
 start the one-car headless session, set controls, step simulation time, read
-time/position/yaw/speed/fuel snapshots, and shut the session down without using
-raw TORCS pointers. Use the same working-directory rule, or configure
+time/position/yaw/speed/fuel snapshots, sample the loaded track's center/right/
+left boundaries for browser rendering, and shut the session down without using
+raw TORCS pointers. The browser harness now draws E-Track 1 from these sampled
+TORCS track coordinates instead of a placeholder map. Use the same
+working-directory rule, or configure
 `locateFile` in browser code, because the generated JavaScript loads the
 `.wasm` and `.data` files relative to the current runtime location.
 

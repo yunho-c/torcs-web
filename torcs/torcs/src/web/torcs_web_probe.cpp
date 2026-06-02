@@ -42,6 +42,7 @@ extern "C" int track(tModInfo *modInfo);
 extern "C" int simuv2(tModInfo *modInfo);
 
 #define TORCS_WEB_SIM_IDENT 0
+#define TORCS_WEB_TRACK_SAMPLES_PER_SEG 12
 
 struct CarElt;
 struct RmInfo;
@@ -179,6 +180,53 @@ clampControl(tdble value, tdble minValue, tdble maxValue)
 		return maxValue;
 	}
 	return value;
+}
+
+static int
+getTrackSample(int sampleIndex, int side, tdble *x, tdble *y)
+{
+	tTrackSeg *seg;
+	tTrkLocPos pos;
+	const int segIndex = sampleIndex / TORCS_WEB_TRACK_SAMPLES_PER_SEG;
+	const int sampleInSeg = sampleIndex % TORCS_WEB_TRACK_SAMPLES_PER_SEG;
+	int i;
+
+	if (!Runtime.active || !Runtime.trackData || !Runtime.trackData->seg ||
+		sampleIndex < 0 ||
+		sampleIndex >= Runtime.trackData->nseg * TORCS_WEB_TRACK_SAMPLES_PER_SEG ||
+		!x || !y) {
+		return -1;
+	}
+
+	seg = Runtime.trackData->seg;
+	for (i = 0; i < segIndex && seg; i++) {
+		seg = seg->next;
+	}
+	if (!seg) {
+		return -1;
+	}
+
+	memset(&pos, 0, sizeof(pos));
+	pos.seg = seg;
+	pos.type = TR_LPOS_SEGMENT;
+	pos.toStart = (seg->type == TR_STR ? seg->length : seg->arc) *
+		((tdble)sampleInSeg / (tdble)TORCS_WEB_TRACK_SAMPLES_PER_SEG);
+
+	switch (side) {
+		case 0:
+			pos.toRight = 0.0f;
+			break;
+		case 2:
+			pos.toRight = RtTrackGetWidth(seg, pos.toStart);
+			break;
+		case 1:
+		default:
+			pos.toRight = RtTrackGetWidth(seg, pos.toStart) * 0.5f;
+			break;
+	}
+
+	RtTrackLocal2Global(&pos, x, y, TR_TORIGHT);
+	return 0;
 }
 
 static void
@@ -706,6 +754,54 @@ double
 torcs_web_runtime_get_car_fuel(void)
 {
 	return Runtime.active ? Runtime.car._fuel : 0.0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+double
+torcs_web_runtime_get_track_length(void)
+{
+	return Runtime.active && Runtime.trackData ? Runtime.trackData->length : 0.0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+double
+torcs_web_runtime_get_track_width(void)
+{
+	return Runtime.active && Runtime.trackData ? Runtime.trackData->width : 0.0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int
+torcs_web_runtime_get_track_segment_count(void)
+{
+	return Runtime.active && Runtime.trackData ? Runtime.trackData->nseg : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int
+torcs_web_runtime_get_track_sample_count(void)
+{
+	return Runtime.active && Runtime.trackData ? Runtime.trackData->nseg * TORCS_WEB_TRACK_SAMPLES_PER_SEG : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+double
+torcs_web_runtime_get_track_sample_x(int sampleIndex, int side)
+{
+	tdble x = 0.0f;
+	tdble y = 0.0f;
+
+	return getTrackSample(sampleIndex, side, &x, &y) == 0 ? x : 0.0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+double
+torcs_web_runtime_get_track_sample_y(int sampleIndex, int side)
+{
+	tdble x = 0.0f;
+	tdble y = 0.0f;
+
+	return getTrackSample(sampleIndex, side, &x, &y) == 0 ? y : 0.0;
 }
 
 }

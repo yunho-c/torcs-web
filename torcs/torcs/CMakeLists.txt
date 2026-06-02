@@ -156,6 +156,12 @@ if(EMSCRIPTEN)
 		"'_torcs_web_runtime_get_car_yaw'"
 		"'_torcs_web_runtime_get_car_speed'"
 		"'_torcs_web_runtime_get_car_fuel'"
+		"'_torcs_web_runtime_get_track_length'"
+		"'_torcs_web_runtime_get_track_width'"
+		"'_torcs_web_runtime_get_track_segment_count'"
+		"'_torcs_web_runtime_get_track_sample_count'"
+		"'_torcs_web_runtime_get_track_sample_x'"
+		"'_torcs_web_runtime_get_track_sample_y'"
 	)
 	list(JOIN TORCS_WEB_EXPORTED_FUNCTIONS "," TORCS_WEB_EXPORTED_FUNCTIONS_ARG)
 

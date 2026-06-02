@@ -32,6 +32,46 @@ createModule()
 		runtime.yaw = module.ccall("torcs_web_runtime_get_car_yaw", "number", [], []);
 		runtime.speed = module.ccall("torcs_web_runtime_get_car_speed", "number", [], []);
 		runtime.fuel = module.ccall("torcs_web_runtime_get_car_fuel", "number", [], []);
+		runtime.trackLength = module.ccall("torcs_web_runtime_get_track_length", "number", [], []);
+		runtime.trackWidth = module.ccall("torcs_web_runtime_get_track_width", "number", [], []);
+		runtime.trackSegments = module.ccall("torcs_web_runtime_get_track_segment_count", "number", [], []);
+		runtime.trackSamples = module.ccall("torcs_web_runtime_get_track_sample_count", "number", [], []);
+		runtime.trackCenterX = module.ccall(
+			"torcs_web_runtime_get_track_sample_x",
+			"number",
+			["number", "number"],
+			[0, 1],
+		);
+		runtime.trackCenterY = module.ccall(
+			"torcs_web_runtime_get_track_sample_y",
+			"number",
+			["number", "number"],
+			[0, 1],
+		);
+		runtime.trackRightX = module.ccall(
+			"torcs_web_runtime_get_track_sample_x",
+			"number",
+			["number", "number"],
+			[0, 0],
+		);
+		runtime.trackRightY = module.ccall(
+			"torcs_web_runtime_get_track_sample_y",
+			"number",
+			["number", "number"],
+			[0, 0],
+		);
+		runtime.trackLeftX = module.ccall(
+			"torcs_web_runtime_get_track_sample_x",
+			"number",
+			["number", "number"],
+			[0, 2],
+		);
+		runtime.trackLeftY = module.ccall(
+			"torcs_web_runtime_get_track_sample_y",
+			"number",
+			["number", "number"],
+			[0, 2],
+		);
 		module.ccall("torcs_web_runtime_shutdown", null, [], []);
 
 		const result = {
@@ -68,6 +108,17 @@ createModule()
 			runtime.step !== 0 ||
 			runtime.time <= 0 ||
 			runtime.fuel <= 0 ||
+			runtime.trackLength <= 0 ||
+			runtime.trackWidth <= 0 ||
+			runtime.trackSegments <= 0 ||
+			runtime.trackSamples !== runtime.trackSegments * 12 ||
+			!Number.isFinite(runtime.trackCenterX) ||
+			!Number.isFinite(runtime.trackCenterY) ||
+			!Number.isFinite(runtime.trackRightX) ||
+			!Number.isFinite(runtime.trackRightY) ||
+			!Number.isFinite(runtime.trackLeftX) ||
+			!Number.isFinite(runtime.trackLeftY) ||
+			Math.hypot(runtime.trackRightX - runtime.trackLeftX, runtime.trackRightY - runtime.trackLeftY) <= 1 ||
 			!Number.isFinite(runtime.x) ||
 			!Number.isFinite(runtime.y) ||
 			!Number.isFinite(runtime.z) ||

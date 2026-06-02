@@ -356,6 +356,15 @@
 		let active = false;
 		let raf = 0;
 		let car = { x: 0, y: 0, z: 0, yaw: 0, speed: 0, fuel: 0, time: 0 };
+		let track = {
+			center: [],
+			right: [],
+			left: [],
+			bounds: null,
+			length: 0,
+			width: 0,
+			segments: 0,
+		};
 
 		function call(name, returnType, argTypes = [], args = []) {
 			return moduleInstance.ccall(name, returnType, argTypes, args);
@@ -413,6 +422,51 @@
 			els.z.textContent = car.z.toFixed(3);
 		}
 
+		function sampleTrack() {
+			track = {
+				center: [],
+				right: [],
+				left: [],
+				bounds: null,
+				length: call("torcs_web_runtime_get_track_length", "number"),
+				width: call("torcs_web_runtime_get_track_width", "number"),
+				segments: call("torcs_web_runtime_get_track_segment_count", "number"),
+			};
+
+			const samples = call("torcs_web_runtime_get_track_sample_count", "number");
+			const bounds = {
+				minX: Number.POSITIVE_INFINITY,
+				minY: Number.POSITIVE_INFINITY,
+				maxX: Number.NEGATIVE_INFINITY,
+				maxY: Number.NEGATIVE_INFINITY,
+			};
+			const readPoint = (index, side) => ({
+				x: call("torcs_web_runtime_get_track_sample_x", "number", ["number", "number"], [index, side]),
+				y: call("torcs_web_runtime_get_track_sample_y", "number", ["number", "number"], [index, side]),
+			});
+			const extendBounds = (point) => {
+				bounds.minX = Math.min(bounds.minX, point.x);
+				bounds.minY = Math.min(bounds.minY, point.y);
+				bounds.maxX = Math.max(bounds.maxX, point.x);
+				bounds.maxY = Math.max(bounds.maxY, point.y);
+			};
+
+			for (let i = 0; i < samples; i += 1) {
+				const right = readPoint(i, 0);
+				const center = readPoint(i, 1);
+				const left = readPoint(i, 2);
+				track.right.push(right);
+				track.center.push(center);
+				track.left.push(left);
+				extendBounds(right);
+				extendBounds(left);
+			}
+
+			if (Number.isFinite(bounds.minX)) {
+				track.bounds = bounds;
+			}
+		}
+
 		function step() {
 			if (!active) {
 				return;
@@ -426,57 +480,116 @@
 		function draw() {
 			const canvas = els.canvas;
 			const ctx = canvas.getContext("2d");
+			const rect = canvas.getBoundingClientRect();
+			const ratio = window.devicePixelRatio || 1;
+			const nextWidth = Math.max(1, Math.floor(rect.width * ratio));
+			const nextHeight = Math.max(1, Math.floor(rect.height * ratio));
+			if (canvas.width !== nextWidth || canvas.height !== nextHeight) {
+				canvas.width = nextWidth;
+				canvas.height = nextHeight;
+			}
 			const w = canvas.width;
 			const h = canvas.height;
 			ctx.clearRect(0, 0, w, h);
 
 			ctx.strokeStyle = "rgba(240, 238, 229, 0.08)";
-			ctx.lineWidth = 1;
-			for (let x = 0; x <= w; x += 44) {
+			ctx.lineWidth = Math.max(1, ratio);
+			for (let x = 0; x <= w; x += 44 * ratio) {
 				ctx.beginPath();
 				ctx.moveTo(x, 0);
 				ctx.lineTo(x, h);
 				ctx.stroke();
 			}
-			for (let y = 0; y <= h; y += 44) {
+			for (let y = 0; y <= h; y += 44 * ratio) {
 				ctx.beginPath();
 				ctx.moveTo(0, y);
 				ctx.lineTo(w, y);
 				ctx.stroke();
 			}
 
-			const cx = w / 2;
-			const cy = h / 2;
-			ctx.strokeStyle = "#3a4037";
-			ctx.lineWidth = 2;
-			ctx.beginPath();
-			ctx.arc(cx, cy, 170, 0, Math.PI * 2);
-			ctx.stroke();
-			ctx.beginPath();
-			ctx.moveTo(cx - 220, cy);
-			ctx.lineTo(cx + 220, cy);
-			ctx.moveTo(cx, cy - 220);
-			ctx.lineTo(cx, cy + 220);
-			ctx.stroke();
+			let view = null;
+			if (track.bounds) {
+				const pad = 58 * ratio;
+				const spanX = Math.max(1, track.bounds.maxX - track.bounds.minX);
+				const spanY = Math.max(1, track.bounds.maxY - track.bounds.minY);
+				const scale = Math.min((w - pad * 2) / spanX, (h - pad * 2) / spanY);
+				const midX = (track.bounds.minX + track.bounds.maxX) * 0.5;
+				const midY = (track.bounds.minY + track.bounds.maxY) * 0.5;
+				view = {
+					scale,
+					toCanvas(point) {
+						return {
+							x: w * 0.5 + (point.x - midX) * scale,
+							y: h * 0.5 - (point.y - midY) * scale,
+						};
+					},
+				};
+
+				ctx.beginPath();
+				for (const [index, point] of track.left.entries()) {
+					const p = view.toCanvas(point);
+					if (index === 0) {
+						ctx.moveTo(p.x, p.y);
+					} else {
+						ctx.lineTo(p.x, p.y);
+					}
+				}
+				for (let i = track.right.length - 1; i >= 0; i -= 1) {
+					const p = view.toCanvas(track.right[i]);
+					ctx.lineTo(p.x, p.y);
+				}
+				ctx.closePath();
+				ctx.fillStyle = "#20231f";
+				ctx.fill();
+				ctx.strokeStyle = "#f0eee5";
+				ctx.lineWidth = Math.max(2, ratio * 2);
+				ctx.stroke();
+
+				ctx.beginPath();
+				for (const [index, point] of track.center.entries()) {
+					const p = view.toCanvas(point);
+					if (index === 0) {
+						ctx.moveTo(p.x, p.y);
+					} else {
+						ctx.lineTo(p.x, p.y);
+					}
+				}
+				ctx.closePath();
+				ctx.setLineDash([8 * ratio, 12 * ratio]);
+				ctx.strokeStyle = "rgba(121, 184, 189, 0.58)";
+				ctx.lineWidth = Math.max(1, ratio);
+				ctx.stroke();
+				ctx.setLineDash([]);
+
+				if (track.center.length > 0) {
+					const start = view.toCanvas(track.center[0]);
+					ctx.fillStyle = "#81b66f";
+					ctx.fillRect(start.x - 4 * ratio, start.y - 4 * ratio, 8 * ratio, 8 * ratio);
+				}
+			}
+
+			const carPoint = view ? view.toCanvas(car) : { x: w * 0.5, y: h * 0.5 };
+			const carLength = Math.max(16 * ratio, Math.min(34 * ratio, (track.width || 12) * (view ? view.scale : ratio) * 0.65));
+			const carWidth = carLength * 0.48;
 
 			ctx.save();
-			ctx.translate(cx, cy);
-			ctx.rotate(car.yaw);
+			ctx.translate(carPoint.x, carPoint.y);
+			ctx.rotate(-car.yaw);
 			ctx.fillStyle = "#d24c3f";
 			ctx.strokeStyle = "#f0eee5";
-			ctx.lineWidth = 2;
+			ctx.lineWidth = Math.max(2, ratio * 2);
 			ctx.beginPath();
-			ctx.moveTo(26, 0);
-			ctx.lineTo(-18, -13);
-			ctx.lineTo(-10, 0);
-			ctx.lineTo(-18, 13);
+			ctx.moveTo(carLength * 0.55, 0);
+			ctx.lineTo(-carLength * 0.38, -carWidth * 0.5);
+			ctx.lineTo(-carLength * 0.22, 0);
+			ctx.lineTo(-carLength * 0.38, carWidth * 0.5);
 			ctx.closePath();
 			ctx.fill();
 			ctx.stroke();
 			ctx.restore();
 
 			ctx.fillStyle = "#79b8bd";
-			ctx.fillRect(cx - 2, cy - 2, 4, 4);
+			ctx.fillRect(carPoint.x - 2 * ratio, carPoint.y - 2 * ratio, 4 * ratio, 4 * ratio);
 		}
 
 		async function startRuntime() {
@@ -488,6 +601,7 @@
 			setStatus(active ? "ready" : "failed");
 			setEnabled(active);
 			applyControls();
+			sampleTrack();
 			sample();
 			draw();
 		}
@@ -502,6 +616,7 @@
 			}
 			setStatus("stopped");
 			setEnabled(false);
+			track = { center: [], right: [], left: [], bounds: null, length: 0, width: 0, segments: 0 };
 			draw();
 		}
 
@@ -530,6 +645,7 @@
 		for (const input of [els.steer, els.accel, els.brake, els.clutch, els.gear]) {
 			input.addEventListener("input", applyControls);
 		}
+		window.addEventListener("resize", draw);
 
 		setEnabled(false);
 		draw();
