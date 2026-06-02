@@ -48,14 +48,17 @@ Build command:
 cd torcs/torcs
 EMSDK_PYTHON=/opt/homebrew/bin/python3 emcmake cmake -S . -B build-wasm -G Ninja
 EMSDK_PYTHON=/opt/homebrew/bin/python3 EM_CACHE="$PWD/build-wasm/emcache" cmake --build build-wasm --target torcs_web_probe
+EMSDK_PYTHON=/opt/homebrew/bin/python3 EM_CACHE="$PWD/build-wasm/emcache" cmake --build build-wasm --target torcs_web_probe_smoke
 ```
 
 The generated target is `build-wasm/torcs_web_probe.js` with a companion
 `.wasm` and `.data` file. It uses Emscripten `MODULARIZE` and `EXPORT_NAME`, so
 JavaScript can instantiate it as `TorcsWebProbe(...)` and call exported probe
-functions via `ccall`/`cwrap`. Run Node-based smoke checks from `build-wasm`, or
-configure `locateFile` in browser code, because the generated JavaScript loads
-the `.wasm` and `.data` files relative to the current runtime location.
+functions via `ccall`/`cwrap`. The `torcs_web_probe_smoke` target runs
+`src/web/smoke_probe.js` from the generated output directory. Use the same
+working-directory rule, or configure `locateFile` in browser code, because the
+generated JavaScript loads the `.wasm` and `.data` files relative to the current
+runtime location.
 
 On this macOS/Homebrew setup, `EMSDK_PYTHON` avoids the system Python 3.9
 interpreter and `EM_CACHE` avoids writes to the read-only Homebrew Emscripten

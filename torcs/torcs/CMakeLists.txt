@@ -59,4 +59,17 @@ if(EMSCRIPTEN)
 			"-sEXPORTED_FUNCTIONS=['_main','_torcs_web_probe','_torcs_web_get_module_name','_torcs_web_get_capture_fps']"
 	)
 	set_target_properties(torcs_web_probe PROPERTIES SUFFIX ".js")
+
+	find_program(TORCS_NODE_EXECUTABLE node)
+	if(TORCS_NODE_EXECUTABLE)
+		add_custom_target(torcs_web_probe_smoke
+			COMMAND
+				"${TORCS_NODE_EXECUTABLE}"
+				"${TORCS_ROOT}/src/web/smoke_probe.js"
+				"$<TARGET_FILE:torcs_web_probe>"
+			WORKING_DIRECTORY "$<TARGET_FILE_DIR:torcs_web_probe>"
+			DEPENDS torcs_web_probe
+			COMMENT "Running TORCS WASM probe smoke test"
+		)
+	endif()
 endif()
