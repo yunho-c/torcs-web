@@ -83,11 +83,13 @@ path also preloads the `kc-2000gt` car XML, configures one car on E-Track 1,
 runs one fixed `RCM_MAX_DT_SIMU` update, and validates the resulting car state.
 The probe also exposes a small persistent runtime API so browser JavaScript can
 start the one-car headless session, set controls, step simulation time, read
-time/position/yaw/speed/fuel snapshots, sample the loaded track's center/right/
-left boundaries for browser rendering, and shut the session down without using
-raw TORCS pointers. The browser harness now draws E-Track 1 from these sampled
-TORCS track coordinates instead of a placeholder map, and mirrors keyboard
-driving input into the same control path as the sliders. Use the same
+time/position/yaw/speed/fuel/drivetrain snapshots, sample the loaded track's
+center/right/left boundaries for browser rendering, and shut the session down
+without using raw TORCS pointers. Drivetrain telemetry currently includes active
+gear, engine revs, engine redline, and per-wheel spin/slip scalars. The browser
+harness now draws E-Track 1 from these sampled TORCS track coordinates instead
+of a placeholder map, mirrors keyboard driving input into the same control path
+as the sliders, and shows the live drivetrain fields. Use the same
 working-directory rule, or configure
 `locateFile` in browser code, because the generated JavaScript loads the
 `.wasm` and `.data` files relative to the current runtime location.
@@ -127,7 +129,7 @@ browser-facing API should expose:
 
 - configurable race/track/car selection
 - multi-car loading and driver selection
-- snapshots of `tSituation`, car transforms, wheel state, lap state, and
+- broader snapshots of `tSituation`, car transforms, wheel state, lap state, and
   race events
 
 The browser shell should not receive raw TORCS pointers.

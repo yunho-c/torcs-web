@@ -758,6 +758,60 @@ torcs_web_runtime_get_car_fuel(void)
 
 EMSCRIPTEN_KEEPALIVE
 double
+torcs_web_runtime_get_engine_rpm(void)
+{
+	return Runtime.active ? Runtime.car._enginerpm : 0.0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+double
+torcs_web_runtime_get_engine_redline(void)
+{
+	return Runtime.active ? Runtime.car._enginerpmRedLine : 0.0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int
+torcs_web_runtime_get_gear(void)
+{
+	return Runtime.active ? Runtime.car._gear : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+double
+torcs_web_runtime_get_wheel_spin_velocity(int wheelIndex)
+{
+	if (!Runtime.active || wheelIndex < 0 || wheelIndex >= 4) {
+		return 0.0;
+	}
+
+	return Runtime.car._wheelSpinVel(wheelIndex);
+}
+
+EMSCRIPTEN_KEEPALIVE
+double
+torcs_web_runtime_get_wheel_slip_accel(int wheelIndex)
+{
+	if (!Runtime.active || wheelIndex < 0 || wheelIndex >= 4) {
+		return 0.0;
+	}
+
+	return Runtime.car._wheelSlipAccel(wheelIndex);
+}
+
+EMSCRIPTEN_KEEPALIVE
+double
+torcs_web_runtime_get_wheel_slip_side(int wheelIndex)
+{
+	if (!Runtime.active || wheelIndex < 0 || wheelIndex >= 4) {
+		return 0.0;
+	}
+
+	return Runtime.car._wheelSlipSide(wheelIndex);
+}
+
+EMSCRIPTEN_KEEPALIVE
+double
 torcs_web_runtime_get_track_length(void)
 {
 	return Runtime.active && Runtime.trackData ? Runtime.trackData->length : 0.0;

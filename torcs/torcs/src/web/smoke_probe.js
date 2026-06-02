@@ -32,6 +32,27 @@ createModule()
 		runtime.yaw = module.ccall("torcs_web_runtime_get_car_yaw", "number", [], []);
 		runtime.speed = module.ccall("torcs_web_runtime_get_car_speed", "number", [], []);
 		runtime.fuel = module.ccall("torcs_web_runtime_get_car_fuel", "number", [], []);
+		runtime.engineRpm = module.ccall("torcs_web_runtime_get_engine_rpm", "number", [], []);
+		runtime.engineRedline = module.ccall("torcs_web_runtime_get_engine_redline", "number", [], []);
+		runtime.gear = module.ccall("torcs_web_runtime_get_gear", "number", [], []);
+		runtime.wheelSpinVelocity = module.ccall(
+			"torcs_web_runtime_get_wheel_spin_velocity",
+			"number",
+			["number"],
+			[0],
+		);
+		runtime.wheelSlipAccel = module.ccall(
+			"torcs_web_runtime_get_wheel_slip_accel",
+			"number",
+			["number"],
+			[0],
+		);
+		runtime.wheelSlipSide = module.ccall(
+			"torcs_web_runtime_get_wheel_slip_side",
+			"number",
+			["number"],
+			[0],
+		);
 		runtime.trackLength = module.ccall("torcs_web_runtime_get_track_length", "number", [], []);
 		runtime.trackWidth = module.ccall("torcs_web_runtime_get_track_width", "number", [], []);
 		runtime.trackSegments = module.ccall("torcs_web_runtime_get_track_segment_count", "number", [], []);
@@ -108,6 +129,12 @@ createModule()
 			runtime.step !== 0 ||
 			runtime.time <= 0 ||
 			runtime.fuel <= 0 ||
+			runtime.engineRpm <= 0 ||
+			runtime.engineRedline <= 0 ||
+			runtime.gear !== 0 ||
+			!Number.isFinite(runtime.wheelSpinVelocity) ||
+			!Number.isFinite(runtime.wheelSlipAccel) ||
+			!Number.isFinite(runtime.wheelSlipSide) ||
 			runtime.trackLength <= 0 ||
 			runtime.trackWidth <= 0 ||
 			runtime.trackSegments <= 0 ||

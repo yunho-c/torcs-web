@@ -312,7 +312,9 @@
 				<div class="metric"><span>Time</span><strong id="time">0.000</strong></div>
 				<div class="metric"><span>Speed</span><strong id="speed">0.000</strong></div>
 				<div class="metric"><span>Fuel</span><strong id="fuel">0.000</strong></div>
-				<div class="metric"><span>Yaw</span><strong id="yaw">0.000</strong></div>
+				<div class="metric"><span>Gear</span><strong id="gear-state">0</strong></div>
+				<div class="metric"><span>Engine</span><strong id="engine-rpm">0.000</strong></div>
+				<div class="metric"><span>Wheel</span><strong id="wheel-spin">0.000</strong></div>
 			</div>
 		</section>
 
@@ -344,7 +346,9 @@
 			time: document.getElementById("time"),
 			speed: document.getElementById("speed"),
 			fuel: document.getElementById("fuel"),
-			yaw: document.getElementById("yaw"),
+			gearState: document.getElementById("gear-state"),
+			engineRpm: document.getElementById("engine-rpm"),
+			wheelSpin: document.getElementById("wheel-spin"),
 			x: document.getElementById("pos-x"),
 			y: document.getElementById("pos-y"),
 			z: document.getElementById("pos-z"),
@@ -355,7 +359,18 @@
 		let running = false;
 		let active = false;
 		let raf = 0;
-		let car = { x: 0, y: 0, z: 0, yaw: 0, speed: 0, fuel: 0, time: 0 };
+		let car = {
+			x: 0,
+			y: 0,
+			z: 0,
+			yaw: 0,
+			speed: 0,
+			fuel: 0,
+			time: 0,
+			engineRpm: 0,
+			gear: 0,
+			wheelSpin: 0,
+		};
 		const keys = new Set();
 		const controlKeyCodes = new Set([
 			"ArrowLeft",
@@ -485,11 +500,16 @@
 				yaw: call("torcs_web_runtime_get_car_yaw", "number"),
 				speed: call("torcs_web_runtime_get_car_speed", "number"),
 				fuel: call("torcs_web_runtime_get_car_fuel", "number"),
+				engineRpm: call("torcs_web_runtime_get_engine_rpm", "number"),
+				gear: call("torcs_web_runtime_get_gear", "number"),
+				wheelSpin: call("torcs_web_runtime_get_wheel_spin_velocity", "number", ["number"], [0]),
 			};
 			els.time.textContent = car.time.toFixed(3);
 			els.speed.textContent = car.speed.toFixed(3);
 			els.fuel.textContent = car.fuel.toFixed(3);
-			els.yaw.textContent = car.yaw.toFixed(3);
+			els.gearState.textContent = String(car.gear);
+			els.engineRpm.textContent = car.engineRpm.toFixed(1);
+			els.wheelSpin.textContent = car.wheelSpin.toFixed(1);
 			els.x.textContent = car.x.toFixed(3);
 			els.y.textContent = car.y.toFixed(3);
 			els.z.textContent = car.z.toFixed(3);
