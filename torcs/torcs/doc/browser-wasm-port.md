@@ -84,19 +84,23 @@ runs one fixed `RCM_MAX_DT_SIMU` update, and validates the resulting car state.
 The probe also exposes a small persistent runtime API so browser JavaScript can
 start the one-car headless session, set controls, step simulation time, read
 time/position/yaw/speed/fuel/drivetrain snapshots, read car dimensions and body
-corners, read local track-position scalars, sample the loaded track's
-center/right/left boundaries for browser rendering, and shut the session down
-without using raw TORCS pointers. Drivetrain telemetry currently includes active
-gear, engine revs, engine redline, and per-wheel spin/slip scalars. Local
-track-position telemetry currently includes segment id/type, `toStart`,
-`toRight`, `toMiddle`, and distance from the start line. The browser harness now
+corners, read local track-position scalars, read one-car race progress
+telemetry, sample the loaded track's center/right/left boundaries for browser
+rendering, and shut the session down without using raw TORCS pointers.
+Drivetrain telemetry currently includes active gear, engine revs, engine
+redline, and per-wheel spin/slip scalars. Local track-position telemetry
+currently includes segment id/type, `toStart`, `toRight`, `toMiddle`, and
+distance from the start line. Race-progress telemetry currently includes race
+state, position, lap count, remaining laps, lap progress, distance raced,
+current/last/best lap times, and top speed. The browser harness now
 draws E-Track 1 from these sampled TORCS track coordinates instead of a
 placeholder map, uses the simulated car footprint instead of guessed display
 geometry, mirrors keyboard driving input into the same control path as the
-sliders, and shows the live drivetrain and track-position fields. The Node
-smoke path also runs a short first-gear full-throttle segment to verify that the
-browser control defaults can move the simulated car. Use the same
-working-directory rule, or configure
+sliders, and shows the live drivetrain, track-position, and race-progress
+fields. The Node smoke path also runs a short first-gear full-throttle segment
+to verify that the browser control defaults can move the simulated car and
+advance distance-raced telemetry. Use the same working-directory rule, or
+configure
 `locateFile` in browser code, because the generated JavaScript loads the
 `.wasm` and `.data` files relative to the current runtime location.
 
@@ -135,8 +139,8 @@ browser-facing API should expose:
 
 - configurable race/track/car selection
 - multi-car loading and driver selection
-- broader snapshots of `tSituation`, car transforms, wheel state, lap state, and
-  race events
+- broader snapshots of `tSituation`, car transforms, wheel state, and race
+  events
 
 The browser shell should not receive raw TORCS pointers.
 

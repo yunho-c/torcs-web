@@ -50,6 +50,16 @@ createModule()
 			[],
 			[],
 		);
+		runtime.raceState = module.ccall("torcs_web_runtime_get_race_state", "number", [], []);
+		runtime.racePosition = module.ccall("torcs_web_runtime_get_race_position", "number", [], []);
+		runtime.lapCount = module.ccall("torcs_web_runtime_get_lap_count", "number", [], []);
+		runtime.remainingLaps = module.ccall("torcs_web_runtime_get_remaining_laps", "number", [], []);
+		runtime.lapProgress = module.ccall("torcs_web_runtime_get_lap_progress", "number", [], []);
+		runtime.distanceRaced = module.ccall("torcs_web_runtime_get_distance_raced", "number", [], []);
+		runtime.currentLapTime = module.ccall("torcs_web_runtime_get_current_lap_time", "number", [], []);
+		runtime.lastLapTime = module.ccall("torcs_web_runtime_get_last_lap_time", "number", [], []);
+		runtime.bestLapTime = module.ccall("torcs_web_runtime_get_best_lap_time", "number", [], []);
+		runtime.topSpeed = module.ccall("torcs_web_runtime_get_top_speed", "number", [], []);
 		runtime.engineRpm = module.ccall("torcs_web_runtime_get_engine_rpm", "number", [], []);
 		runtime.engineRedline = module.ccall("torcs_web_runtime_get_engine_redline", "number", [], []);
 		runtime.gear = module.ccall("torcs_web_runtime_get_gear", "number", [], []);
@@ -139,6 +149,10 @@ createModule()
 			[],
 			[],
 		);
+		drive.lapProgress = module.ccall("torcs_web_runtime_get_lap_progress", "number", [], []);
+		drive.distanceRaced = module.ccall("torcs_web_runtime_get_distance_raced", "number", [], []);
+		drive.currentLapTime = module.ccall("torcs_web_runtime_get_current_lap_time", "number", [], []);
+		drive.topSpeed = module.ccall("torcs_web_runtime_get_top_speed", "number", [], []);
 		module.ccall("torcs_web_runtime_shutdown", null, [], []);
 
 		const result = {
@@ -191,6 +205,17 @@ createModule()
 			!Number.isFinite(runtime.trackToMiddle) ||
 			runtime.trackDistanceFromStart <= 0 ||
 			runtime.trackDistanceFromStart >= runtime.trackLength ||
+			runtime.raceState !== 1 ||
+			runtime.racePosition !== 1 ||
+			runtime.lapCount !== 0 ||
+			runtime.remainingLaps !== 0 ||
+			runtime.lapProgress <= 0 ||
+			runtime.lapProgress >= 1 ||
+			runtime.distanceRaced < 0 ||
+			runtime.currentLapTime <= 0 ||
+			runtime.lastLapTime !== 0 ||
+			runtime.bestLapTime !== 0 ||
+			runtime.topSpeed < runtime.speed ||
 			runtime.engineRpm <= 0 ||
 			runtime.engineRedline <= 0 ||
 			runtime.gear !== 0 ||
@@ -221,6 +246,10 @@ createModule()
 			drive.gear !== 1 ||
 			drive.engineRpm <= runtime.engineRpm ||
 			drive.trackDistanceFromStart <= runtime.trackDistanceFromStart ||
+			drive.lapProgress <= runtime.lapProgress ||
+			drive.distanceRaced <= runtime.distanceRaced ||
+			drive.currentLapTime < 9.9 ||
+			drive.topSpeed < drive.speed ||
 			Math.hypot(drive.x - drive.startX, drive.y - drive.startY) <= 5
 		) {
 			fail("TORCS WASM probe smoke test failed", result);

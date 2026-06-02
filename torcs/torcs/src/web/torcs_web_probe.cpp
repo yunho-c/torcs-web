@@ -75,6 +75,10 @@ typedef struct TorcsWebRuntime {
 	tCarElt			*cars[1];
 	tSituation			situation;
 	tRmInfo			reInfo;
+	int					raceProgressReady;
+	tdble				previousTrackDistance;
+	tdble				totalDistance;
+	double				lapStartTime;
 } tTorcsWebRuntime;
 
 static tTorcsWebRuntime Runtime;
@@ -180,6 +184,94 @@ clampControl(tdble value, tdble minValue, tdble maxValue)
 		return maxValue;
 	}
 	return value;
+}
+
+static tdble
+getCarTrackDistanceFromStart(const tCarElt *car)
+{
+	tTrackSeg *seg;
+	tdble segmentDistance;
+
+	if (!car || !car->_trkPos.seg) {
+		return 0.0f;
+	}
+
+	seg = car->_trkPos.seg;
+	segmentDistance = seg->type == TR_STR ? car->_trkPos.toStart : car->_trkPos.toStart * seg->radius;
+	return seg->lgfromstart + segmentDistance;
+}
+
+static void
+initRuntimeRaceProgress(void)
+{
+	if (!Runtime.active || !Runtime.trackData) {
+		return;
+	}
+
+	Runtime.previousTrackDistance = getCarTrackDistanceFromStart(&(Runtime.car));
+	Runtime.totalDistance = 0.0f;
+	Runtime.lapStartTime = Runtime.situation.currentTime;
+	Runtime.raceProgressReady = 1;
+	Runtime.car._curTime = Runtime.situation.currentTime;
+	Runtime.car._curLapTime = 0.0;
+	Runtime.car._lastLapTime = 0.0;
+	Runtime.car._bestLapTime = 0.0;
+	Runtime.car._laps = 0;
+	Runtime.car._remainingLaps = Runtime.situation._totLaps;
+	Runtime.car._pos = 1;
+	Runtime.car._distFromStartLine = Runtime.previousTrackDistance;
+	Runtime.car._distRaced = Runtime.totalDistance;
+	Runtime.car._topSpeed = Runtime.car.pub.speed;
+}
+
+static void
+updateRuntimeRaceProgress(void)
+{
+	tdble trackLength;
+	tdble currentDistance;
+	tdble deltaDistance;
+
+	if (!Runtime.active || !Runtime.trackData || Runtime.trackData->length <= 0.0f) {
+		return;
+	}
+
+	if (!Runtime.raceProgressReady) {
+		initRuntimeRaceProgress();
+	}
+
+	trackLength = Runtime.trackData->length;
+	currentDistance = getCarTrackDistanceFromStart(&(Runtime.car));
+	deltaDistance = currentDistance - Runtime.previousTrackDistance;
+
+	if (deltaDistance < -trackLength * 0.5f) {
+		deltaDistance += trackLength;
+		Runtime.car._laps++;
+		if (Runtime.car._remainingLaps > 0) {
+			Runtime.car._remainingLaps--;
+		}
+		Runtime.car._lastLapTime = Runtime.situation.currentTime - Runtime.lapStartTime;
+		if (Runtime.car._lastLapTime > 0.0 &&
+			(Runtime.car._bestLapTime == 0.0 || Runtime.car._lastLapTime < Runtime.car._bestLapTime)) {
+			Runtime.car._bestLapTime = Runtime.car._lastLapTime;
+		}
+		Runtime.lapStartTime = Runtime.situation.currentTime;
+	} else if (deltaDistance > trackLength * 0.5f) {
+		deltaDistance -= trackLength;
+	}
+
+	Runtime.totalDistance += deltaDistance;
+	if (Runtime.totalDistance < 0.0f) {
+		Runtime.totalDistance = 0.0f;
+	}
+
+	Runtime.previousTrackDistance = currentDistance;
+	Runtime.car._curTime = Runtime.situation.currentTime;
+	Runtime.car._curLapTime = Runtime.situation.currentTime - Runtime.lapStartTime;
+	Runtime.car._distFromStartLine = currentDistance;
+	Runtime.car._distRaced = Runtime.totalDistance;
+	if (Runtime.car.pub.speed > Runtime.car._topSpeed) {
+		Runtime.car._topSpeed = Runtime.car.pub.speed;
+	}
 }
 
 static int
@@ -654,6 +746,7 @@ torcs_web_runtime_start(void)
 	Runtime.car.ctrl.brakeCmd = 0.0f;
 	Runtime.car.ctrl.clutchCmd = 1.0f;
 	Runtime.active = 1;
+	initRuntimeRaceProgress();
 	return 0;
 }
 
@@ -701,6 +794,7 @@ torcs_web_runtime_step(double deltaTime)
 		Runtime.situation.deltaTime = step;
 		Runtime.simItf.update(&(Runtime.situation), step, -1);
 		Runtime.situation.currentTime += step;
+		updateRuntimeRaceProgress();
 		remaining -= step;
 	}
 
@@ -838,16 +932,81 @@ EMSCRIPTEN_KEEPALIVE
 double
 torcs_web_runtime_get_car_track_distance_from_start(void)
 {
-	tTrackSeg *seg;
-	tdble segmentDistance;
+	return Runtime.active ? getCarTrackDistanceFromStart(&(Runtime.car)) : 0.0;
+}
 
-	if (!Runtime.active || !Runtime.car._trkPos.seg) {
+EMSCRIPTEN_KEEPALIVE
+int
+torcs_web_runtime_get_race_state(void)
+{
+	return Runtime.active ? Runtime.situation._raceState : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int
+torcs_web_runtime_get_race_position(void)
+{
+	return Runtime.active ? Runtime.car._pos : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int
+torcs_web_runtime_get_lap_count(void)
+{
+	return Runtime.active ? Runtime.car._laps : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int
+torcs_web_runtime_get_remaining_laps(void)
+{
+	return Runtime.active ? Runtime.car._remainingLaps : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+double
+torcs_web_runtime_get_lap_progress(void)
+{
+	if (!Runtime.active || !Runtime.trackData || Runtime.trackData->length <= 0.0f) {
 		return 0.0;
 	}
 
-	seg = Runtime.car._trkPos.seg;
-	segmentDistance = seg->type == TR_STR ? Runtime.car._trkPos.toStart : Runtime.car._trkPos.toStart * seg->radius;
-	return seg->lgfromstart + segmentDistance;
+	return Runtime.car._distFromStartLine / Runtime.trackData->length;
+}
+
+EMSCRIPTEN_KEEPALIVE
+double
+torcs_web_runtime_get_distance_raced(void)
+{
+	return Runtime.active ? Runtime.car._distRaced : 0.0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+double
+torcs_web_runtime_get_current_lap_time(void)
+{
+	return Runtime.active ? Runtime.car._curLapTime : 0.0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+double
+torcs_web_runtime_get_last_lap_time(void)
+{
+	return Runtime.active ? Runtime.car._lastLapTime : 0.0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+double
+torcs_web_runtime_get_best_lap_time(void)
+{
+	return Runtime.active ? Runtime.car._bestLapTime : 0.0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+double
+torcs_web_runtime_get_top_speed(void)
+{
+	return Runtime.active ? Runtime.car._topSpeed : 0.0;
 }
 
 EMSCRIPTEN_KEEPALIVE
