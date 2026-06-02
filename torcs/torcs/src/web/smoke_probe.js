@@ -15,6 +15,25 @@ function fail(message, details) {
 
 createModule()
 	.then((module) => {
+		const runtime = {
+			start: module.ccall("torcs_web_runtime_start", "number", [], []),
+		};
+		runtime.setControls = module.ccall(
+			"torcs_web_runtime_set_controls",
+			"number",
+			["number", "number", "number", "number", "number"],
+			[0.1, 0.0, 0.0, 1.0, 0],
+		);
+		runtime.step = module.ccall("torcs_web_runtime_step", "number", ["number"], [1 / 60]);
+		runtime.time = module.ccall("torcs_web_runtime_get_time", "number", [], []);
+		runtime.x = module.ccall("torcs_web_runtime_get_car_x", "number", [], []);
+		runtime.y = module.ccall("torcs_web_runtime_get_car_y", "number", [], []);
+		runtime.z = module.ccall("torcs_web_runtime_get_car_z", "number", [], []);
+		runtime.yaw = module.ccall("torcs_web_runtime_get_car_yaw", "number", [], []);
+		runtime.speed = module.ccall("torcs_web_runtime_get_car_speed", "number", [], []);
+		runtime.fuel = module.ccall("torcs_web_runtime_get_car_fuel", "number", [], []);
+		module.ccall("torcs_web_runtime_shutdown", null, [], []);
+
 		const result = {
 			rc: module.ccall("torcs_web_probe", "number", [], []),
 			rc2: module.ccall("torcs_web_probe", "number", [], []),
@@ -27,6 +46,7 @@ createModule()
 			simuv2Module: module.ccall("torcs_web_check_simuv2_module", "number", [], []),
 			headlessSimInit: module.ccall("torcs_web_check_headless_sim_init", "number", [], []),
 			headlessSimUpdate: module.ccall("torcs_web_check_headless_sim_update", "number", [], []),
+			runtime,
 		};
 
 		console.log(JSON.stringify(result));
@@ -42,7 +62,17 @@ createModule()
 			result.trackBuild !== 0 ||
 			result.simuv2Module !== 0 ||
 			result.headlessSimInit !== 0 ||
-			result.headlessSimUpdate !== 0
+			result.headlessSimUpdate !== 0 ||
+			runtime.start !== 0 ||
+			runtime.setControls !== 0 ||
+			runtime.step !== 0 ||
+			runtime.time <= 0 ||
+			runtime.fuel <= 0 ||
+			!Number.isFinite(runtime.x) ||
+			!Number.isFinite(runtime.y) ||
+			!Number.isFinite(runtime.z) ||
+			!Number.isFinite(runtime.yaw) ||
+			!Number.isFinite(runtime.speed)
 		) {
 			fail("TORCS WASM probe smoke test failed", result);
 		}

@@ -61,6 +61,23 @@ typedef struct TorcsWebSimItf {
 	tfTorcsWebSimShutdown	shutdown;
 } tTorcsWebSimItf;
 
+typedef struct TorcsWebRuntime {
+	int					active;
+	int					simStarted;
+	tModList			*trackInfoList;
+	tModList			*simInfoList;
+	tTrackItf			trackItf;
+	tTorcsWebSimItf		simItf;
+	tTrack				*trackData;
+	void				*carHandle;
+	tCarElt			car;
+	tCarElt			*cars[1];
+	tSituation			situation;
+	tRmInfo			reInfo;
+} tTorcsWebRuntime;
+
+static tTorcsWebRuntime Runtime;
+
 static int
 webProbeModuleInit(int /* index */, void * /* moduleInfo */)
 {
@@ -150,6 +167,39 @@ positionCarOnTrack(tCarElt *car, tTrack *track)
 	car->_pos_Z = RtTrackHeightL(&(car->_trkPos)) + 0.3f;
 	NORM0_2PI(car->_yaw);
 	return 0;
+}
+
+static tdble
+clampControl(tdble value, tdble minValue, tdble maxValue)
+{
+	if (value < minValue) {
+		return minValue;
+	}
+	if (value > maxValue) {
+		return maxValue;
+	}
+	return value;
+}
+
+static void
+shutdownRuntime(void)
+{
+	if (Runtime.simStarted && Runtime.simItf.shutdown) {
+		Runtime.simItf.shutdown();
+	}
+	if (Runtime.carHandle) {
+		GfParmReleaseHandle(Runtime.carHandle);
+	}
+	if (Runtime.trackData && Runtime.trackData->seg && Runtime.trackItf.trkShutdown) {
+		Runtime.trackItf.trkShutdown();
+	}
+	if (Runtime.trackInfoList) {
+		GfModFreeInfoList(&(Runtime.trackInfoList));
+	}
+	if (Runtime.simInfoList) {
+		GfModFreeInfoList(&(Runtime.simInfoList));
+	}
+	memset(&Runtime, 0, sizeof(Runtime));
 }
 
 extern "C" {
@@ -497,6 +547,165 @@ cleanup:
 		GfModFreeInfoList(&simInfoList);
 	}
 	return result;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int
+torcs_web_runtime_start(void)
+{
+	char trackModuleName[] = "track.so";
+	char simModuleName[] = "simuv2.so";
+	char trackFile[] = "/torcs/data/tracks/e-track-1/e-track-1.xml";
+
+	shutdownRuntime();
+	initWebProbe();
+
+	if (GfModInfo(TRK_IDENT, trackModuleName, &(Runtime.trackInfoList)) < 0 || !Runtime.trackInfoList ||
+		GfModInfo(TORCS_WEB_SIM_IDENT, simModuleName, &(Runtime.simInfoList)) < 0 || !Runtime.simInfoList) {
+		shutdownRuntime();
+		return -1;
+	}
+
+	if (!Runtime.trackInfoList->modInfo[0].fctInit ||
+		Runtime.trackInfoList->modInfo[0].fctInit(0, &(Runtime.trackItf)) != 0 ||
+		!Runtime.trackItf.trkBuild ||
+		!Runtime.trackItf.trkShutdown ||
+		!Runtime.simInfoList->modInfo[0].fctInit ||
+		Runtime.simInfoList->modInfo[0].fctInit(0, &(Runtime.simItf)) != 0 ||
+		!Runtime.simItf.init ||
+		!Runtime.simItf.config ||
+		!Runtime.simItf.update ||
+		!Runtime.simItf.shutdown) {
+		shutdownRuntime();
+		return -1;
+	}
+
+	Runtime.trackData = Runtime.trackItf.trkBuild(trackFile);
+	Runtime.carHandle = GfParmReadFile(CarConfig, GFPARM_RMODE_STD | GFPARM_RMODE_REREAD);
+	if (!Runtime.trackData || !Runtime.trackData->seg || !Runtime.carHandle ||
+		positionCarOnTrack(&(Runtime.car), Runtime.trackData) != 0) {
+		shutdownRuntime();
+		return -1;
+	}
+
+	Runtime.car._carHandle = Runtime.carHandle;
+	Runtime.cars[0] = &(Runtime.car);
+	Runtime.situation._ncars = 1;
+	Runtime.situation._raceState = RM_RACE_RUNNING;
+	Runtime.situation._raceType = RM_TYPE_PRACTICE;
+	Runtime.situation.cars = Runtime.cars;
+	Runtime.reInfo.carList = &(Runtime.car);
+	Runtime.reInfo.s = &(Runtime.situation);
+	Runtime.reInfo.track = Runtime.trackData;
+
+	Runtime.simItf.init(1, Runtime.trackData, 1.0f, 1.0f, 1.0f);
+	Runtime.simStarted = 1;
+	Runtime.simItf.config(&(Runtime.car), &(Runtime.reInfo));
+	Runtime.car.ctrl.gear = 0;
+	Runtime.car.ctrl.accelCmd = 0.0f;
+	Runtime.car.ctrl.brakeCmd = 0.0f;
+	Runtime.car.ctrl.clutchCmd = 1.0f;
+	Runtime.active = 1;
+	return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+void
+torcs_web_runtime_shutdown(void)
+{
+	shutdownRuntime();
+}
+
+EMSCRIPTEN_KEEPALIVE
+int
+torcs_web_runtime_set_controls(double steer, double accel, double brake, double clutch, int gear)
+{
+	if (!Runtime.active) {
+		return -1;
+	}
+
+	Runtime.car.ctrl.steer = clampControl((tdble)steer, -1.0f, 1.0f);
+	Runtime.car.ctrl.accelCmd = clampControl((tdble)accel, 0.0f, 1.0f);
+	Runtime.car.ctrl.brakeCmd = clampControl((tdble)brake, 0.0f, 1.0f);
+	Runtime.car.ctrl.clutchCmd = clampControl((tdble)clutch, 0.0f, 1.0f);
+	Runtime.car.ctrl.gear = gear;
+	return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int
+torcs_web_runtime_step(double deltaTime)
+{
+	double remaining;
+	double step;
+
+	if (!Runtime.active || !Runtime.simItf.update) {
+		return -1;
+	}
+
+	remaining = deltaTime > 0.0 ? deltaTime : RCM_MAX_DT_SIMU;
+	if (remaining > 0.25) {
+		remaining = 0.25;
+	}
+
+	while (remaining > 0.0) {
+		step = remaining > RCM_MAX_DT_SIMU ? RCM_MAX_DT_SIMU : remaining;
+		Runtime.situation.deltaTime = step;
+		Runtime.simItf.update(&(Runtime.situation), step, -1);
+		Runtime.situation.currentTime += step;
+		remaining -= step;
+	}
+
+	return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+double
+torcs_web_runtime_get_time(void)
+{
+	return Runtime.active ? Runtime.situation.currentTime : 0.0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+double
+torcs_web_runtime_get_car_x(void)
+{
+	return Runtime.active ? Runtime.car._pos_X : 0.0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+double
+torcs_web_runtime_get_car_y(void)
+{
+	return Runtime.active ? Runtime.car._pos_Y : 0.0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+double
+torcs_web_runtime_get_car_z(void)
+{
+	return Runtime.active ? Runtime.car._pos_Z : 0.0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+double
+torcs_web_runtime_get_car_yaw(void)
+{
+	return Runtime.active ? Runtime.car._yaw : 0.0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+double
+torcs_web_runtime_get_car_speed(void)
+{
+	return Runtime.active ? Runtime.car.pub.speed : 0.0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+double
+torcs_web_runtime_get_car_fuel(void)
+{
+	return Runtime.active ? Runtime.car._fuel : 0.0;
 }
 
 }

@@ -76,9 +76,12 @@ zero-car headless initialization check then calls `simuv2` init/shutdown against
 the loaded track, exercising the simulator and collision setup path. The smoke
 path also preloads the `kc-2000gt` car XML, configures one car on E-Track 1,
 runs one fixed `RCM_MAX_DT_SIMU` update, and validates the resulting car state.
-Use the same working-directory rule, or configure `locateFile` in browser code,
-because the generated JavaScript loads the `.wasm` and `.data` files relative
-to the current runtime location.
+The probe also exposes a small persistent runtime API so browser JavaScript can
+start the one-car headless session, set controls, step simulation time, read
+time/position/yaw/speed/fuel snapshots, and shut the session down without using
+raw TORCS pointers. Use the same working-directory rule, or configure
+`locateFile` in browser code, because the generated JavaScript loads the
+`.wasm` and `.data` files relative to the current runtime location.
 
 On this macOS/Homebrew setup, `EMSDK_PYTHON` avoids the system Python 3.9
 interpreter and `EM_CACHE` avoids writes to the read-only Homebrew Emscripten
@@ -110,13 +113,12 @@ browser-hostile dependency on `dlopen()`.
 Compile enough of `raceengineclient`, `track`, `robottools`, `simuv2`, SOLID,
 and car/track data to run a scripted race without graphics. The current scaffold
 can load E-Track 1, configure one `kc-2000gt`, and execute one headless `simuv2`
-update. The next browser-facing API should expose:
+update through exported start/control/step/snapshot functions. The next
+browser-facing API should expose:
 
-- load race config
-- load track and cars
-- step fixed simulation time
-- set controls for human-controlled cars
-- return snapshots of `tSituation`, car transforms, wheel state, lap state, and
+- configurable race/track/car selection
+- multi-car loading and driver selection
+- snapshots of `tSituation`, car transforms, wheel state, lap state, and
   race events
 
 The browser shell should not receive raw TORCS pointers.

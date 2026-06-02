@@ -134,6 +134,31 @@ add_executable(torcs_web_probe
 target_link_libraries(torcs_web_probe PRIVATE torcs_tgf torcs_track torcs_simuv2)
 
 if(EMSCRIPTEN)
+	set(TORCS_WEB_EXPORTED_FUNCTIONS
+		"'_main'"
+		"'_torcs_web_probe'"
+		"'_torcs_web_get_module_name'"
+		"'_torcs_web_get_capture_fps'"
+		"'_torcs_web_check_static_module_registry'"
+		"'_torcs_web_check_track_module'"
+		"'_torcs_web_check_simuv2_module'"
+		"'_torcs_web_check_track_build'"
+		"'_torcs_web_check_headless_sim_init'"
+		"'_torcs_web_check_headless_sim_update'"
+		"'_torcs_web_runtime_start'"
+		"'_torcs_web_runtime_shutdown'"
+		"'_torcs_web_runtime_set_controls'"
+		"'_torcs_web_runtime_step'"
+		"'_torcs_web_runtime_get_time'"
+		"'_torcs_web_runtime_get_car_x'"
+		"'_torcs_web_runtime_get_car_y'"
+		"'_torcs_web_runtime_get_car_z'"
+		"'_torcs_web_runtime_get_car_yaw'"
+		"'_torcs_web_runtime_get_car_speed'"
+		"'_torcs_web_runtime_get_car_fuel'"
+	)
+	list(JOIN TORCS_WEB_EXPORTED_FUNCTIONS "," TORCS_WEB_EXPORTED_FUNCTIONS_ARG)
+
 	target_link_options(torcs_web_probe
 		PRIVATE
 			"--preload-file=${TORCS_ROOT}/src/libs/raceengineclient/raceengine.xml@/torcs/config/raceengine.xml"
@@ -146,7 +171,7 @@ if(EMSCRIPTEN)
 			"-sMODULARIZE=1"
 			"-sEXPORT_NAME=TorcsWebProbe"
 			"-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap']"
-			"-sEXPORTED_FUNCTIONS=['_main','_torcs_web_probe','_torcs_web_get_module_name','_torcs_web_get_capture_fps','_torcs_web_check_static_module_registry','_torcs_web_check_track_module','_torcs_web_check_simuv2_module','_torcs_web_check_track_build','_torcs_web_check_headless_sim_init','_torcs_web_check_headless_sim_update']"
+			"-sEXPORTED_FUNCTIONS=[${TORCS_WEB_EXPORTED_FUNCTIONS_ARG}]"
 	)
 	set_target_properties(torcs_web_probe PROPERTIES SUFFIX ".js")
 
