@@ -26,11 +26,14 @@
 #endif
 
 #include <tgf.h>
+#include <raceman.h>
+#include <robottools.h>
 #include <track.h>
 
 #include "torcs_web_platform.h"
 
 static const char *RaceEngineConfig = "/torcs/config/raceengine.xml";
+static const char *CarConfig = "/torcs/data/cars/models/kc-2000gt/kc-2000gt.xml";
 static const char *ModulesSection = "Modules";
 static const char *MovieCaptureSection = "Movie Capture";
 static void *RaceEngineHandle = NULL;
@@ -102,6 +105,51 @@ loadRaceEngineConfig(void)
 	}
 
 	return RaceEngineHandle;
+}
+
+static int
+positionCarOnTrack(tCarElt *car, tTrack *track)
+{
+	tTrackSeg *seg;
+
+	if (!car || !track || !track->seg) {
+		return -1;
+	}
+
+	memset(car, 0, sizeof(*car));
+	car->index = 0;
+	strcpy(car->_name, "webprobe");
+	strcpy(car->_carName, "kc-2000gt");
+	car->_skillLevel = 0;
+	car->_speed_x = 0.0f;
+	car->_commitBestLapTime = true;
+
+	seg = track->seg;
+	car->_trkPos.seg = seg;
+	car->_trkPos.type = TR_LPOS_SEGMENT;
+	car->_trkPos.toRight = seg->width * 0.5f;
+
+	switch (seg->type) {
+		case TR_STR:
+			car->_trkPos.toStart = seg->length * 0.5f;
+			car->_yaw = seg->angle[TR_ZS];
+			break;
+		case TR_RGT:
+			car->_trkPos.toStart = seg->arc * 0.5f;
+			car->_yaw = seg->angle[TR_ZS] - car->_trkPos.toStart;
+			break;
+		case TR_LFT:
+			car->_trkPos.toStart = seg->arc * 0.5f;
+			car->_yaw = seg->angle[TR_ZS] + car->_trkPos.toStart;
+			break;
+		default:
+			return -1;
+	}
+
+	RtTrackLocal2Global(&(car->_trkPos), &(car->_pos_X), &(car->_pos_Y), TR_TORIGHT);
+	car->_pos_Z = RtTrackHeightL(&(car->_trkPos)) + 0.3f;
+	NORM0_2PI(car->_yaw);
+	return 0;
 }
 
 extern "C" {
@@ -338,6 +386,107 @@ torcs_web_check_headless_sim_init(void)
 	result = 0;
 
 cleanup:
+	if (trackData && trackData->seg && trackItf.trkShutdown) {
+		trackItf.trkShutdown();
+	}
+	if (trackInfoList) {
+		GfModFreeInfoList(&trackInfoList);
+	}
+	if (simInfoList) {
+		GfModFreeInfoList(&simInfoList);
+	}
+	return result;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int
+torcs_web_check_headless_sim_update(void)
+{
+	tModList *trackInfoList = NULL;
+	tModList *simInfoList = NULL;
+	tTrackItf trackItf;
+	tTorcsWebSimItf simItf;
+	tTrack *trackData = NULL;
+	void *carHandle = NULL;
+	tCarElt car;
+	tCarElt *cars[1];
+	tSituation situation;
+	tRmInfo reInfo;
+	char trackModuleName[] = "track.so";
+	char simModuleName[] = "simuv2.so";
+	char trackFile[] = "/torcs/data/tracks/e-track-1/e-track-1.xml";
+	tdble startZ;
+	int result = -1;
+
+	initWebProbe();
+	memset(&trackItf, 0, sizeof(trackItf));
+	memset(&simItf, 0, sizeof(simItf));
+
+	if (GfModInfo(TRK_IDENT, trackModuleName, &trackInfoList) < 0 || !trackInfoList ||
+		GfModInfo(TORCS_WEB_SIM_IDENT, simModuleName, &simInfoList) < 0 || !simInfoList) {
+		goto cleanup;
+	}
+
+	if (!trackInfoList->modInfo[0].fctInit ||
+		trackInfoList->modInfo[0].fctInit(0, &trackItf) != 0 ||
+		!trackItf.trkBuild ||
+		!trackItf.trkShutdown ||
+		!simInfoList->modInfo[0].fctInit ||
+		simInfoList->modInfo[0].fctInit(0, &simItf) != 0 ||
+		!simItf.init ||
+		!simItf.config ||
+		!simItf.update ||
+		!simItf.shutdown) {
+		goto cleanup;
+	}
+
+	trackData = trackItf.trkBuild(trackFile);
+	carHandle = GfParmReadFile(CarConfig, GFPARM_RMODE_STD | GFPARM_RMODE_REREAD);
+	if (!trackData || !trackData->seg || !carHandle) {
+		goto cleanup;
+	}
+
+	if (positionCarOnTrack(&car, trackData) != 0) {
+		goto cleanup;
+	}
+	car._carHandle = carHandle;
+	startZ = car._pos_Z;
+
+	memset(&situation, 0, sizeof(situation));
+	memset(&reInfo, 0, sizeof(reInfo));
+	cars[0] = &car;
+	situation._ncars = 1;
+	situation._raceState = RM_RACE_RUNNING;
+	situation._raceType = RM_TYPE_PRACTICE;
+	situation.cars = cars;
+	reInfo.carList = &car;
+	reInfo.s = &situation;
+	reInfo.track = trackData;
+
+	simItf.init(1, trackData, 1.0f, 1.0f, 1.0f);
+	simItf.config(&car, &reInfo);
+	car.ctrl.gear = 0;
+	car.ctrl.accelCmd = 0.0f;
+	car.ctrl.brakeCmd = 0.0f;
+	car.ctrl.clutchCmd = 1.0f;
+	simItf.update(&situation, RCM_MAX_DT_SIMU, -1);
+	simItf.shutdown();
+
+	if (car._trkPos.seg &&
+		car._dimension_x > 0.0f &&
+		car._dimension_y > 0.0f &&
+		car._fuel > 0.0f &&
+		car._pos_Z > startZ - 1.0f &&
+		car._pos_Z < startZ + 1.0f &&
+		car.pub.speed >= 0.0f &&
+		car.pub.speed < 100.0f) {
+		result = 0;
+	}
+
+cleanup:
+	if (carHandle) {
+		GfParmReleaseHandle(carHandle);
+	}
 	if (trackData && trackData->seg && trackItf.trkShutdown) {
 		trackItf.trkShutdown();
 	}

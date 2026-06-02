@@ -142,10 +142,11 @@ if(EMSCRIPTEN)
 			"--preload-file=${TORCS_ROOT}/data/tracks/e-track-1/e-track-1.xml@/torcs/data/tracks/e-track-1/e-track-1.xml"
 			"--preload-file=${TORCS_ROOT}/data/data/tracks/objects.xml@/torcs/data/tracks/objects.xml"
 			"--preload-file=${TORCS_ROOT}/data/data/tracks/surfaces.xml@/torcs/data/tracks/surfaces.xml"
+			"--preload-file=${TORCS_ROOT}/data/cars/models/kc-2000gt/kc-2000gt.xml@/torcs/data/cars/models/kc-2000gt/kc-2000gt.xml"
 			"-sMODULARIZE=1"
 			"-sEXPORT_NAME=TorcsWebProbe"
 			"-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap']"
-			"-sEXPORTED_FUNCTIONS=['_main','_torcs_web_probe','_torcs_web_get_module_name','_torcs_web_get_capture_fps','_torcs_web_check_static_module_registry','_torcs_web_check_track_module','_torcs_web_check_simuv2_module','_torcs_web_check_track_build','_torcs_web_check_headless_sim_init']"
+			"-sEXPORTED_FUNCTIONS=['_main','_torcs_web_probe','_torcs_web_get_module_name','_torcs_web_get_capture_fps','_torcs_web_check_static_module_registry','_torcs_web_check_track_module','_torcs_web_check_simuv2_module','_torcs_web_check_track_build','_torcs_web_check_headless_sim_init','_torcs_web_check_headless_sim_update']"
 	)
 	set_target_properties(torcs_web_probe PROPERTIES SUFFIX ".js")
 

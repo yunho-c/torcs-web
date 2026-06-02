@@ -26,6 +26,7 @@ createModule()
 			trackBuild: module.ccall("torcs_web_check_track_build", "number", [], []),
 			simuv2Module: module.ccall("torcs_web_check_simuv2_module", "number", [], []),
 			headlessSimInit: module.ccall("torcs_web_check_headless_sim_init", "number", [], []),
+			headlessSimUpdate: module.ccall("torcs_web_check_headless_sim_update", "number", [], []),
 		};
 
 		console.log(JSON.stringify(result));
@@ -40,7 +41,8 @@ createModule()
 			result.trackModule !== 0 ||
 			result.trackBuild !== 0 ||
 			result.simuv2Module !== 0 ||
-			result.headlessSimInit !== 0
+			result.headlessSimInit !== 0 ||
+			result.headlessSimUpdate !== 0
 		) {
 			fail("TORCS WASM probe smoke test failed", result);
 		}
