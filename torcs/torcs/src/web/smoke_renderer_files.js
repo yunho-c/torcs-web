@@ -61,6 +61,125 @@ function checkPng(relativePath) {
 	}
 }
 
+function extendBounds(bounds, x, z) {
+	bounds.minX = Math.min(bounds.minX, x);
+	bounds.maxX = Math.max(bounds.maxX, x);
+	bounds.minZ = Math.min(bounds.minZ, z);
+	bounds.maxZ = Math.max(bounds.maxZ, z);
+}
+
+function readGlbJson(relativePath) {
+	const filePath = path.join(root, "web-assets", relativePath);
+	const data = fs.readFileSync(filePath);
+	let offset = 12;
+	while (offset < data.length) {
+		const length = data.readUInt32LE(offset);
+		const kind = data.toString("ascii", offset + 4, offset + 8);
+		offset += 8;
+		if (kind === "JSON") {
+			return JSON.parse(data.subarray(offset, offset + length).toString("utf8"));
+		}
+		offset += length;
+	}
+	fail("TORCS web renderer smoke test could not find GLB JSON", { file: relativePath });
+	return null;
+}
+
+function readPositionBounds(relativePath) {
+	const gltf = readGlbJson(relativePath);
+	const bounds = {
+		minX: Number.POSITIVE_INFINITY,
+		maxX: Number.NEGATIVE_INFINITY,
+		minZ: Number.POSITIVE_INFINITY,
+		maxZ: Number.NEGATIVE_INFINITY,
+	};
+	for (const mesh of gltf.meshes || []) {
+		for (const primitive of mesh.primitives || []) {
+			const positionAccessor = gltf.accessors[primitive.attributes.POSITION];
+			if (!positionAccessor || !positionAccessor.min || !positionAccessor.max) {
+				fail("TORCS web renderer smoke test found GLB position accessor without bounds", {
+					file: relativePath,
+				});
+			}
+			extendBounds(bounds, positionAccessor.min[0], positionAccessor.min[2]);
+			extendBounds(bounds, positionAccessor.max[0], positionAccessor.max[2]);
+		}
+	}
+	if (!Number.isFinite(bounds.minX)) {
+		fail("TORCS web renderer smoke test found GLB without position bounds", { file: relativePath });
+	}
+	return bounds;
+}
+
+async function checkTrackAlignment(trackAsset) {
+	const createModule = require(path.join(root, "torcs_web_probe.js"));
+	const module = await createModule({
+		locateFile: (file) => path.join(root, file),
+	});
+	const sampleBounds = {
+		minX: Number.POSITIVE_INFINITY,
+		maxX: Number.NEGATIVE_INFINITY,
+		minZ: Number.POSITIVE_INFINITY,
+		maxZ: Number.NEGATIVE_INFINITY,
+	};
+
+	try {
+		const start = module.ccall(
+			"torcs_web_runtime_start_with_files",
+			"number",
+			["string", "string"],
+			[
+				"/torcs/data/tracks/e-track-1/e-track-1.xml",
+				"/torcs/data/cars/models/kc-2000gt/kc-2000gt.xml",
+			],
+		);
+		if (start !== 0) {
+			fail("TORCS web renderer smoke test could not start alignment runtime", { start });
+		}
+
+		const sampleCount = module.ccall("torcs_web_runtime_get_track_sample_count", "number", [], []);
+		for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
+			for (const side of [0, 2]) {
+				const x = module.ccall(
+					"torcs_web_runtime_get_track_sample_x",
+					"number",
+					["number", "number"],
+					[sampleIndex, side],
+				);
+				const y = module.ccall(
+					"torcs_web_runtime_get_track_sample_y",
+					"number",
+					["number", "number"],
+					[sampleIndex, side],
+				);
+				extendBounds(sampleBounds, x, -y);
+			}
+		}
+		if (!Number.isFinite(sampleBounds.minX)) {
+			fail("TORCS web renderer smoke test found no track samples");
+		}
+	} finally {
+		module.ccall("torcs_web_runtime_shutdown", null, [], []);
+	}
+
+	const glbBounds = readPositionBounds(trackAsset);
+	const tolerance = 2.0;
+	const containsSamples =
+		glbBounds.minX <= sampleBounds.minX + tolerance &&
+		glbBounds.maxX >= sampleBounds.maxX - tolerance &&
+		glbBounds.minZ <= sampleBounds.minZ + tolerance &&
+		glbBounds.maxZ >= sampleBounds.maxZ - tolerance;
+	if (!containsSamples) {
+		fail("TORCS web renderer smoke test found converted track/sample bounds mismatch", {
+			trackAsset,
+			glbBounds,
+			sampleBounds,
+			tolerance,
+		});
+	}
+	return { glbBounds, sampleBounds };
+}
+
 const files = [
 	"torcs_web_renderer.html",
 	"renderer/main.js",
@@ -119,10 +238,15 @@ for (const texture of Object.values(track.textures).concat(Object.values(car.tex
 	checkPng(texture);
 }
 
-console.log(JSON.stringify({
-	rendererFiles: files.length,
-	html: "torcs_web_renderer.html",
-	entrypoint: "renderer/main.js",
-	webAssetTracks: Object.keys(manifest.tracks).length,
-	webAssetCars: Object.keys(manifest.cars).length,
-}));
+checkTrackAlignment(track.asset)
+	.then((alignment) => {
+		console.log(JSON.stringify({
+			rendererFiles: files.length,
+			html: "torcs_web_renderer.html",
+			entrypoint: "renderer/main.js",
+			webAssetTracks: Object.keys(manifest.tracks).length,
+			webAssetCars: Object.keys(manifest.cars).length,
+			alignment,
+		}));
+	})
+	.catch((error) => fail("TORCS web renderer smoke test failed", { error: error.message }));

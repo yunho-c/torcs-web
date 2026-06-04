@@ -202,12 +202,12 @@ def parse_ac3d(path):
 
 def ac_position_to_three(position):
 	x, y, z = position
-	return [x, y, -z]
+	return [x, y, z]
 
 
 def ac_normal_to_three(normal):
 	x, y, z = normal
-	return [x, y, -z]
+	return [x, y, z]
 
 
 def resolve_texture(source_root, asset_source_dir, texture):
@@ -524,7 +524,7 @@ def main():
 		"generator": "tools/web-assets/convert_torcs_assets.py",
 		"coordinateFrame": {
 			"source": "AC3D x, height-y, z",
-			"three": "x, height-y, -z",
+			"three": "x, height-y, z",
 		},
 		"tracks": {
 			track_meta["xml"]: {
