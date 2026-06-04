@@ -508,6 +508,7 @@ def main():
 		car_texture_sources.update(result["textureSources"])
 		lod["asset"] = relative_to_output(lod_glb, output_dir)
 		lod["primitiveCount"] = result["primitives"]
+		lod["objectNames"] = result["objects"]
 
 	for texture in [car_meta["wheelTexture"], car_meta["shadowTexture"]]:
 		resolved = resolve_texture(source_root, source_root / "data/cars/models/kc-2000gt", texture)
@@ -539,6 +540,7 @@ def main():
 				"lightPosition": track_meta["lightPosition"],
 				"textures": {name: track_texture_outputs[name] for name in track_result["textures"] if name in track_texture_outputs},
 				"primitiveCount": track_result["primitives"],
+				"objectNames": track_result["objects"],
 			},
 		},
 		"cars": {

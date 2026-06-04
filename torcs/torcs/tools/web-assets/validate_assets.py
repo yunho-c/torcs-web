@@ -64,6 +64,12 @@ def require(root, relative_path):
 	return path
 
 
+def check_object_names(entry, label):
+	object_names = entry.get("objectNames")
+	if not object_names or not all(isinstance(name, str) and name for name in object_names):
+		raise ValueError(f"{label} missing object names")
+
+
 def main():
 	if len(sys.argv) != 2:
 		return fail("usage: validate_assets.py <manifest.json>")
@@ -82,11 +88,13 @@ def main():
 
 		for track in tracks.values():
 			check_glb(require(root, track["asset"]))
+			check_object_names(track, track.get("source", "track"))
 			for texture in track.get("textures", {}).values():
 				check_texture(require(root, texture))
 		for car in cars.values():
 			for lod in car.get("lods", []):
 				check_glb(require(root, lod["asset"]))
+				check_object_names(lod, lod.get("model", "car LOD"))
 			for texture in car.get("textures", {}).values():
 				check_texture(require(root, texture))
 	except Exception as exc:

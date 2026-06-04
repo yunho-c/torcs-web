@@ -61,6 +61,13 @@ function checkPng(relativePath) {
 	}
 }
 
+function checkObjectNames(entry, label) {
+	if (!Array.isArray(entry.objectNames) || entry.objectNames.length === 0 ||
+		entry.objectNames.some((name) => typeof name !== "string" || name.length === 0)) {
+		fail("TORCS web renderer smoke test found missing object names", { label });
+	}
+}
+
 function extendBounds(bounds, x, z) {
 	bounds.minX = Math.min(bounds.minX, x);
 	bounds.maxX = Math.max(bounds.maxX, x);
@@ -231,8 +238,10 @@ if (!track || !car) {
 	fail("TORCS web renderer smoke test missing Phase 1 manifest entries");
 }
 checkGlb(track.asset);
+checkObjectNames(track, track.source);
 for (const lod of car.lods) {
 	checkGlb(lod.asset);
+	checkObjectNames(lod, lod.model);
 }
 for (const texture of Object.values(track.textures).concat(Object.values(car.textures))) {
 	checkPng(texture);
