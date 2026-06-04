@@ -2,6 +2,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const childProcess = require("node:child_process");
 
 const root = path.resolve(process.argv[2] || ".");
 
@@ -30,6 +31,20 @@ function requireText(file, text, label) {
 	}
 }
 
+function checkJavaScriptSyntax(file) {
+	const result = childProcess.spawnSync(process.execPath, ["--input-type=module", "--check"], {
+		encoding: "utf8",
+		input: file.content,
+	});
+	if (result.status !== 0) {
+		fail("TORCS web renderer smoke test found invalid JavaScript", {
+			file: file.path,
+			stdout: result.stdout.trim(),
+			stderr: result.stderr.trim(),
+		});
+	}
+}
+
 const files = [
 	"torcs_web_renderer.html",
 	"renderer/main.js",
@@ -44,6 +59,9 @@ const files = [
 }));
 
 const byPath = Object.fromEntries(files.map((file) => [file.path, file]));
+files
+	.filter((file) => file.path.endsWith(".js"))
+	.forEach(checkJavaScriptSyntax);
 
 requireText(byPath["torcs_web_renderer.html"], "./torcs_web_probe.js", "WASM probe script");
 requireText(byPath["torcs_web_renderer.html"], "./renderer/main.js", "renderer module entrypoint");
