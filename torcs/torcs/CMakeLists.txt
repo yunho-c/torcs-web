@@ -209,6 +209,19 @@ if(EMSCRIPTEN)
 		COMMENT "Copying TORCS WASM browser probe"
 	)
 
+	add_custom_target(torcs_web_renderer_browser
+		COMMAND
+			"${CMAKE_COMMAND}" -E copy_if_different
+			"${TORCS_ROOT}/src/web/torcs_web_renderer.html"
+			"$<TARGET_FILE_DIR:torcs_web_probe>/torcs_web_renderer.html"
+		COMMAND
+			"${CMAKE_COMMAND}" -E copy_directory
+			"${TORCS_ROOT}/src/web/renderer"
+			"$<TARGET_FILE_DIR:torcs_web_probe>/renderer"
+		DEPENDS torcs_web_probe
+		COMMENT "Copying TORCS WASM browser renderer"
+	)
+
 	target_link_options(torcs_web_probe
 		PRIVATE
 			"--preload-file=${TORCS_ROOT}/src/libs/raceengineclient/raceengine.xml@/torcs/config/raceengine.xml"
@@ -234,8 +247,12 @@ if(EMSCRIPTEN)
 				"${TORCS_NODE_EXECUTABLE}"
 				"${TORCS_ROOT}/src/web/smoke_probe.js"
 				"$<TARGET_FILE:torcs_web_probe>"
+			COMMAND
+				"${TORCS_NODE_EXECUTABLE}"
+				"${TORCS_ROOT}/src/web/smoke_renderer_files.js"
+				"$<TARGET_FILE_DIR:torcs_web_probe>"
 			WORKING_DIRECTORY "$<TARGET_FILE_DIR:torcs_web_probe>"
-			DEPENDS torcs_web_probe_browser
+			DEPENDS torcs_web_probe_browser torcs_web_renderer_browser
 			COMMENT "Running TORCS WASM probe smoke test"
 		)
 	endif()
