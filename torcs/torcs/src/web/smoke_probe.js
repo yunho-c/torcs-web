@@ -13,6 +13,54 @@ function fail(message, details) {
 	process.exit(1);
 }
 
+const SNAPSHOT = {
+	time: 0,
+	x: 1,
+	y: 2,
+	z: 3,
+	yaw: 4,
+	speed: 7,
+	fuel: 8,
+	dimensionX: 9,
+	dimensionY: 10,
+	dimensionZ: 11,
+	gear: 13,
+	engineRpm: 14,
+	trackSegmentId: 16,
+	trackSegmentType: 17,
+	trackDistanceFromStart: 21,
+	raceState: 22,
+	racePosition: 23,
+	lapProgress: 26,
+	distanceRaced: 27,
+	currentLapTime: 28,
+	topSpeed: 31,
+	controlSteer: 32,
+	posMat0: 36,
+	cornerX0: 52,
+	cornerY0: 56,
+	wheelSpinVelocity0: 60,
+	wheelSlipAccel0: 64,
+	wheelSlipSide0: 68,
+	trackLength: 76,
+	trackWidth: 77,
+	trackSegments: 78,
+	trackSamples: 79,
+};
+
+function readSnapshot(module) {
+	const version = module.ccall("torcs_web_runtime_get_snapshot_version", "number", [], []);
+	const size = module.ccall("torcs_web_runtime_get_snapshot_size", "number", [], []);
+	const ptr = module._malloc(size);
+	try {
+		const write = module.ccall("torcs_web_runtime_write_snapshot", "number", ["number", "number"], [ptr, size]);
+		const values = Array.from(module.HEAPF64.subarray(ptr >> 3, (ptr + size) >> 3));
+		return { version, size, write, values };
+	} finally {
+		module._free(ptr);
+	}
+}
+
 createModule()
 	.then((module) => {
 		const runtime = {
@@ -123,6 +171,7 @@ createModule()
 			["number", "number"],
 			[0, 2],
 		);
+		runtime.snapshot = readSnapshot(module);
 		module.ccall("torcs_web_runtime_shutdown", null, [], []);
 
 		const drive = {
@@ -253,6 +302,42 @@ createModule()
 			runtime.trackWidth <= 0 ||
 			runtime.trackSegments <= 0 ||
 			runtime.trackSamples !== runtime.trackSegments * 12 ||
+			runtime.snapshot.version !== 1 ||
+			runtime.snapshot.size !== 80 * 8 ||
+			runtime.snapshot.write !== 0 ||
+			runtime.snapshot.values.length !== 80 ||
+			Math.abs(runtime.snapshot.values[SNAPSHOT.time] - runtime.time) > 0.000001 ||
+			Math.abs(runtime.snapshot.values[SNAPSHOT.x] - runtime.x) > 0.000001 ||
+			Math.abs(runtime.snapshot.values[SNAPSHOT.y] - runtime.y) > 0.000001 ||
+			Math.abs(runtime.snapshot.values[SNAPSHOT.z] - runtime.z) > 0.000001 ||
+			Math.abs(runtime.snapshot.values[SNAPSHOT.yaw] - runtime.yaw) > 0.000001 ||
+			Math.abs(runtime.snapshot.values[SNAPSHOT.speed] - runtime.speed) > 0.000001 ||
+			Math.abs(runtime.snapshot.values[SNAPSHOT.fuel] - runtime.fuel) > 0.000001 ||
+			runtime.snapshot.values[SNAPSHOT.dimensionX] !== runtime.dimensionX ||
+			runtime.snapshot.values[SNAPSHOT.dimensionY] !== runtime.dimensionY ||
+			runtime.snapshot.values[SNAPSHOT.dimensionZ] !== runtime.dimensionZ ||
+			runtime.snapshot.values[SNAPSHOT.gear] !== runtime.gear ||
+			Math.abs(runtime.snapshot.values[SNAPSHOT.engineRpm] - runtime.engineRpm) > 0.000001 ||
+			runtime.snapshot.values[SNAPSHOT.trackSegmentId] !== runtime.trackSegmentId ||
+			runtime.snapshot.values[SNAPSHOT.trackSegmentType] !== runtime.trackSegmentType ||
+			Math.abs(runtime.snapshot.values[SNAPSHOT.trackDistanceFromStart] - runtime.trackDistanceFromStart) > 0.000001 ||
+			runtime.snapshot.values[SNAPSHOT.raceState] !== runtime.raceState ||
+			runtime.snapshot.values[SNAPSHOT.racePosition] !== runtime.racePosition ||
+			Math.abs(runtime.snapshot.values[SNAPSHOT.lapProgress] - runtime.lapProgress) > 0.000001 ||
+			Math.abs(runtime.snapshot.values[SNAPSHOT.distanceRaced] - runtime.distanceRaced) > 0.000001 ||
+			Math.abs(runtime.snapshot.values[SNAPSHOT.currentLapTime] - runtime.currentLapTime) > 0.000001 ||
+			Math.abs(runtime.snapshot.values[SNAPSHOT.topSpeed] - runtime.topSpeed) > 0.000001 ||
+			Math.abs(runtime.snapshot.values[SNAPSHOT.controlSteer] - 0.1) > 0.000001 ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.posMat0]) ||
+			Math.abs(runtime.snapshot.values[SNAPSHOT.cornerX0] - runtime.corner0X) > 0.000001 ||
+			Math.abs(runtime.snapshot.values[SNAPSHOT.cornerY0] - runtime.corner0Y) > 0.000001 ||
+			Math.abs(runtime.snapshot.values[SNAPSHOT.wheelSpinVelocity0] - runtime.wheelSpinVelocity) > 0.000001 ||
+			Math.abs(runtime.snapshot.values[SNAPSHOT.wheelSlipAccel0] - runtime.wheelSlipAccel) > 0.000001 ||
+			Math.abs(runtime.snapshot.values[SNAPSHOT.wheelSlipSide0] - runtime.wheelSlipSide) > 0.000001 ||
+			runtime.snapshot.values[SNAPSHOT.trackLength] !== runtime.trackLength ||
+			runtime.snapshot.values[SNAPSHOT.trackWidth] !== runtime.trackWidth ||
+			runtime.snapshot.values[SNAPSHOT.trackSegments] !== runtime.trackSegments ||
+			runtime.snapshot.values[SNAPSHOT.trackSamples] !== runtime.trackSamples ||
 			!Number.isFinite(runtime.trackCenterX) ||
 			!Number.isFinite(runtime.trackCenterY) ||
 			!Number.isFinite(runtime.trackRightX) ||

@@ -136,6 +136,8 @@ target_link_libraries(torcs_web_probe PRIVATE torcs_tgf torcs_track torcs_simuv2
 if(EMSCRIPTEN)
 	set(TORCS_WEB_EXPORTED_FUNCTIONS
 		"'_main'"
+		"'_malloc'"
+		"'_free'"
 		"'_torcs_web_probe'"
 		"'_torcs_web_get_module_name'"
 		"'_torcs_web_get_capture_fps'"
@@ -192,6 +194,9 @@ if(EMSCRIPTEN)
 		"'_torcs_web_runtime_get_track_sample_count'"
 		"'_torcs_web_runtime_get_track_sample_x'"
 		"'_torcs_web_runtime_get_track_sample_y'"
+		"'_torcs_web_runtime_get_snapshot_version'"
+		"'_torcs_web_runtime_get_snapshot_size'"
+		"'_torcs_web_runtime_write_snapshot'"
 	)
 	list(JOIN TORCS_WEB_EXPORTED_FUNCTIONS "," TORCS_WEB_EXPORTED_FUNCTIONS_ARG)
 
@@ -217,7 +222,7 @@ if(EMSCRIPTEN)
 			"--preload-file=${TORCS_ROOT}/data/cars/models/kc-a110/kc-a110.xml@/torcs/data/cars/models/kc-a110/kc-a110.xml"
 			"-sMODULARIZE=1"
 			"-sEXPORT_NAME=TorcsWebProbe"
-			"-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap']"
+			"-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap','HEAPF64']"
 			"-sEXPORTED_FUNCTIONS=[${TORCS_WEB_EXPORTED_FUNCTIONS_ARG}]"
 	)
 	set_target_properties(torcs_web_probe PROPERTIES SUFFIX ".js")

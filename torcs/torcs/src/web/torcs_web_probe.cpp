@@ -44,6 +44,58 @@ extern "C" int simuv2(tModInfo *modInfo);
 
 #define TORCS_WEB_SIM_IDENT 0
 #define TORCS_WEB_TRACK_SAMPLES_PER_SEG 12
+#define TORCS_WEB_RUNTIME_SNAPSHOT_VERSION 1
+#define TORCS_WEB_RUNTIME_SNAPSHOT_DOUBLE_COUNT 80
+
+enum TorcsWebRuntimeSnapshotField {
+	TORCS_WEB_SNAPSHOT_TIME = 0,
+	TORCS_WEB_SNAPSHOT_CAR_X,
+	TORCS_WEB_SNAPSHOT_CAR_Y,
+	TORCS_WEB_SNAPSHOT_CAR_Z,
+	TORCS_WEB_SNAPSHOT_CAR_YAW,
+	TORCS_WEB_SNAPSHOT_CAR_PITCH,
+	TORCS_WEB_SNAPSHOT_CAR_ROLL,
+	TORCS_WEB_SNAPSHOT_CAR_SPEED,
+	TORCS_WEB_SNAPSHOT_CAR_FUEL,
+	TORCS_WEB_SNAPSHOT_CAR_DIMENSION_X,
+	TORCS_WEB_SNAPSHOT_CAR_DIMENSION_Y,
+	TORCS_WEB_SNAPSHOT_CAR_DIMENSION_Z,
+	TORCS_WEB_SNAPSHOT_CAR_STATE,
+	TORCS_WEB_SNAPSHOT_CAR_GEAR,
+	TORCS_WEB_SNAPSHOT_ENGINE_RPM,
+	TORCS_WEB_SNAPSHOT_ENGINE_REDLINE,
+	TORCS_WEB_SNAPSHOT_TRACK_SEGMENT_ID,
+	TORCS_WEB_SNAPSHOT_TRACK_SEGMENT_TYPE,
+	TORCS_WEB_SNAPSHOT_TRACK_TO_START,
+	TORCS_WEB_SNAPSHOT_TRACK_TO_RIGHT,
+	TORCS_WEB_SNAPSHOT_TRACK_TO_MIDDLE,
+	TORCS_WEB_SNAPSHOT_TRACK_DISTANCE_FROM_START,
+	TORCS_WEB_SNAPSHOT_RACE_STATE,
+	TORCS_WEB_SNAPSHOT_RACE_POSITION,
+	TORCS_WEB_SNAPSHOT_LAP_COUNT,
+	TORCS_WEB_SNAPSHOT_REMAINING_LAPS,
+	TORCS_WEB_SNAPSHOT_LAP_PROGRESS,
+	TORCS_WEB_SNAPSHOT_DISTANCE_RACED,
+	TORCS_WEB_SNAPSHOT_CURRENT_LAP_TIME,
+	TORCS_WEB_SNAPSHOT_LAST_LAP_TIME,
+	TORCS_WEB_SNAPSHOT_BEST_LAP_TIME,
+	TORCS_WEB_SNAPSHOT_TOP_SPEED,
+	TORCS_WEB_SNAPSHOT_CONTROL_STEER,
+	TORCS_WEB_SNAPSHOT_CONTROL_ACCEL,
+	TORCS_WEB_SNAPSHOT_CONTROL_BRAKE,
+	TORCS_WEB_SNAPSHOT_CONTROL_CLUTCH,
+	TORCS_WEB_SNAPSHOT_POS_MAT_0,
+	TORCS_WEB_SNAPSHOT_CORNER_X_0 = 52,
+	TORCS_WEB_SNAPSHOT_CORNER_Y_0 = 56,
+	TORCS_WEB_SNAPSHOT_WHEEL_SPIN_VELOCITY_0 = 60,
+	TORCS_WEB_SNAPSHOT_WHEEL_SLIP_ACCEL_0 = 64,
+	TORCS_WEB_SNAPSHOT_WHEEL_SLIP_SIDE_0 = 68,
+	TORCS_WEB_SNAPSHOT_WHEEL_BRAKE_TEMP_0 = 72,
+	TORCS_WEB_SNAPSHOT_TRACK_LENGTH = 76,
+	TORCS_WEB_SNAPSHOT_TRACK_WIDTH,
+	TORCS_WEB_SNAPSHOT_TRACK_SEGMENT_COUNT,
+	TORCS_WEB_SNAPSHOT_TRACK_SAMPLE_COUNT
+};
 
 struct CarElt;
 struct RmInfo;
@@ -359,6 +411,82 @@ getTrackSample(int sampleIndex, int side, tdble *x, tdble *y)
 
 	RtTrackLocal2Global(&pos, x, y, TR_TORIGHT);
 	return 0;
+}
+
+static double
+getRuntimeLapProgress(void)
+{
+	if (!Runtime.active || !Runtime.trackData || Runtime.trackData->length <= 0.0f) {
+		return 0.0;
+	}
+
+	return Runtime.car._distFromStartLine / Runtime.trackData->length;
+}
+
+static void
+writeRuntimeSnapshotValues(double *values)
+{
+	const float *posMat = (const float *)Runtime.car._posMat;
+	int i;
+
+	memset(values, 0, sizeof(double) * TORCS_WEB_RUNTIME_SNAPSHOT_DOUBLE_COUNT);
+	if (!Runtime.active) {
+		return;
+	}
+
+	values[TORCS_WEB_SNAPSHOT_TIME] = Runtime.situation.currentTime;
+	values[TORCS_WEB_SNAPSHOT_CAR_X] = Runtime.car._pos_X;
+	values[TORCS_WEB_SNAPSHOT_CAR_Y] = Runtime.car._pos_Y;
+	values[TORCS_WEB_SNAPSHOT_CAR_Z] = Runtime.car._pos_Z;
+	values[TORCS_WEB_SNAPSHOT_CAR_YAW] = Runtime.car._yaw;
+	values[TORCS_WEB_SNAPSHOT_CAR_PITCH] = Runtime.car._pitch;
+	values[TORCS_WEB_SNAPSHOT_CAR_ROLL] = Runtime.car._roll;
+	values[TORCS_WEB_SNAPSHOT_CAR_SPEED] = Runtime.car.pub.speed;
+	values[TORCS_WEB_SNAPSHOT_CAR_FUEL] = Runtime.car._fuel;
+	values[TORCS_WEB_SNAPSHOT_CAR_DIMENSION_X] = Runtime.car._dimension_x;
+	values[TORCS_WEB_SNAPSHOT_CAR_DIMENSION_Y] = Runtime.car._dimension_y;
+	values[TORCS_WEB_SNAPSHOT_CAR_DIMENSION_Z] = Runtime.car._dimension_z;
+	values[TORCS_WEB_SNAPSHOT_CAR_STATE] = Runtime.car._state;
+	values[TORCS_WEB_SNAPSHOT_CAR_GEAR] = Runtime.car._gear;
+	values[TORCS_WEB_SNAPSHOT_ENGINE_RPM] = Runtime.car._enginerpm;
+	values[TORCS_WEB_SNAPSHOT_ENGINE_REDLINE] = Runtime.car._enginerpmRedLine;
+	values[TORCS_WEB_SNAPSHOT_TRACK_SEGMENT_ID] = Runtime.car._trkPos.seg ? Runtime.car._trkPos.seg->id : -1;
+	values[TORCS_WEB_SNAPSHOT_TRACK_SEGMENT_TYPE] = Runtime.car._trkPos.seg ? Runtime.car._trkPos.seg->type : 0;
+	values[TORCS_WEB_SNAPSHOT_TRACK_TO_START] = Runtime.car._trkPos.toStart;
+	values[TORCS_WEB_SNAPSHOT_TRACK_TO_RIGHT] = Runtime.car._trkPos.toRight;
+	values[TORCS_WEB_SNAPSHOT_TRACK_TO_MIDDLE] = Runtime.car._trkPos.toMiddle;
+	values[TORCS_WEB_SNAPSHOT_TRACK_DISTANCE_FROM_START] = getCarTrackDistanceFromStart(&(Runtime.car));
+	values[TORCS_WEB_SNAPSHOT_RACE_STATE] = Runtime.situation._raceState;
+	values[TORCS_WEB_SNAPSHOT_RACE_POSITION] = Runtime.car._pos;
+	values[TORCS_WEB_SNAPSHOT_LAP_COUNT] = Runtime.car._laps;
+	values[TORCS_WEB_SNAPSHOT_REMAINING_LAPS] = Runtime.car._remainingLaps;
+	values[TORCS_WEB_SNAPSHOT_LAP_PROGRESS] = getRuntimeLapProgress();
+	values[TORCS_WEB_SNAPSHOT_DISTANCE_RACED] = Runtime.car._distRaced;
+	values[TORCS_WEB_SNAPSHOT_CURRENT_LAP_TIME] = Runtime.car._curLapTime;
+	values[TORCS_WEB_SNAPSHOT_LAST_LAP_TIME] = Runtime.car._lastLapTime;
+	values[TORCS_WEB_SNAPSHOT_BEST_LAP_TIME] = Runtime.car._bestLapTime;
+	values[TORCS_WEB_SNAPSHOT_TOP_SPEED] = Runtime.car._topSpeed;
+	values[TORCS_WEB_SNAPSHOT_CONTROL_STEER] = Runtime.car.ctrl.steer;
+	values[TORCS_WEB_SNAPSHOT_CONTROL_ACCEL] = Runtime.car.ctrl.accelCmd;
+	values[TORCS_WEB_SNAPSHOT_CONTROL_BRAKE] = Runtime.car.ctrl.brakeCmd;
+	values[TORCS_WEB_SNAPSHOT_CONTROL_CLUTCH] = Runtime.car.ctrl.clutchCmd;
+
+	for (i = 0; i < 16; i++) {
+		values[TORCS_WEB_SNAPSHOT_POS_MAT_0 + i] = posMat[i];
+	}
+	for (i = 0; i < 4; i++) {
+		values[TORCS_WEB_SNAPSHOT_CORNER_X_0 + i] = Runtime.car._corner_x(i);
+		values[TORCS_WEB_SNAPSHOT_CORNER_Y_0 + i] = Runtime.car._corner_y(i);
+		values[TORCS_WEB_SNAPSHOT_WHEEL_SPIN_VELOCITY_0 + i] = Runtime.car._wheelSpinVel(i);
+		values[TORCS_WEB_SNAPSHOT_WHEEL_SLIP_ACCEL_0 + i] = Runtime.car._wheelSlipAccel(i);
+		values[TORCS_WEB_SNAPSHOT_WHEEL_SLIP_SIDE_0 + i] = Runtime.car._wheelSlipSide(i);
+		values[TORCS_WEB_SNAPSHOT_WHEEL_BRAKE_TEMP_0 + i] = Runtime.car._brakeTemp(i);
+	}
+
+	values[TORCS_WEB_SNAPSHOT_TRACK_LENGTH] = Runtime.trackData ? Runtime.trackData->length : 0.0;
+	values[TORCS_WEB_SNAPSHOT_TRACK_WIDTH] = Runtime.trackData ? Runtime.trackData->width : 0.0;
+	values[TORCS_WEB_SNAPSHOT_TRACK_SEGMENT_COUNT] = Runtime.trackData ? Runtime.trackData->nseg : 0;
+	values[TORCS_WEB_SNAPSHOT_TRACK_SAMPLE_COUNT] = Runtime.trackData ? Runtime.trackData->nseg * TORCS_WEB_TRACK_SAMPLES_PER_SEG : 0;
 }
 
 static void
@@ -1033,11 +1161,7 @@ EMSCRIPTEN_KEEPALIVE
 double
 torcs_web_runtime_get_lap_progress(void)
 {
-	if (!Runtime.active || !Runtime.trackData || Runtime.trackData->length <= 0.0f) {
-		return 0.0;
-	}
-
-	return Runtime.car._distFromStartLine / Runtime.trackData->length;
+	return getRuntimeLapProgress();
 }
 
 EMSCRIPTEN_KEEPALIVE
@@ -1175,6 +1299,32 @@ torcs_web_runtime_get_track_sample_y(int sampleIndex, int side)
 	tdble y = 0.0f;
 
 	return getTrackSample(sampleIndex, side, &x, &y) == 0 ? y : 0.0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int
+torcs_web_runtime_get_snapshot_version(void)
+{
+	return TORCS_WEB_RUNTIME_SNAPSHOT_VERSION;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int
+torcs_web_runtime_get_snapshot_size(void)
+{
+	return (int)(sizeof(double) * TORCS_WEB_RUNTIME_SNAPSHOT_DOUBLE_COUNT);
+}
+
+EMSCRIPTEN_KEEPALIVE
+int
+torcs_web_runtime_write_snapshot(void *buffer, int byteSize)
+{
+	if (!buffer || byteSize < torcs_web_runtime_get_snapshot_size()) {
+		return -1;
+	}
+
+	writeRuntimeSnapshotValues((double *)buffer);
+	return Runtime.active ? 0 : -1;
 }
 
 }
