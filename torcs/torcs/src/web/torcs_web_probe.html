@@ -527,12 +527,14 @@
 			if (!active) {
 				return;
 			}
+			// The web UI is right-positive; TORCS control input is left-positive.
+			const torcsSteer = -Number(els.steer.value);
 			call(
 				"torcs_web_runtime_set_controls",
 				"number",
 				["number", "number", "number", "number", "number"],
 				[
-					Number(els.steer.value),
+					torcsSteer,
 					Number(els.accel.value),
 					Number(els.brake.value),
 					Number(els.clutch.value),

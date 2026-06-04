@@ -98,11 +98,13 @@ export class TorcsRuntime {
 		if (!this.active) {
 			return false;
 		}
+		// The web UI is right-positive; TORCS control input is left-positive.
+		const torcsSteer = -steer;
 		return this.call(
 			"torcs_web_runtime_set_controls",
 			"number",
 			["number", "number", "number", "number", "number"],
-			[steer, accel, brake, clutch, gear],
+			[torcsSteer, accel, brake, clutch, gear],
 		) === 0;
 	}
 
