@@ -1,0 +1,193 @@
+export const SNAPSHOT = {
+	time: 0,
+	x: 1,
+	y: 2,
+	z: 3,
+	yaw: 4,
+	pitch: 5,
+	roll: 6,
+	speed: 7,
+	fuel: 8,
+	dimensionX: 9,
+	dimensionY: 10,
+	dimensionZ: 11,
+	state: 12,
+	gear: 13,
+	engineRpm: 14,
+	engineRedline: 15,
+	trackSegmentId: 16,
+	trackSegmentType: 17,
+	trackToStart: 18,
+	trackToRight: 19,
+	trackToMiddle: 20,
+	trackDistanceFromStart: 21,
+	raceState: 22,
+	racePosition: 23,
+	lapCount: 24,
+	remainingLaps: 25,
+	lapProgress: 26,
+	distanceRaced: 27,
+	currentLapTime: 28,
+	lastLapTime: 29,
+	bestLapTime: 30,
+	topSpeed: 31,
+	controlSteer: 32,
+	controlAccel: 33,
+	controlBrake: 34,
+	controlClutch: 35,
+	posMat0: 36,
+	cornerX0: 52,
+	cornerY0: 56,
+	wheelSpinVelocity0: 60,
+	wheelSlipAccel0: 64,
+	wheelSlipSide0: 68,
+	wheelBrakeTemp0: 72,
+	trackLength: 76,
+	trackWidth: 77,
+	trackSegments: 78,
+	trackSamples: 79,
+};
+
+const TRACK_SIDE = {
+	right: 0,
+	center: 1,
+	left: 2,
+};
+
+export class TorcsRuntime {
+	constructor(module) {
+		this.module = module;
+		this.snapshotSize = this.call("torcs_web_runtime_get_snapshot_size", "number");
+		this.snapshotCount = this.snapshotSize / Float64Array.BYTES_PER_ELEMENT;
+		this.snapshotPtr = module._malloc(this.snapshotSize);
+		this.active = false;
+	}
+
+	call(name, returnType, argTypes = [], args = []) {
+		return this.module.ccall(name, returnType, argTypes, args);
+	}
+
+	start(trackPath, carPath) {
+		this.shutdown();
+		const rc = this.call(
+			"torcs_web_runtime_start_with_files",
+			"number",
+			["string", "string"],
+			[trackPath, carPath],
+		);
+		this.active = rc === 0;
+		return this.active;
+	}
+
+	shutdown() {
+		if (this.active) {
+			this.call("torcs_web_runtime_shutdown", null);
+			this.active = false;
+		}
+	}
+
+	dispose() {
+		this.shutdown();
+		if (this.snapshotPtr) {
+			this.module._free(this.snapshotPtr);
+			this.snapshotPtr = 0;
+		}
+	}
+
+	setControls({ steer, accel, brake, clutch, gear }) {
+		if (!this.active) {
+			return false;
+		}
+		return this.call(
+			"torcs_web_runtime_set_controls",
+			"number",
+			["number", "number", "number", "number", "number"],
+			[steer, accel, brake, clutch, gear],
+		) === 0;
+	}
+
+	step(deltaTime) {
+		if (!this.active) {
+			return false;
+		}
+		return this.call("torcs_web_runtime_step", "number", ["number"], [deltaTime]) === 0;
+	}
+
+	readSnapshot() {
+		if (!this.active) {
+			return null;
+		}
+		const rc = this.call(
+			"torcs_web_runtime_write_snapshot",
+			"number",
+			["number", "number"],
+			[this.snapshotPtr, this.snapshotSize],
+		);
+		if (rc !== 0) {
+			return null;
+		}
+		const values = this.module.HEAPF64.subarray(
+			this.snapshotPtr >> 3,
+			(this.snapshotPtr >> 3) + this.snapshotCount,
+		);
+		return values;
+	}
+
+	readPoint(sampleIndex, side) {
+		return {
+			x: this.call("torcs_web_runtime_get_track_sample_x", "number", ["number", "number"], [sampleIndex, side]),
+			y: this.call("torcs_web_runtime_get_track_sample_y", "number", ["number", "number"], [sampleIndex, side]),
+		};
+	}
+
+	readTrackSamples() {
+		if (!this.active) {
+			return { center: [], right: [], left: [], bounds: null };
+		}
+
+		const count = this.call("torcs_web_runtime_get_track_sample_count", "number");
+		const track = {
+			center: [],
+			right: [],
+			left: [],
+			bounds: {
+				minX: Number.POSITIVE_INFINITY,
+				minY: Number.POSITIVE_INFINITY,
+				maxX: Number.NEGATIVE_INFINITY,
+				maxY: Number.NEGATIVE_INFINITY,
+			},
+		};
+		const extend = (point) => {
+			track.bounds.minX = Math.min(track.bounds.minX, point.x);
+			track.bounds.minY = Math.min(track.bounds.minY, point.y);
+			track.bounds.maxX = Math.max(track.bounds.maxX, point.x);
+			track.bounds.maxY = Math.max(track.bounds.maxY, point.y);
+		};
+
+		for (let i = 0; i < count; i += 1) {
+			const right = this.readPoint(i, TRACK_SIDE.right);
+			const center = this.readPoint(i, TRACK_SIDE.center);
+			const left = this.readPoint(i, TRACK_SIDE.left);
+			track.right.push(right);
+			track.center.push(center);
+			track.left.push(left);
+			extend(right);
+			extend(left);
+		}
+
+		if (!Number.isFinite(track.bounds.minX)) {
+			track.bounds = null;
+		}
+		return track;
+	}
+}
+
+export async function createTorcsRuntime() {
+	const factory = window.TorcsWebProbe;
+	if (!factory) {
+		throw new Error("torcs_web_probe.js did not expose TorcsWebProbe");
+	}
+	const module = await factory({ locateFile: (path) => path });
+	return new TorcsRuntime(module);
+}
+
