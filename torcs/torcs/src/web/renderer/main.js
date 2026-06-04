@@ -1,6 +1,7 @@
 import { CameraRig } from "./cameras.js";
 import { Hud } from "./hud.js";
 import { InputController } from "./input.js";
+import { AssetManager } from "./assets.js";
 import { createTorcsRuntime } from "./runtime.js";
 import { TorcsScene } from "./scene.js";
 
@@ -32,6 +33,7 @@ const elements = {
 const hud = new Hud(elements);
 const scene = new TorcsScene(elements.canvas);
 const cameras = new CameraRig(elements.canvas);
+const assets = new AssetManager();
 let runtime = null;
 let running = false;
 let lastTime = 0;
@@ -94,7 +96,24 @@ function animate(time) {
 	requestAnimationFrame(animate);
 }
 
-function startSession() {
+async function loadVisualAssets() {
+	try {
+		const [track, car] = await Promise.all([
+			assets.loadTrack(elements.track.value),
+			assets.loadCar(elements.car.value),
+		]);
+		scene.setTrackVisual(track ? track.scene : null);
+		scene.setCarVisual(car ? car.scene : null);
+		return Boolean(track && car);
+	} catch (error) {
+		console.warn("TORCS web renderer asset load failed", error);
+		scene.setTrackVisual(null);
+		scene.setCarVisual(null);
+		return false;
+	}
+}
+
+async function startSession() {
 	if (!runtime) {
 		return;
 	}
@@ -109,8 +128,11 @@ function startSession() {
 	applyControls();
 	scene.setTrack(runtime.readTrackSamples());
 	snapshot = runtime.readSnapshot();
+	scene.updateCar(snapshot);
 	hud.setState("ready");
 	setEnabled(true);
+	const hasAssets = await loadVisualAssets();
+	hud.setState(hasAssets ? "ready" : "debug");
 	readAndRender();
 }
 

@@ -209,6 +209,30 @@ if(EMSCRIPTEN)
 		COMMENT "Copying TORCS WASM browser probe"
 	)
 
+	find_program(TORCS_PYTHON_EXECUTABLE NAMES python3 python)
+	if(TORCS_PYTHON_EXECUTABLE)
+		add_custom_target(torcs_web_assets
+			COMMAND
+				"${TORCS_PYTHON_EXECUTABLE}"
+				"${TORCS_ROOT}/tools/web-assets/convert_torcs_assets.py"
+				"--source-root"
+				"${TORCS_ROOT}"
+				"--output-dir"
+				"$<TARGET_FILE_DIR:torcs_web_probe>/web-assets"
+			COMMAND
+				"${TORCS_PYTHON_EXECUTABLE}"
+				"${TORCS_ROOT}/tools/web-assets/validate_assets.py"
+				"$<TARGET_FILE_DIR:torcs_web_probe>/web-assets/manifest.json"
+			DEPENDS
+				torcs_web_probe
+				"${TORCS_ROOT}/tools/web-assets/convert_torcs_assets.py"
+				"${TORCS_ROOT}/tools/web-assets/validate_assets.py"
+			COMMENT "Converting TORCS browser renderer assets"
+		)
+	else()
+		message(FATAL_ERROR "python3 is required to generate TORCS web renderer assets")
+	endif()
+
 	add_custom_target(torcs_web_renderer_browser
 		COMMAND
 			"${CMAKE_COMMAND}" -E copy_if_different
@@ -221,6 +245,9 @@ if(EMSCRIPTEN)
 		DEPENDS torcs_web_probe
 		COMMENT "Copying TORCS WASM browser renderer"
 	)
+	if(TARGET torcs_web_assets)
+		add_dependencies(torcs_web_renderer_browser torcs_web_assets)
+	endif()
 
 	target_link_options(torcs_web_probe
 		PRIVATE

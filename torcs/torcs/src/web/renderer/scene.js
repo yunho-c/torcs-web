@@ -77,10 +77,13 @@ export class TorcsScene {
 		this.addLighting();
 		this.addReferenceGrid();
 		this.car = null;
+		this.carBox = null;
+		this.carVisual = null;
 		this.carDimensions = null;
 		this.carShadow = null;
 		this.footprint = null;
 		this.track = null;
+		this.trackVisual = null;
 	}
 
 	addLighting() {
@@ -110,12 +113,43 @@ export class TorcsScene {
 		this.groups.land.add(root);
 	}
 
+	setTrackVisual(model) {
+		if (this.trackVisual) {
+			this.groups.land.remove(this.trackVisual);
+		}
+		this.trackVisual = model;
+		if (this.trackVisual) {
+			this.groups.land.add(this.trackVisual);
+		}
+	}
+
+	setCarVisual(model) {
+		if (!this.car) {
+			return;
+		}
+		if (this.carVisual) {
+			this.car.remove(this.carVisual);
+		}
+		this.carVisual = model;
+		if (this.carVisual) {
+			this.car.add(this.carVisual);
+			if (this.carBox) {
+				this.carBox.visible = false;
+			}
+		} else if (this.carBox) {
+			this.carBox.visible = true;
+		}
+	}
+
 	createCar(values) {
 		this.carDimensions = getCarDimensions(values);
+		this.car = new THREE.Group();
+		this.groups.cars.add(this.car);
+
 		const geometry = new THREE.BoxGeometry(...this.carDimensions);
 		const material = new THREE.MeshLambertMaterial({ color: 0xc9483d });
-		this.car = new THREE.Mesh(geometry, material);
-		this.groups.cars.add(this.car);
+		this.carBox = new THREE.Mesh(geometry, material);
+		this.car.add(this.carBox);
 
 		this.carShadow = new THREE.Mesh(
 			new THREE.CircleGeometry(1, 32),
@@ -136,8 +170,8 @@ export class TorcsScene {
 		const dimensionsChanged = !this.carDimensions ||
 			nextDimensions.some((value, index) => Math.abs(value - this.carDimensions[index]) > 0.001);
 		if (dimensionsChanged) {
-			this.car.geometry.dispose();
-			this.car.geometry = new THREE.BoxGeometry(...nextDimensions);
+			this.carBox.geometry.dispose();
+			this.carBox.geometry = new THREE.BoxGeometry(...nextDimensions);
 			this.carDimensions = nextDimensions;
 		}
 
