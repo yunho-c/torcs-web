@@ -73,4 +73,3 @@ export class InputController {
 		window.addEventListener("keyup", (event) => this.handleKey(event, false));
 	}
 }
-

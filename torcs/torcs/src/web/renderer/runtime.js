@@ -190,4 +190,3 @@ export async function createTorcsRuntime() {
 	const module = await factory({ locateFile: (path) => path });
 	return new TorcsRuntime(module);
 }
-

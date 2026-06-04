@@ -45,4 +45,3 @@ export class CameraRig {
 		this.camera.lookAt(this.target);
 	}
 }
-

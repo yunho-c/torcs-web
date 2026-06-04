@@ -155,4 +155,3 @@ createTorcsRuntime()
 		console.error(error);
 		hud.setState("failed");
 	});
-

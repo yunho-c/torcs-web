@@ -27,4 +27,3 @@ export class Hud {
 		this.elements.offset.textContent = fmt(values[SNAPSHOT.trackToMiddle], 2);
 	}
 }
-

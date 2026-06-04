@@ -67,4 +67,3 @@ console.log(JSON.stringify({
 	html: "torcs_web_renderer.html",
 	entrypoint: "renderer/main.js",
 }));
-
