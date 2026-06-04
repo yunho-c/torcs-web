@@ -46,6 +46,14 @@ function makeRoadMesh(track) {
 	);
 }
 
+function getCarDimensions(values) {
+	return [
+		Math.max(0.1, values[SNAPSHOT.dimensionX]),
+		Math.max(0.1, values[SNAPSHOT.dimensionZ]),
+		Math.max(0.1, values[SNAPSHOT.dimensionY]),
+	];
+}
+
 export class TorcsScene {
 	constructor(canvas) {
 		this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -69,6 +77,7 @@ export class TorcsScene {
 		this.addLighting();
 		this.addReferenceGrid();
 		this.car = null;
+		this.carDimensions = null;
 		this.carShadow = null;
 		this.footprint = null;
 		this.track = null;
@@ -102,11 +111,8 @@ export class TorcsScene {
 	}
 
 	createCar(values) {
-		const geometry = new THREE.BoxGeometry(
-			Math.max(0.1, values[SNAPSHOT.dimensionX]),
-			Math.max(0.1, values[SNAPSHOT.dimensionZ]),
-			Math.max(0.1, values[SNAPSHOT.dimensionY]),
-		);
+		this.carDimensions = getCarDimensions(values);
+		const geometry = new THREE.BoxGeometry(...this.carDimensions);
 		const material = new THREE.MeshLambertMaterial({ color: 0xc9483d });
 		this.car = new THREE.Mesh(geometry, material);
 		this.groups.cars.add(this.car);
@@ -125,6 +131,14 @@ export class TorcsScene {
 	updateCar(values) {
 		if (!this.car) {
 			this.createCar(values);
+		}
+		const nextDimensions = getCarDimensions(values);
+		const dimensionsChanged = !this.carDimensions ||
+			nextDimensions.some((value, index) => Math.abs(value - this.carDimensions[index]) > 0.001);
+		if (dimensionsChanged) {
+			this.car.geometry.dispose();
+			this.car.geometry = new THREE.BoxGeometry(...nextDimensions);
+			this.carDimensions = nextDimensions;
 		}
 
 		this.car.position.copy(torcsToThree(values[SNAPSHOT.x], values[SNAPSHOT.y], values[SNAPSHOT.z]));
@@ -168,4 +182,3 @@ export class TorcsScene {
 }
 
 export { torcsToThree };
-
