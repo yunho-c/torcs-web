@@ -245,8 +245,10 @@ requireText(byPath["renderer/scene.js"], "new THREE.BoxGeometry", "simulated car
 requireText(byPath["renderer/scene.js"], "makeRoadMesh(track)", "sampled track road mesh");
 requireText(byPath["renderer/scene.js"], "setTrackVisual(model)", "converted track mesh hook");
 requireText(byPath["renderer/scene.js"], "setTrackAtmosphere(entry, backgroundTexture = null)", "track atmosphere hook");
-requireText(byPath["renderer/scene.js"], "new THREE.Fog(backgroundColor, 300, 600)", "linear TORCS fog range");
+requireText(byPath["renderer/scene.js"], "backgroundColor.clone().multiplyScalar(0.8)", "native fog color scaling");
+requireText(byPath["renderer/scene.js"], "new THREE.Fog(fogColor, 300, 600)", "linear TORCS fog range");
 requireText(byPath["renderer/scene.js"], "new THREE.CylinderGeometry(900, 900, 260, 36, 1, true)", "background dome geometry");
+requireText(byPath["renderer/scene.js"], "color: 0xffffff", "unlit untinted background texture");
 requireText(byPath["renderer/scene.js"], "torcsToThree(entry.lightPosition[0], entry.lightPosition[1], entry.lightPosition[2])", "track light position conversion");
 requireText(byPath["renderer/scene.js"], "setCarVisual(asset)", "converted car LOD hook");
 requireText(byPath["renderer/scene.js"], "export { getTorcsPoseQuaternion, torcsToThree }", "shared TORCS pose export");

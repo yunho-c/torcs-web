@@ -216,11 +216,12 @@ export class TorcsScene {
 
 	setTrackAtmosphere(entry, backgroundTexture = null) {
 		const backgroundColor = colorFromRgb(entry && entry.backgroundColor, DEFAULT_BACKGROUND);
+		const fogColor = backgroundColor.clone().multiplyScalar(0.8);
 		const ambientColor = colorFromRgb(entry && entry.ambientColor, DEFAULT_AMBIENT);
 		const diffuseColor = colorFromRgb(entry && entry.diffuseColor, DEFAULT_SUN);
 		this.renderer.setClearColor(backgroundColor, 1);
 		this.scene.background = backgroundColor.clone();
-		this.scene.fog = new THREE.Fog(backgroundColor, 300, 600);
+		this.scene.fog = new THREE.Fog(fogColor, 300, 600);
 		this.ambientLight.color.copy(ambientColor);
 		this.ambientLight.intensity = 2.4;
 		this.sunLight.color.copy(diffuseColor);
@@ -233,10 +234,10 @@ export class TorcsScene {
 			lightPosition.normalize().multiplyScalar(260);
 		}
 		this.sunLight.position.copy(lightPosition);
-		this.setBackgroundDome(backgroundTexture, backgroundColor);
+		this.setBackgroundDome(backgroundTexture);
 	}
 
-	setBackgroundDome(texture, color) {
+	setBackgroundDome(texture) {
 		if (this.backgroundDome) {
 			this.groups.background.remove(this.backgroundDome);
 			if (this.backgroundDome.material.map) {
@@ -255,7 +256,7 @@ export class TorcsScene {
 		const geometry = new THREE.CylinderGeometry(900, 900, 260, 36, 1, true);
 		const material = new THREE.MeshBasicMaterial({
 			map: texture,
-			color,
+			color: 0xffffff,
 			side: THREE.BackSide,
 			depthWrite: false,
 			fog: false,
