@@ -212,9 +212,11 @@ requireText(byPath["torcs_web_renderer.html"], "\"three\"", "Three.js import map
 requireText(byPath["torcs_web_renderer.html"], "\"three/addons/\"", "Three.js addons import map");
 
 requireText(byPath["renderer/assets.js"], "GLTFLoader", "GLTF loader import");
+requireText(byPath["renderer/assets.js"], "TextureLoader", "texture loader import");
 requireText(byPath["renderer/assets.js"], "./web-assets/", "asset manifest base path");
 requireText(byPath["renderer/assets.js"], "export class AssetManager", "asset manager export");
 requireText(byPath["renderer/assets.js"], "Promise.all(entry.lods.map", "all car LOD loading");
+requireText(byPath["renderer/assets.js"], "entry.backgroundTexture", "track background texture loading");
 
 requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_get_snapshot_size", "snapshot size export");
 requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_write_snapshot", "snapshot write export");
@@ -225,11 +227,16 @@ requireText(byPath["renderer/main.js"], "createTorcsRuntime", "runtime factory i
 requireText(byPath["renderer/main.js"], "new AssetManager", "asset manager creation");
 requireText(byPath["renderer/main.js"], "new TorcsScene", "scene creation");
 requireText(byPath["renderer/main.js"], "runtime.readTrackSamples()", "track sample ingestion");
+requireText(byPath["renderer/main.js"], "scene.setTrackAtmosphere(track ? track.entry : null, track ? track.backgroundTexture : null)", "track atmosphere handoff");
 
 requireText(byPath["renderer/scene.js"], "import * as THREE from \"three\"", "Three.js module import");
 requireText(byPath["renderer/scene.js"], "new THREE.BoxGeometry", "simulated car box");
 requireText(byPath["renderer/scene.js"], "makeRoadMesh(track)", "sampled track road mesh");
 requireText(byPath["renderer/scene.js"], "setTrackVisual(model)", "converted track mesh hook");
+requireText(byPath["renderer/scene.js"], "setTrackAtmosphere(entry, backgroundTexture = null)", "track atmosphere hook");
+requireText(byPath["renderer/scene.js"], "new THREE.Fog(backgroundColor, 300, 600)", "linear TORCS fog range");
+requireText(byPath["renderer/scene.js"], "new THREE.CylinderGeometry(900, 900, 260, 36, 1, true)", "background dome geometry");
+requireText(byPath["renderer/scene.js"], "torcsToThree(entry.lightPosition[0], entry.lightPosition[1], entry.lightPosition[2])", "track light position conversion");
 requireText(byPath["renderer/scene.js"], "setCarVisual(asset)", "converted car LOD hook");
 requireText(byPath["renderer/scene.js"], "export { getTorcsPoseQuaternion, torcsToThree }", "shared TORCS pose export");
 requireText(byPath["renderer/scene.js"], "createGeneratedWheels(values)", "generated wheel fallback");
@@ -263,6 +270,15 @@ if (!track || !car) {
 }
 checkGlb(track.asset);
 checkObjectNames(track, track.source);
+if (!track.backgroundTexture) {
+	fail("TORCS web renderer smoke test found missing background texture metadata");
+}
+checkPng(track.backgroundTexture);
+for (const field of ["backgroundColor", "ambientColor", "diffuseColor", "lightPosition"]) {
+	if (!Array.isArray(track[field]) || track[field].length !== 3) {
+		fail("TORCS web renderer smoke test found malformed track atmosphere metadata", { field });
+	}
+}
 for (const lod of car.lods) {
 	checkGlb(lod.asset);
 	checkObjectNames(lod, lod.model);

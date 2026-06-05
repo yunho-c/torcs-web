@@ -1,3 +1,4 @@
+import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 function normalizeRuntimePath(path) {
@@ -8,6 +9,7 @@ export class AssetManager {
 	constructor(baseUrl = "./web-assets/") {
 		this.baseUrl = baseUrl;
 		this.loader = new GLTFLoader();
+		this.textureLoader = new THREE.TextureLoader();
 		this.manifest = null;
 	}
 
@@ -28,6 +30,12 @@ export class AssetManager {
 		return gltf.scene;
 	}
 
+	async loadTexture(relativePath) {
+		const texture = await this.textureLoader.loadAsync(`${this.baseUrl}${relativePath}`);
+		texture.colorSpace = THREE.SRGBColorSpace;
+		return texture;
+	}
+
 	async loadTrack(trackPath) {
 		const manifest = await this.loadManifest();
 		const entry = manifest.tracks[normalizeRuntimePath(trackPath)];
@@ -35,8 +43,11 @@ export class AssetManager {
 			return null;
 		}
 		const scene = await this.loadGltf(entry.asset);
+		const backgroundTexture = entry.backgroundTexture
+			? await this.loadTexture(entry.backgroundTexture)
+			: null;
 		scene.name = entry.name || "track";
-		return { entry, scene };
+		return { entry, scene, backgroundTexture };
 	}
 
 	async loadCar(carPath) {

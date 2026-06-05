@@ -5,6 +5,9 @@ const ROAD_Y = 0.03;
 const WHEEL_ORDER = [0, 1, 2, 3];
 const WHEEL_HEAT_COOL = new THREE.Color(0x343936);
 const WHEEL_HEAT_HOT = new THREE.Color(0xff5b32);
+const DEFAULT_BACKGROUND = new THREE.Color(0x0b0d0c);
+const DEFAULT_AMBIENT = new THREE.Color(0xd8e0db);
+const DEFAULT_SUN = new THREE.Color(0xfff0d2);
 const TORCS_TO_THREE_BASIS = new THREE.Matrix4().set(
 	1, 0, 0, 0,
 	0, 0, 1, 0,
@@ -89,6 +92,17 @@ function clamp01(value) {
 	return Math.max(0, Math.min(1, value));
 }
 
+function colorFromRgb(values, fallback) {
+	if (!Array.isArray(values) || values.length < 3) {
+		return fallback.clone();
+	}
+	return new THREE.Color(
+		clamp01(values[0]),
+		clamp01(values[1]),
+		clamp01(values[2]),
+	);
+}
+
 function getCarLodFactor(camera, position, canvas) {
 	if (!camera || !camera.isPerspectiveCamera) {
 		return Number.POSITIVE_INFINITY;
@@ -130,11 +144,12 @@ export class TorcsScene {
 	constructor(canvas) {
 		this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 		this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-		this.renderer.setClearColor(0x0b0d0c, 1);
+		this.renderer.setClearColor(DEFAULT_BACKGROUND, 1);
+		this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 		this.scene = new THREE.Scene();
-		this.scene.background = new THREE.Color(0x0b0d0c);
-		this.scene.fog = new THREE.Fog(0x0b0d0c, 140, 820);
+		this.scene.background = DEFAULT_BACKGROUND.clone();
+		this.scene.fog = new THREE.Fog(DEFAULT_BACKGROUND, 300, 600);
 
 		this.groups = {
 			background: new THREE.Group(),
@@ -159,14 +174,15 @@ export class TorcsScene {
 		this.footprint = null;
 		this.track = null;
 		this.trackVisual = null;
+		this.backgroundDome = null;
 	}
 
 	addLighting() {
-		const hemi = new THREE.HemisphereLight(0xd8e0db, 0x272b23, 1.7);
-		this.scene.add(hemi);
-		const sun = new THREE.DirectionalLight(0xfff0d2, 2.2);
-		sun.position.set(-90, 160, 80);
-		this.scene.add(sun);
+		this.ambientLight = new THREE.AmbientLight(DEFAULT_AMBIENT, 1.7);
+		this.scene.add(this.ambientLight);
+		this.sunLight = new THREE.DirectionalLight(DEFAULT_SUN, 2.2);
+		this.sunLight.position.set(-90, 160, 80);
+		this.scene.add(this.sunLight);
 	}
 
 	addReferenceGrid() {
@@ -196,6 +212,57 @@ export class TorcsScene {
 		if (this.trackVisual) {
 			this.groups.land.add(this.trackVisual);
 		}
+	}
+
+	setTrackAtmosphere(entry, backgroundTexture = null) {
+		const backgroundColor = colorFromRgb(entry && entry.backgroundColor, DEFAULT_BACKGROUND);
+		const ambientColor = colorFromRgb(entry && entry.ambientColor, DEFAULT_AMBIENT);
+		const diffuseColor = colorFromRgb(entry && entry.diffuseColor, DEFAULT_SUN);
+		this.renderer.setClearColor(backgroundColor, 1);
+		this.scene.background = backgroundColor.clone();
+		this.scene.fog = new THREE.Fog(backgroundColor, 300, 600);
+		this.ambientLight.color.copy(ambientColor);
+		this.ambientLight.intensity = 2.4;
+		this.sunLight.color.copy(diffuseColor);
+		this.sunLight.intensity = 2.3;
+
+		const lightPosition = entry && Array.isArray(entry.lightPosition)
+			? torcsToThree(entry.lightPosition[0], entry.lightPosition[1], entry.lightPosition[2])
+			: new THREE.Vector3(-90, 160, 80);
+		if (lightPosition.lengthSq() > 0.001) {
+			lightPosition.normalize().multiplyScalar(260);
+		}
+		this.sunLight.position.copy(lightPosition);
+		this.setBackgroundDome(backgroundTexture, backgroundColor);
+	}
+
+	setBackgroundDome(texture, color) {
+		if (this.backgroundDome) {
+			this.groups.background.remove(this.backgroundDome);
+			if (this.backgroundDome.material.map) {
+				this.backgroundDome.material.map.dispose();
+			}
+			this.backgroundDome.geometry.dispose();
+			this.backgroundDome.material.dispose();
+			this.backgroundDome = null;
+		}
+		if (!texture) {
+			return;
+		}
+		texture.wrapS = THREE.RepeatWrapping;
+		texture.wrapT = THREE.ClampToEdgeWrapping;
+		texture.repeat.set(1, 1);
+		const geometry = new THREE.CylinderGeometry(900, 900, 260, 36, 1, true);
+		const material = new THREE.MeshBasicMaterial({
+			map: texture,
+			color,
+			side: THREE.BackSide,
+			depthWrite: false,
+			fog: false,
+		});
+		this.backgroundDome = new THREE.Mesh(geometry, material);
+		this.backgroundDome.renderOrder = -1000;
+		this.groups.background.add(this.backgroundDome);
 	}
 
 	setCarVisual(asset) {
@@ -401,6 +468,9 @@ export class TorcsScene {
 	}
 
 	render(camera) {
+		if (this.backgroundDome && camera) {
+			this.backgroundDome.position.set(camera.position.x, 110, camera.position.z);
+		}
 		this.renderer.render(this.scene, camera);
 	}
 }

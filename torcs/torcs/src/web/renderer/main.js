@@ -103,11 +103,13 @@ async function loadVisualAssets() {
 			assets.loadCar(elements.car.value),
 		]);
 		scene.setTrackVisual(track ? track.scene : null);
+		scene.setTrackAtmosphere(track ? track.entry : null, track ? track.backgroundTexture : null);
 		scene.setCarVisual(car);
 		return Boolean(track && car);
 	} catch (error) {
 		console.warn("TORCS web renderer asset load failed", error);
 		scene.setTrackVisual(null);
+		scene.setTrackAtmosphere(null, null);
 		scene.setCarVisual(null);
 		return false;
 	}

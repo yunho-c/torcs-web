@@ -89,6 +89,16 @@ def main():
 		for track in tracks.values():
 			check_glb(require(root, track["asset"]))
 			check_object_names(track, track.get("source", "track"))
+			if not isinstance(track.get("backgroundColor"), list) or len(track["backgroundColor"]) != 3:
+				raise ValueError(f"{track.get('source', 'track')} missing background color")
+			if not isinstance(track.get("ambientColor"), list) or len(track["ambientColor"]) != 3:
+				raise ValueError(f"{track.get('source', 'track')} missing ambient color")
+			if not isinstance(track.get("diffuseColor"), list) or len(track["diffuseColor"]) != 3:
+				raise ValueError(f"{track.get('source', 'track')} missing diffuse color")
+			if not isinstance(track.get("lightPosition"), list) or len(track["lightPosition"]) != 3:
+				raise ValueError(f"{track.get('source', 'track')} missing light position")
+			if track.get("backgroundTexture"):
+				check_texture(require(root, track["backgroundTexture"]))
 			for texture in track.get("textures", {}).values():
 				check_texture(require(root, texture))
 		for car in cars.values():

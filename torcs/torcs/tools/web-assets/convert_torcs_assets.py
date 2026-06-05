@@ -94,6 +94,7 @@ def parse_track_metadata(source_root):
 		"category": attstr(header, "category"),
 		"model": attstr(graphic, "3d description"),
 		"background": attstr(graphic, "background image"),
+		"backgroundType": int(attnum(graphic, "background type", 0)),
 		"backgroundColor": [
 			attnum(graphic, "background color R", 0.45),
 			attnum(graphic, "background color G", 0.45),
@@ -553,6 +554,14 @@ def main():
 		name: relative_to_output(convert_texture(source, track_dir), output_dir)
 		for name, source in sorted(track_result["textureSources"].items())
 	}
+	track_background_output = ""
+	track_background_source = resolve_texture(
+		source_root,
+		source_root / "data/tracks/e-track-1",
+		track_meta["background"],
+	)
+	if track_background_source:
+		track_background_output = relative_to_output(convert_texture(track_background_source, track_dir), output_dir)
 
 	car_dir = output_dir / "cars/kc-2000gt"
 	car_texture_sources = {}
@@ -592,6 +601,8 @@ def main():
 				"source": track_result["source"],
 				"asset": relative_to_output(track_glb, output_dir),
 				"background": track_meta["background"],
+				"backgroundType": track_meta["backgroundType"],
+				"backgroundTexture": track_background_output,
 				"backgroundColor": track_meta["backgroundColor"],
 				"ambientColor": track_meta["ambientColor"],
 				"diffuseColor": track_meta["diffuseColor"],
