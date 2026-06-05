@@ -20,6 +20,7 @@ AC_SURFACE_LINE_LOOP = 1
 AC_SURFACE_LINE_STRIP = 2
 AC_SURFACE_TRIANGLES = 3
 AC_SURFACE_TRIANGLE_STRIP = 4
+TREE_ALPHA_CUTOFF = 0.65
 
 
 @dataclass
@@ -235,6 +236,19 @@ def make_material_name(texture):
 	return Path(texture).stem if texture else "flat"
 
 
+def uses_alpha_test(texture):
+	name = texture.lower()
+	return "tree" in name or "trans-" in name or "arbor" in name
+
+
+def apply_texture_alpha(material, texture):
+	if not texture:
+		return
+	if uses_alpha_test(texture):
+		material["alphaMode"] = "MASK"
+		material["alphaCutoff"] = TREE_ALPHA_CUTOFF
+
+
 def add_accessor(gltf, buffer_views, buffer_parts, component_type, item_type, values, minimum=None, maximum=None):
 	offset = sum(len(part) for part in buffer_parts)
 	if component_type == 5126:
@@ -384,6 +398,7 @@ def convert_ac_to_glb(source_root, source_path, output_path):
 		if texture:
 			png_name = f"{Path(texture).stem}.png"
 			material["pbrMetallicRoughness"]["baseColorTexture"] = {"index": len(gltf["textures"])}
+			apply_texture_alpha(material, texture)
 			gltf["textures"].append({"sampler": 0, "source": len(gltf["images"])})
 			gltf["images"].append({"uri": png_name})
 		gltf["materials"].append(material)

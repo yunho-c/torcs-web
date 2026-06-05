@@ -74,6 +74,21 @@ kids 0
 		self.assertEqual(objects[0].surfaces[0]["flags"], 0x14)
 		self.assertEqual(convert.surface_primitive_type(objects[0].surfaces[0]["flags"]), 4)
 
+	def test_tree_textures_use_masked_alpha(self):
+		material = {}
+
+		convert.apply_texture_alpha(material, "treeg1.rgb")
+
+		self.assertEqual(material["alphaMode"], "MASK")
+		self.assertEqual(material["alphaCutoff"], convert.TREE_ALPHA_CUTOFF)
+
+	def test_non_billboard_texture_does_not_set_alpha_mode(self):
+		material = {}
+
+		convert.apply_texture_alpha(material, "kc-2000gt.rgb")
+
+		self.assertNotIn("alphaMode", material)
+
 
 if __name__ == "__main__":
 	unittest.main()
