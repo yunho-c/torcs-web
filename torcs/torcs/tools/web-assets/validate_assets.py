@@ -89,6 +89,8 @@ def main():
 		for track in tracks.values():
 			check_glb(require(root, track["asset"]))
 			check_object_names(track, track.get("source", "track"))
+			if not isinstance(track.get("backgroundType"), int):
+				raise ValueError(f"{track.get('source', 'track')} missing background type")
 			if not isinstance(track.get("backgroundColor"), list) or len(track["backgroundColor"]) != 3:
 				raise ValueError(f"{track.get('source', 'track')} missing background color")
 			if not isinstance(track.get("ambientColor"), list) or len(track["ambientColor"]) != 3:

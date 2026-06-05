@@ -273,6 +273,9 @@ checkObjectNames(track, track.source);
 if (!track.backgroundTexture) {
 	fail("TORCS web renderer smoke test found missing background texture metadata");
 }
+if (typeof track.backgroundType !== "number") {
+	fail("TORCS web renderer smoke test found missing background type metadata");
+}
 checkPng(track.backgroundTexture);
 for (const field of ["backgroundColor", "ambientColor", "diffuseColor", "lightPosition"]) {
 	if (!Array.isArray(track[field]) || track[field].length !== 3) {

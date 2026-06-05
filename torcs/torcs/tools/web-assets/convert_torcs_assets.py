@@ -633,11 +633,14 @@ def main():
 		},
 	}
 	(output_dir / "manifest.json").write_text(json.dumps(manifest, indent="\t") + "\n", encoding="utf-8")
+	texture_outputs = set(track_texture_outputs.values()) | set(car_texture_outputs.values())
+	if track_background_output:
+		texture_outputs.add(track_background_output)
 	print(json.dumps({
 		"manifest": relative_to_output(output_dir / "manifest.json", output_dir),
 		"track": manifest["tracks"][track_meta["xml"]]["asset"],
 		"carLods": len(car_meta["lods"]),
-		"textures": len(track_texture_outputs) + len(car_texture_outputs),
+		"textures": len(texture_outputs),
 	}))
 
 
