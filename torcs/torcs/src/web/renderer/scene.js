@@ -19,7 +19,7 @@ function torcsToThree(x, y, z = 0) {
 	return new THREE.Vector3(x, z, -y);
 }
 
-function setObjectQuaternionFromTorcsPosMat(object, values) {
+function getTorcsPoseQuaternion(values, target) {
 	const offset = SNAPSHOT.posMat0;
 
 	// PLIB stores row-vector transforms; Three.js uses column-vector matrices.
@@ -31,7 +31,11 @@ function setObjectQuaternionFromTorcsPosMat(object, values) {
 	);
 	CAR_ROTATION_MATRIX.multiplyMatrices(TORCS_TO_THREE_BASIS, TORCS_POS_MATRIX);
 	CAR_ROTATION_MATRIX.multiply(THREE_TO_TORCS_BASIS);
-	object.quaternion.setFromRotationMatrix(CAR_ROTATION_MATRIX);
+	return target.setFromRotationMatrix(CAR_ROTATION_MATRIX);
+}
+
+function setObjectQuaternionFromTorcsPosMat(object, values) {
+	getTorcsPoseQuaternion(values, object.quaternion);
 }
 
 function makeLine(points, color, opacity, yOffset = ROAD_Y) {
@@ -401,4 +405,4 @@ export class TorcsScene {
 	}
 }
 
-export { torcsToThree };
+export { getTorcsPoseQuaternion, torcsToThree };

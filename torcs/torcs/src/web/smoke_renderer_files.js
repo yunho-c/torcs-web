@@ -231,6 +231,7 @@ requireText(byPath["renderer/scene.js"], "new THREE.BoxGeometry", "simulated car
 requireText(byPath["renderer/scene.js"], "makeRoadMesh(track)", "sampled track road mesh");
 requireText(byPath["renderer/scene.js"], "setTrackVisual(model)", "converted track mesh hook");
 requireText(byPath["renderer/scene.js"], "setCarVisual(asset)", "converted car LOD hook");
+requireText(byPath["renderer/scene.js"], "export { getTorcsPoseQuaternion, torcsToThree }", "shared TORCS pose export");
 requireText(byPath["renderer/scene.js"], "createGeneratedWheels(values)", "generated wheel fallback");
 requireText(byPath["renderer/scene.js"], "setObjectQuaternionFromTorcsPosMat(this.car, values)", "car body pose matrix conversion");
 requireText(byPath["renderer/scene.js"], "CAR_ROTATION_MATRIX.multiplyMatrices(TORCS_TO_THREE_BASIS, TORCS_POS_MATRIX)", "TORCS-to-Three body basis conversion");
@@ -243,6 +244,15 @@ requireText(byPath["renderer/scene.js"], "lodFactor >= item.lod.threshold", "nat
 requireText(byPath["renderer/scene.js"], "next.lod.wheels !== false", "LOD wheel visibility flag");
 if (byPath["renderer/scene.js"].content.includes("this.car.rotation.set(values[SNAPSHOT.pitch]")) {
 	fail("TORCS web renderer smoke test found scalar Euler car body orientation");
+}
+
+requireText(byPath["renderer/cameras.js"], "getTorcsPoseQuaternion(values, this.carRotation)", "camera pose matrix conversion");
+requireText(byPath["renderer/cameras.js"], "fov: 40", "TORCS chase camera FOV");
+requireText(byPath["renderer/cameras.js"], "fov: 67.5", "TORCS onboard camera FOV");
+requireText(byPath["renderer/cameras.js"], "this.trackView = { center, height: span * 0.78 }", "fixed top alignment camera framing");
+requireText(byPath["renderer/main.js"], "cameras.setTrack(trackSamples)", "camera track-sample alignment handoff");
+if (byPath["renderer/cameras.js"].content.includes("Math.cos(yaw)")) {
+	fail("TORCS web renderer smoke test found scalar-yaw camera direction");
 }
 
 const manifest = JSON.parse(read("web-assets/manifest.json"));

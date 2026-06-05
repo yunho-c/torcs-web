@@ -126,7 +126,9 @@ async function startSession() {
 		return;
 	}
 	applyControls();
-	scene.setTrack(runtime.readTrackSamples());
+	const trackSamples = runtime.readTrackSamples();
+	scene.setTrack(trackSamples);
+	cameras.setTrack(trackSamples);
 	snapshot = runtime.readSnapshot();
 	cameras.update(snapshot);
 	scene.updateCar(snapshot, cameras.camera);

@@ -1,17 +1,73 @@
 import * as THREE from "three";
 import { SNAPSHOT } from "./runtime.js";
-import { torcsToThree } from "./scene.js";
+import { getTorcsPoseQuaternion, torcsToThree } from "./scene.js";
+
+const CAMERA_MODES = {
+	chase: {
+		fov: 40,
+		near: 1,
+		far: 600,
+		distance: 10,
+		height: 2,
+		targetAhead: 9,
+		targetHeight: 1.25,
+	},
+	onboard: {
+		fov: 67.5,
+		near: 0.3,
+		far: 600,
+		forwardOffset: 0.35,
+		heightScale: 0.62,
+		targetAhead: 28,
+		targetHeight: 1.2,
+	},
+	top: {
+		fov: 45,
+		near: 1,
+		far: 4000,
+	},
+};
 
 export class CameraRig {
 	constructor(canvas) {
 		this.mode = "chase";
-		this.camera = new THREE.PerspectiveCamera(56, 1, 0.2, 1800);
+		this.camera = new THREE.PerspectiveCamera(40, 1, 1, 600);
 		this.target = new THREE.Vector3();
+		this.carRotation = new THREE.Quaternion();
+		this.forward = new THREE.Vector3();
+		this.up = new THREE.Vector3();
+		this.trackView = null;
 		this.canvas = canvas;
+		this.applyModeSettings();
 	}
 
 	setMode(mode) {
-		this.mode = mode;
+		this.mode = Object.hasOwn(CAMERA_MODES, mode) ? mode : "chase";
+		this.applyModeSettings();
+	}
+
+	setTrack(track) {
+		if (!track || !track.bounds) {
+			this.trackView = null;
+			return;
+		}
+		const min = torcsToThree(track.bounds.minX, track.bounds.maxY, 0);
+		const max = torcsToThree(track.bounds.maxX, track.bounds.minY, 0);
+		const center = new THREE.Vector3(
+			(min.x + max.x) * 0.5,
+			0,
+			(min.z + max.z) * 0.5,
+		);
+		const span = Math.max(Math.abs(max.x - min.x), Math.abs(max.z - min.z), 100);
+		this.trackView = { center, height: span * 0.78 };
+	}
+
+	applyModeSettings() {
+		const settings = CAMERA_MODES[this.mode];
+		this.camera.fov = settings.fov;
+		this.camera.near = settings.near;
+		this.camera.far = settings.far;
+		this.camera.updateProjectionMatrix();
 	}
 
 	updateProjection() {
@@ -24,23 +80,35 @@ export class CameraRig {
 	update(values) {
 		const car = torcsToThree(values[SNAPSHOT.x], values[SNAPSHOT.y], values[SNAPSHOT.z]);
 		if (this.mode === "top") {
-			this.camera.position.set(car.x, 260, car.z);
-			this.target.set(car.x, 0, car.z);
+			const view = this.trackView || { center: car, height: 260 };
+			this.camera.position.set(view.center.x, view.height, view.center.z);
+			this.target.set(view.center.x, 0, view.center.z);
 			this.camera.up.set(0, 0, -1);
 			this.camera.lookAt(this.target);
 			return;
 		}
 
 		this.camera.up.set(0, 1, 0);
-		const yaw = values[SNAPSHOT.yaw];
-		const distance = this.mode === "onboard" ? -0.4 : 16;
-		const height = this.mode === "onboard" ? 1.2 : 6.2;
-		const ahead = this.mode === "onboard" ? 18 : 9;
-		const forward = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
-		const cameraPos = car.clone()
-			.addScaledVector(forward, -distance)
-			.add(new THREE.Vector3(0, height, 0));
-		this.target.copy(car).addScaledVector(forward, ahead).add(new THREE.Vector3(0, 1.1, 0));
+		getTorcsPoseQuaternion(values, this.carRotation);
+		this.forward.set(1, 0, 0).applyQuaternion(this.carRotation).normalize();
+		this.up.set(0, 1, 0).applyQuaternion(this.carRotation).normalize();
+
+		const settings = CAMERA_MODES[this.mode];
+		const carHeight = Math.max(0.1, values[SNAPSHOT.dimensionZ]);
+		const cameraPos = car.clone();
+		if (this.mode === "onboard") {
+			cameraPos
+				.addScaledVector(this.forward, settings.forwardOffset)
+				.addScaledVector(this.up, Math.max(0.9, carHeight * settings.heightScale));
+		} else {
+			cameraPos
+				.addScaledVector(this.forward, -settings.distance)
+				.add(new THREE.Vector3(0, settings.height, 0));
+		}
+
+		this.target.copy(car)
+			.addScaledVector(this.forward, settings.targetAhead)
+			.add(new THREE.Vector3(0, settings.targetHeight, 0));
 		this.camera.position.copy(cameraPos);
 		this.camera.lookAt(this.target);
 	}
