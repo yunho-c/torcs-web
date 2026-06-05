@@ -15,6 +15,11 @@ from xml.etree import ElementTree
 TRACK_XML = Path("data/tracks/e-track-1/e-track-1.xml")
 CAR_XML = Path("data/cars/models/kc-2000gt/kc-2000gt.xml")
 EMPTY_TEXTURE = "empty_texture_no_mapping"
+AC_SURFACE_FAN = 0
+AC_SURFACE_LINE_LOOP = 1
+AC_SURFACE_LINE_STRIP = 2
+AC_SURFACE_TRIANGLES = 3
+AC_SURFACE_TRIANGLE_STRIP = 4
 
 
 @dataclass
@@ -175,10 +180,12 @@ def parse_ac3d(path):
 		elif key == "numsurf":
 			count = int(value)
 			for _ in range(count):
-				surface = {"refs": []}
+				surface = {"flags": AC_SURFACE_FAN, "refs": []}
 				while index < len(lines):
 					surf_line = lines[index].strip()
 					index += 1
+					if surf_line.startswith("SURF "):
+						surface["flags"] = int(surf_line.split()[1], 0)
 					if surf_line.startswith("refs "):
 						ref_count = int(surf_line.split()[1])
 						for _ in range(ref_count):
@@ -261,13 +268,49 @@ def add_accessor(gltf, buffer_views, buffer_parts, component_type, item_type, va
 	return len(gltf["accessors"]) - 1
 
 
-def triangulate_surface(refs):
+def surface_primitive_type(flags):
+	return flags & 0x0F
+
+
+def triangulate_fan(refs):
 	if len(refs) < 3:
 		return []
 	triangles = []
 	for i in range(1, len(refs) - 1):
 		triangles.append([refs[0], refs[i], refs[i + 1]])
 	return triangles
+
+
+def triangulate_strip(refs):
+	if len(refs) < 3:
+		return []
+	triangles = []
+	for i in range(len(refs) - 2):
+		if i % 2:
+			triangles.append([refs[i + 1], refs[i], refs[i + 2]])
+		else:
+			triangles.append([refs[i], refs[i + 1], refs[i + 2]])
+	return triangles
+
+
+def triangulate_list(refs):
+	if len(refs) < 3:
+		return []
+	triangles = []
+	for i in range(0, len(refs) - 2, 3):
+		triangles.append([refs[i], refs[i + 1], refs[i + 2]])
+	return triangles
+
+
+def triangulate_surface(refs, flags):
+	primitive_type = surface_primitive_type(flags)
+	if primitive_type == AC_SURFACE_FAN:
+		return triangulate_fan(refs)
+	if primitive_type == AC_SURFACE_TRIANGLE_STRIP:
+		return triangulate_strip(refs)
+	if primitive_type == AC_SURFACE_TRIANGLES:
+		return triangulate_list(refs)
+	return []
 
 
 def convert_ac_to_glb(source_root, source_path, output_path):
@@ -295,7 +338,7 @@ def convert_ac_to_glb(source_root, source_path, output_path):
 		if obj.name:
 			target["objects"].add(obj.name)
 		for surface in obj.surfaces:
-			for triangle in triangulate_surface(surface["refs"]):
+			for triangle in triangulate_surface(surface["refs"], surface["flags"]):
 				for vertex_index, u, v in triangle:
 					position, normal = obj.vertices[vertex_index]
 					target["indices"].append(len(target["positions"]))
