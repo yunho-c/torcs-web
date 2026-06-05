@@ -231,6 +231,8 @@ export class TorcsScene {
 			const width = Math.max(0.04, values[SNAPSHOT.wheelWidth0 + index] || 0.18);
 			const root = new THREE.Group();
 			const steer = new THREE.Group();
+			const camber = new THREE.Group();
+			const spin = new THREE.Group();
 			const tireMaterial = new THREE.MeshLambertMaterial({ color: 0x151716 });
 			const tire = new THREE.Mesh(makeWheelGeometry(radius, width), tireMaterial);
 			tire.rotation.x = Math.PI / 2;
@@ -242,12 +244,16 @@ export class TorcsScene {
 			const heat = new THREE.Mesh(makeWheelGeometry(radius * 0.58, width * 1.08), heatMaterial);
 			heat.rotation.x = Math.PI / 2;
 			const spokes = makeWheelSpokes(radius, width);
-			steer.add(tire, heat, spokes);
+			spin.add(tire, heat, spokes);
+			camber.add(spin);
+			steer.add(camber);
 			root.add(steer);
 			this.car.add(root);
 			this.generatedWheels.push({
 				root,
 				steer,
+				camber,
+				spin,
 				tire,
 				heat,
 				spokes,
@@ -307,13 +313,8 @@ export class TorcsScene {
 				values[SNAPSHOT.wheelRelZ0 + index],
 			));
 			wheel.steer.rotation.y = values[SNAPSHOT.wheelSteerAngle0 + index];
-			wheel.tire.rotation.set(
-				Math.PI / 2 + values[SNAPSHOT.wheelRelRoll0 + index],
-				0,
-				values[SNAPSHOT.wheelSpinAngle0 + index],
-			);
-			wheel.heat.rotation.copy(wheel.tire.rotation);
-			wheel.spokes.rotation.set(0, 0, values[SNAPSHOT.wheelSpinAngle0 + index]);
+			wheel.camber.rotation.x = values[SNAPSHOT.wheelRelRoll0 + index];
+			wheel.spin.rotation.z = values[SNAPSHOT.wheelSpinAngle0 + index];
 
 			const heat = clamp01(values[SNAPSHOT.wheelBrakeTemp0 + index]);
 			wheel.heat.material.color.copy(WHEEL_HEAT_COOL).lerp(WHEEL_HEAT_HOT, heat);

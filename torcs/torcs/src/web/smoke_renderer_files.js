@@ -233,6 +233,8 @@ requireText(byPath["renderer/scene.js"], "setTrackVisual(model)", "converted tra
 requireText(byPath["renderer/scene.js"], "setCarVisual(asset)", "converted car LOD hook");
 requireText(byPath["renderer/scene.js"], "createGeneratedWheels(values)", "generated wheel fallback");
 requireText(byPath["renderer/scene.js"], "wheelBrakeTemp0", "brake heat wheel feedback");
+requireText(byPath["renderer/scene.js"], "wheel.camber.rotation.x", "wheel camber transform node");
+requireText(byPath["renderer/scene.js"], "wheel.spin.rotation.z", "wheel spin transform node");
 requireText(byPath["renderer/scene.js"], "selectCarLod(camera)", "deterministic car LOD switching");
 requireText(byPath["renderer/scene.js"], "getCarLodFactor(camera, this.car.position", "TORCS-style car LOD factor");
 requireText(byPath["renderer/scene.js"], "lodFactor >= item.lod.threshold", "native car LOD threshold comparison");
