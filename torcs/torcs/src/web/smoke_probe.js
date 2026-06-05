@@ -46,6 +46,15 @@ const SNAPSHOT = {
 	trackWidth: 77,
 	trackSegments: 78,
 	trackSamples: 79,
+	wheelRelX0: 80,
+	wheelRelY0: 84,
+	wheelRelZ0: 88,
+	wheelRelRoll0: 92,
+	wheelSpinAngle0: 96,
+	wheelSteerAngle0: 100,
+	wheelRadius0: 104,
+	wheelWidth0: 108,
+	carSteerLock: 112,
 };
 
 function readSnapshot(module) {
@@ -302,10 +311,10 @@ createModule()
 			runtime.trackWidth <= 0 ||
 			runtime.trackSegments <= 0 ||
 			runtime.trackSamples !== runtime.trackSegments * 12 ||
-			runtime.snapshot.version !== 1 ||
-			runtime.snapshot.size !== 80 * 8 ||
+			runtime.snapshot.version !== 2 ||
+			runtime.snapshot.size !== 116 * 8 ||
 			runtime.snapshot.write !== 0 ||
-			runtime.snapshot.values.length !== 80 ||
+			runtime.snapshot.values.length !== 116 ||
 			Math.abs(runtime.snapshot.values[SNAPSHOT.time] - runtime.time) > 0.000001 ||
 			Math.abs(runtime.snapshot.values[SNAPSHOT.x] - runtime.x) > 0.000001 ||
 			Math.abs(runtime.snapshot.values[SNAPSHOT.y] - runtime.y) > 0.000001 ||
@@ -338,6 +347,15 @@ createModule()
 			runtime.snapshot.values[SNAPSHOT.trackWidth] !== runtime.trackWidth ||
 			runtime.snapshot.values[SNAPSHOT.trackSegments] !== runtime.trackSegments ||
 			runtime.snapshot.values[SNAPSHOT.trackSamples] !== runtime.trackSamples ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.wheelRelX0]) ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.wheelRelY0]) ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.wheelRelZ0]) ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.wheelRelRoll0]) ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.wheelSpinAngle0]) ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.wheelSteerAngle0]) ||
+			runtime.snapshot.values[SNAPSHOT.wheelRadius0] <= 0 ||
+			runtime.snapshot.values[SNAPSHOT.wheelWidth0] <= 0 ||
+			runtime.snapshot.values[SNAPSHOT.carSteerLock] <= 0 ||
 			!Number.isFinite(runtime.trackCenterX) ||
 			!Number.isFinite(runtime.trackCenterY) ||
 			!Number.isFinite(runtime.trackRightX) ||

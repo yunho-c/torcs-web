@@ -92,7 +92,15 @@ def main():
 			for texture in track.get("textures", {}).values():
 				check_texture(require(root, texture))
 		for car in cars.values():
+			wheel_fallback = car.get("wheelFallback") or {}
+			wheel_texture = wheel_fallback.get("texture")
+			if wheel_fallback.get("source") != "runtime-snapshot" or not wheel_texture:
+				raise ValueError("car missing runtime wheel fallback metadata")
+			if wheel_texture not in car.get("textures", {}):
+				raise ValueError(f"wheel fallback texture {wheel_texture} is not converted")
 			for lod in car.get("lods", []):
+				if "wheels" not in lod:
+					raise ValueError(f"{lod.get('model', 'car LOD')} missing wheel visibility metadata")
 				check_glb(require(root, lod["asset"]))
 				check_object_names(lod, lod.get("model", "car LOD"))
 			for texture in car.get("textures", {}).values():

@@ -2,6 +2,9 @@ import * as THREE from "three";
 import { SNAPSHOT } from "./runtime.js";
 
 const ROAD_Y = 0.03;
+const WHEEL_ORDER = [0, 1, 2, 3];
+const WHEEL_HEAT_COOL = new THREE.Color(0x343936);
+const WHEEL_HEAT_HOT = new THREE.Color(0xff5b32);
 
 function torcsToThree(x, y, z = 0) {
 	return new THREE.Vector3(x, z, -y);
@@ -54,6 +57,47 @@ function getCarDimensions(values) {
 	];
 }
 
+function clamp01(value) {
+	return Math.max(0, Math.min(1, value));
+}
+
+function getCarLodFactor(camera, position, canvas) {
+	if (!camera || !camera.isPerspectiveCamera) {
+		return Number.POSITIVE_INFINITY;
+	}
+	const distance = Math.max(0.001, camera.position.distanceTo(position));
+	const height = Math.max(1, canvas.clientHeight || canvas.height || 1);
+	const fovRadians = THREE.MathUtils.degToRad(camera.fov * 0.5);
+	return height * 0.5 / distance / Math.tan(fovRadians);
+}
+
+function makeWheelGeometry(radius, width) {
+	return new THREE.CylinderGeometry(
+		Math.max(0.05, radius),
+		Math.max(0.05, radius),
+		Math.max(0.04, width),
+		24,
+		1,
+		false,
+	);
+}
+
+function makeWheelSpokes(radius, width) {
+	const group = new THREE.Group();
+	const material = new THREE.MeshBasicMaterial({ color: 0xd8d0bd });
+	const spokeLength = Math.max(0.08, radius * 1.5);
+	const spokeWidth = Math.max(0.015, radius * 0.08);
+	for (let i = 0; i < 3; i += 1) {
+		const spoke = new THREE.Mesh(
+			new THREE.BoxGeometry(spokeLength, spokeWidth, Math.max(0.02, width * 1.06)),
+			material,
+		);
+		spoke.rotation.z = i * Math.PI / 3;
+		group.add(spoke);
+	}
+	return group;
+}
+
 export class TorcsScene {
 	constructor(canvas) {
 		this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -78,9 +122,12 @@ export class TorcsScene {
 		this.addReferenceGrid();
 		this.car = null;
 		this.carBox = null;
-		this.carVisual = null;
+		this.carVisualRoot = null;
+		this.carLods = [];
+		this.activeCarLod = null;
 		this.carDimensions = null;
 		this.carShadow = null;
+		this.generatedWheels = [];
 		this.footprint = null;
 		this.track = null;
 		this.trackVisual = null;
@@ -123,16 +170,26 @@ export class TorcsScene {
 		}
 	}
 
-	setCarVisual(model) {
+	setCarVisual(asset) {
 		if (!this.car) {
 			return;
 		}
-		if (this.carVisual) {
-			this.car.remove(this.carVisual);
+		if (this.carVisualRoot) {
+			this.car.remove(this.carVisualRoot);
 		}
-		this.carVisual = model;
-		if (this.carVisual) {
-			this.car.add(this.carVisual);
+		this.carVisualRoot = null;
+		this.carLods = [];
+		this.activeCarLod = null;
+		if (asset && asset.lods && asset.lods.length) {
+			this.carVisualRoot = new THREE.Group();
+			this.carLods = asset.lods
+				.slice()
+				.sort((a, b) => b.lod.threshold - a.lod.threshold);
+			for (const item of this.carLods) {
+				item.scene.visible = false;
+				this.carVisualRoot.add(item.scene);
+			}
+			this.car.add(this.carVisualRoot);
 			if (this.carBox) {
 				this.carBox.visible = false;
 			}
@@ -160,9 +217,111 @@ export class TorcsScene {
 
 		this.footprint = makeLine([], 0xf3ead6, 0.92, ROAD_Y + 0.08);
 		this.groups.cars.add(this.footprint);
+		this.createGeneratedWheels(values);
 	}
 
-	updateCar(values) {
+	createGeneratedWheels(values) {
+		for (const wheel of this.generatedWheels) {
+			this.car.remove(wheel.root);
+		}
+		this.generatedWheels = [];
+
+		for (const index of WHEEL_ORDER) {
+			const radius = Math.max(0.05, values[SNAPSHOT.wheelRadius0 + index] || 0.32);
+			const width = Math.max(0.04, values[SNAPSHOT.wheelWidth0 + index] || 0.18);
+			const root = new THREE.Group();
+			const steer = new THREE.Group();
+			const tireMaterial = new THREE.MeshLambertMaterial({ color: 0x151716 });
+			const tire = new THREE.Mesh(makeWheelGeometry(radius, width), tireMaterial);
+			tire.rotation.x = Math.PI / 2;
+			const heatMaterial = new THREE.MeshBasicMaterial({
+				color: WHEEL_HEAT_COOL.clone(),
+				transparent: true,
+				opacity: 0.72,
+			});
+			const heat = new THREE.Mesh(makeWheelGeometry(radius * 0.58, width * 1.08), heatMaterial);
+			heat.rotation.x = Math.PI / 2;
+			const spokes = makeWheelSpokes(radius, width);
+			steer.add(tire, heat, spokes);
+			root.add(steer);
+			this.car.add(root);
+			this.generatedWheels.push({
+				root,
+				steer,
+				tire,
+				heat,
+				spokes,
+				radius,
+				width,
+			});
+		}
+	}
+
+	selectCarLod(camera) {
+		if (!this.carLods.length) {
+			return;
+		}
+		let next = this.carLods[this.carLods.length - 1];
+		if (camera) {
+			const lodFactor = getCarLodFactor(camera, this.car.position, this.renderer.domElement);
+			for (const item of this.carLods) {
+				if (lodFactor >= item.lod.threshold) {
+					next = item;
+					break;
+				}
+			}
+		} else {
+			next = this.carLods[0];
+		}
+		if (next === this.activeCarLod) {
+			return;
+		}
+		for (const item of this.carLods) {
+			item.scene.visible = item === next;
+		}
+		for (const wheel of this.generatedWheels) {
+			wheel.root.visible = next.lod.wheels !== false;
+		}
+		this.activeCarLod = next;
+	}
+
+	updateGeneratedWheels(values) {
+		for (let index = 0; index < this.generatedWheels.length; index += 1) {
+			const wheel = this.generatedWheels[index];
+			const radius = Math.max(0.05, values[SNAPSHOT.wheelRadius0 + index] || wheel.radius);
+			const width = Math.max(0.04, values[SNAPSHOT.wheelWidth0 + index] || wheel.width);
+			if (Math.abs(radius - wheel.radius) > 0.001 || Math.abs(width - wheel.width) > 0.001) {
+				wheel.tire.geometry.dispose();
+				wheel.heat.geometry.dispose();
+				wheel.tire.geometry = makeWheelGeometry(radius, width);
+				wheel.heat.geometry = makeWheelGeometry(radius * 0.58, width * 1.08);
+				wheel.spokes.clear();
+				wheel.spokes.add(...makeWheelSpokes(radius, width).children);
+				wheel.radius = radius;
+				wheel.width = width;
+			}
+
+			wheel.root.position.copy(torcsToThree(
+				values[SNAPSHOT.wheelRelX0 + index],
+				values[SNAPSHOT.wheelRelY0 + index],
+				values[SNAPSHOT.wheelRelZ0 + index],
+			));
+			wheel.steer.rotation.y = values[SNAPSHOT.wheelSteerAngle0 + index];
+			wheel.tire.rotation.set(
+				Math.PI / 2 + values[SNAPSHOT.wheelRelRoll0 + index],
+				0,
+				values[SNAPSHOT.wheelSpinAngle0 + index],
+			);
+			wheel.heat.rotation.copy(wheel.tire.rotation);
+			wheel.spokes.rotation.set(0, 0, values[SNAPSHOT.wheelSpinAngle0 + index]);
+
+			const heat = clamp01(values[SNAPSHOT.wheelBrakeTemp0 + index]);
+			wheel.heat.material.color.copy(WHEEL_HEAT_COOL).lerp(WHEEL_HEAT_HOT, heat);
+			wheel.heat.material.opacity = 0.38 + heat * 0.5;
+		}
+	}
+
+	updateCar(values, camera = null) {
 		if (!this.car) {
 			this.createCar(values);
 		}
@@ -177,6 +336,8 @@ export class TorcsScene {
 
 		this.car.position.copy(torcsToThree(values[SNAPSHOT.x], values[SNAPSHOT.y], values[SNAPSHOT.z]));
 		this.car.rotation.set(values[SNAPSHOT.pitch], values[SNAPSHOT.yaw], -values[SNAPSHOT.roll], "YXZ");
+		this.selectCarLod(camera);
+		this.updateGeneratedWheels(values);
 
 		this.carShadow.position.set(this.car.position.x, ROAD_Y + 0.01, this.car.position.z);
 		this.carShadow.scale.set(

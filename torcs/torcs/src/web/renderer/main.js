@@ -66,8 +66,8 @@ function readAndRender() {
 		return;
 	}
 	hud.update(snapshot);
-	scene.updateCar(snapshot);
 	cameras.update(snapshot);
+	scene.updateCar(snapshot, cameras.camera);
 	scene.render(cameras.camera);
 }
 
@@ -103,7 +103,7 @@ async function loadVisualAssets() {
 			assets.loadCar(elements.car.value),
 		]);
 		scene.setTrackVisual(track ? track.scene : null);
-		scene.setCarVisual(car ? car.scene : null);
+		scene.setCarVisual(car);
 		return Boolean(track && car);
 	} catch (error) {
 		console.warn("TORCS web renderer asset load failed", error);
@@ -128,7 +128,8 @@ async function startSession() {
 	applyControls();
 	scene.setTrack(runtime.readTrackSamples());
 	snapshot = runtime.readSnapshot();
-	scene.updateCar(snapshot);
+	cameras.update(snapshot);
+	scene.updateCar(snapshot, cameras.camera);
 	hud.setState("ready");
 	setEnabled(true);
 	const hasAssets = await loadVisualAssets();

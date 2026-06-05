@@ -44,8 +44,8 @@ extern "C" int simuv2(tModInfo *modInfo);
 
 #define TORCS_WEB_SIM_IDENT 0
 #define TORCS_WEB_TRACK_SAMPLES_PER_SEG 12
-#define TORCS_WEB_RUNTIME_SNAPSHOT_VERSION 1
-#define TORCS_WEB_RUNTIME_SNAPSHOT_DOUBLE_COUNT 80
+#define TORCS_WEB_RUNTIME_SNAPSHOT_VERSION 2
+#define TORCS_WEB_RUNTIME_SNAPSHOT_DOUBLE_COUNT 116
 
 enum TorcsWebRuntimeSnapshotField {
 	TORCS_WEB_SNAPSHOT_TIME = 0,
@@ -94,7 +94,16 @@ enum TorcsWebRuntimeSnapshotField {
 	TORCS_WEB_SNAPSHOT_TRACK_LENGTH = 76,
 	TORCS_WEB_SNAPSHOT_TRACK_WIDTH,
 	TORCS_WEB_SNAPSHOT_TRACK_SEGMENT_COUNT,
-	TORCS_WEB_SNAPSHOT_TRACK_SAMPLE_COUNT
+	TORCS_WEB_SNAPSHOT_TRACK_SAMPLE_COUNT,
+	TORCS_WEB_SNAPSHOT_WHEEL_REL_X_0,
+	TORCS_WEB_SNAPSHOT_WHEEL_REL_Y_0 = 84,
+	TORCS_WEB_SNAPSHOT_WHEEL_REL_Z_0 = 88,
+	TORCS_WEB_SNAPSHOT_WHEEL_REL_ROLL_0 = 92,
+	TORCS_WEB_SNAPSHOT_WHEEL_SPIN_ANGLE_0 = 96,
+	TORCS_WEB_SNAPSHOT_WHEEL_STEER_ANGLE_0 = 100,
+	TORCS_WEB_SNAPSHOT_WHEEL_RADIUS_0 = 104,
+	TORCS_WEB_SNAPSHOT_WHEEL_WIDTH_0 = 108,
+	TORCS_WEB_SNAPSHOT_CAR_STEER_LOCK = 112
 };
 
 struct CarElt;
@@ -481,7 +490,16 @@ writeRuntimeSnapshotValues(double *values)
 		values[TORCS_WEB_SNAPSHOT_WHEEL_SLIP_ACCEL_0 + i] = Runtime.car._wheelSlipAccel(i);
 		values[TORCS_WEB_SNAPSHOT_WHEEL_SLIP_SIDE_0 + i] = Runtime.car._wheelSlipSide(i);
 		values[TORCS_WEB_SNAPSHOT_WHEEL_BRAKE_TEMP_0 + i] = Runtime.car._brakeTemp(i);
+		values[TORCS_WEB_SNAPSHOT_WHEEL_REL_X_0 + i] = Runtime.car.priv.wheel[i].relPos.x;
+		values[TORCS_WEB_SNAPSHOT_WHEEL_REL_Y_0 + i] = Runtime.car.priv.wheel[i].relPos.y;
+		values[TORCS_WEB_SNAPSHOT_WHEEL_REL_Z_0 + i] = Runtime.car.priv.wheel[i].relPos.z;
+		values[TORCS_WEB_SNAPSHOT_WHEEL_REL_ROLL_0 + i] = Runtime.car.priv.wheel[i].relPos.ax;
+		values[TORCS_WEB_SNAPSHOT_WHEEL_SPIN_ANGLE_0 + i] = Runtime.car.priv.wheel[i].relPos.ay;
+		values[TORCS_WEB_SNAPSHOT_WHEEL_STEER_ANGLE_0 + i] = Runtime.car.priv.wheel[i].relPos.az;
+		values[TORCS_WEB_SNAPSHOT_WHEEL_RADIUS_0 + i] = Runtime.car._wheelRadius(i);
+		values[TORCS_WEB_SNAPSHOT_WHEEL_WIDTH_0 + i] = Runtime.car._tireWidth(i);
 	}
+	values[TORCS_WEB_SNAPSHOT_CAR_STEER_LOCK] = Runtime.car._steerLock;
 
 	values[TORCS_WEB_SNAPSHOT_TRACK_LENGTH] = Runtime.trackData ? Runtime.trackData->length : 0.0;
 	values[TORCS_WEB_SNAPSHOT_TRACK_WIDTH] = Runtime.trackData ? Runtime.trackData->width : 0.0;

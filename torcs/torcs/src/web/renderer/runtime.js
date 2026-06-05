@@ -46,6 +46,15 @@ export const SNAPSHOT = {
 	trackWidth: 77,
 	trackSegments: 78,
 	trackSamples: 79,
+	wheelRelX0: 80,
+	wheelRelY0: 84,
+	wheelRelZ0: 88,
+	wheelRelRoll0: 92,
+	wheelSpinAngle0: 96,
+	wheelSteerAngle0: 100,
+	wheelRadius0: 104,
+	wheelWidth0: 108,
+	carSteerLock: 112,
 };
 
 const TRACK_SIDE = {

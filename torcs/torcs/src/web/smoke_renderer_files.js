@@ -214,6 +214,7 @@ requireText(byPath["torcs_web_renderer.html"], "\"three/addons/\"", "Three.js ad
 requireText(byPath["renderer/assets.js"], "GLTFLoader", "GLTF loader import");
 requireText(byPath["renderer/assets.js"], "./web-assets/", "asset manifest base path");
 requireText(byPath["renderer/assets.js"], "export class AssetManager", "asset manager export");
+requireText(byPath["renderer/assets.js"], "Promise.all(entry.lods.map", "all car LOD loading");
 
 requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_get_snapshot_size", "snapshot size export");
 requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_write_snapshot", "snapshot write export");
@@ -229,7 +230,13 @@ requireText(byPath["renderer/scene.js"], "import * as THREE from \"three\"", "Th
 requireText(byPath["renderer/scene.js"], "new THREE.BoxGeometry", "simulated car box");
 requireText(byPath["renderer/scene.js"], "makeRoadMesh(track)", "sampled track road mesh");
 requireText(byPath["renderer/scene.js"], "setTrackVisual(model)", "converted track mesh hook");
-requireText(byPath["renderer/scene.js"], "setCarVisual(model)", "converted car mesh hook");
+requireText(byPath["renderer/scene.js"], "setCarVisual(asset)", "converted car LOD hook");
+requireText(byPath["renderer/scene.js"], "createGeneratedWheels(values)", "generated wheel fallback");
+requireText(byPath["renderer/scene.js"], "wheelBrakeTemp0", "brake heat wheel feedback");
+requireText(byPath["renderer/scene.js"], "selectCarLod(camera)", "deterministic car LOD switching");
+requireText(byPath["renderer/scene.js"], "getCarLodFactor(camera, this.car.position", "TORCS-style car LOD factor");
+requireText(byPath["renderer/scene.js"], "lodFactor >= item.lod.threshold", "native car LOD threshold comparison");
+requireText(byPath["renderer/scene.js"], "next.lod.wheels !== false", "LOD wheel visibility flag");
 
 const manifest = JSON.parse(read("web-assets/manifest.json"));
 const track = manifest.tracks["data/tracks/e-track-1/e-track-1.xml"];
@@ -242,6 +249,15 @@ checkObjectNames(track, track.source);
 for (const lod of car.lods) {
 	checkGlb(lod.asset);
 	checkObjectNames(lod, lod.model);
+	if (typeof lod.wheels !== "boolean") {
+		fail("TORCS web renderer smoke test found car LOD without wheel metadata", {
+			model: lod.model,
+		});
+	}
+}
+if (!car.wheelFallback || car.wheelFallback.source !== "runtime-snapshot" ||
+	!car.wheelFallback.texture || !(car.wheelFallback.texture in car.textures)) {
+	fail("TORCS web renderer smoke test found missing wheel fallback metadata");
 }
 for (const texture of Object.values(track.textures).concat(Object.values(car.textures))) {
 	checkPng(texture);

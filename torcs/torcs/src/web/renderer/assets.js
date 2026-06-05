@@ -45,9 +45,12 @@ export class AssetManager {
 		if (!entry || !entry.lods.length) {
 			return null;
 		}
-		const lod = entry.lods[0];
-		const scene = await this.loadGltf(lod.asset);
-		scene.name = entry.name || "car";
-		return { entry, lod, scene };
+		const lods = await Promise.all(entry.lods.map(async (lod) => {
+			const scene = await this.loadGltf(lod.asset);
+			scene.name = lod.model || entry.name || "car";
+			scene.visible = false;
+			return { lod, scene };
+		}));
+		return { entry, lods };
 	}
 }

@@ -604,6 +604,14 @@ def main():
 		"cars": {
 			car_meta["xml"]: {
 				"name": car_meta["name"],
+				"wheelTexture": car_meta["wheelTexture"],
+				"shadowTexture": car_meta["shadowTexture"],
+				"wheelFallback": {
+					"source": "runtime-snapshot",
+					"texture": car_meta["wheelTexture"],
+					"radiusScale": 1.0,
+					"widthScale": 1.0,
+				},
 				"lods": car_meta["lods"],
 				"textures": {
 					name: car_texture_outputs[name]
