@@ -68,6 +68,16 @@ function checkObjectNames(entry, label) {
 	}
 }
 
+function checkNumberTriplet(entry, field, label) {
+	if (!Array.isArray(entry[field]) || entry[field].length !== 3 ||
+		entry[field].some((value) => typeof value !== "number" || !Number.isFinite(value))) {
+		fail("TORCS web renderer smoke test found malformed track atmosphere metadata", {
+			label,
+			field,
+		});
+	}
+}
+
 function extendBounds(bounds, x, z) {
 	bounds.minX = Math.min(bounds.minX, x);
 	bounds.maxX = Math.max(bounds.maxX, x);
@@ -283,9 +293,7 @@ if (typeof track.backgroundType !== "number") {
 }
 checkPng(track.backgroundTexture);
 for (const field of ["backgroundColor", "ambientColor", "diffuseColor", "lightPosition"]) {
-	if (!Array.isArray(track[field]) || track[field].length !== 3) {
-		fail("TORCS web renderer smoke test found malformed track atmosphere metadata", { field });
-	}
+	checkNumberTriplet(track, field, track.source);
 }
 for (const lod of car.lods) {
 	checkGlb(lod.asset);

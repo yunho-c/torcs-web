@@ -2,6 +2,7 @@
 """Validate generated TORCS browser asset manifests."""
 
 import json
+import math
 import struct
 import sys
 from pathlib import Path
@@ -70,6 +71,14 @@ def check_object_names(entry, label):
 		raise ValueError(f"{label} missing object names")
 
 
+def check_number_triplet(entry, field, label):
+	values = entry.get(field)
+	if not isinstance(values, list) or len(values) != 3:
+		raise ValueError(f"{label} missing {field}")
+	if not all(isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) for value in values):
+		raise ValueError(f"{label} has non-numeric {field}")
+
+
 def main():
 	if len(sys.argv) != 2:
 		return fail("usage: validate_assets.py <manifest.json>")
@@ -89,16 +98,11 @@ def main():
 		for track in tracks.values():
 			check_glb(require(root, track["asset"]))
 			check_object_names(track, track.get("source", "track"))
+			label = track.get("source", "track")
 			if not isinstance(track.get("backgroundType"), int):
-				raise ValueError(f"{track.get('source', 'track')} missing background type")
-			if not isinstance(track.get("backgroundColor"), list) or len(track["backgroundColor"]) != 3:
-				raise ValueError(f"{track.get('source', 'track')} missing background color")
-			if not isinstance(track.get("ambientColor"), list) or len(track["ambientColor"]) != 3:
-				raise ValueError(f"{track.get('source', 'track')} missing ambient color")
-			if not isinstance(track.get("diffuseColor"), list) or len(track["diffuseColor"]) != 3:
-				raise ValueError(f"{track.get('source', 'track')} missing diffuse color")
-			if not isinstance(track.get("lightPosition"), list) or len(track["lightPosition"]) != 3:
-				raise ValueError(f"{track.get('source', 'track')} missing light position")
+				raise ValueError(f"{label} missing background type")
+			for field in ["backgroundColor", "ambientColor", "diffuseColor", "lightPosition"]:
+				check_number_triplet(track, field, label)
 			if track.get("backgroundTexture"):
 				check_texture(require(root, track["backgroundTexture"]))
 			for texture in track.get("textures", {}).values():
