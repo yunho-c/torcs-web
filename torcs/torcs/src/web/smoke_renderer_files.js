@@ -210,6 +210,7 @@ requireText(byPath["torcs_web_renderer.html"], "./torcs_web_probe.js", "WASM pro
 requireText(byPath["torcs_web_renderer.html"], "./renderer/main.js", "renderer module entrypoint");
 requireText(byPath["torcs_web_renderer.html"], "\"three\"", "Three.js import map");
 requireText(byPath["torcs_web_renderer.html"], "\"three/addons/\"", "Three.js addons import map");
+requireText(byPath["torcs_web_renderer.html"], "<option value=\"trackside\">Trackside</option>", "trackside camera UI option");
 
 requireText(byPath["renderer/assets.js"], "GLTFLoader", "GLTF loader import");
 requireText(byPath["renderer/assets.js"], "TextureLoader", "texture loader import");
@@ -256,6 +257,10 @@ if (byPath["renderer/scene.js"].content.includes("this.car.rotation.set(values[S
 requireText(byPath["renderer/cameras.js"], "getTorcsPoseQuaternion(values, this.carRotation)", "camera pose matrix conversion");
 requireText(byPath["renderer/cameras.js"], "fov: 40", "TORCS chase camera FOV");
 requireText(byPath["renderer/cameras.js"], "fov: 67.5", "TORCS onboard camera FOV");
+requireText(byPath["renderer/cameras.js"], "trackside: {", "fixed trackside camera mode");
+requireText(byPath["renderer/cameras.js"], "fov: 30", "TORCS road camera FOV");
+requireText(byPath["renderer/cameras.js"], "this.tracksideViews = this.makeTracksideViews(min, max, center, span)", "generated trackside camera placement");
+requireText(byPath["renderer/cameras.js"], "selectTracksideView(car)", "nearest trackside camera selection");
 requireText(byPath["renderer/cameras.js"], "this.trackView = { center, height: span * 0.78 }", "fixed top alignment camera framing");
 requireText(byPath["renderer/main.js"], "cameras.setTrack(trackSamples)", "camera track-sample alignment handoff");
 if (byPath["renderer/cameras.js"].content.includes("Math.cos(yaw)")) {

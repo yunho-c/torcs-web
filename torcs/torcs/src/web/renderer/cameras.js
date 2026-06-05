@@ -21,6 +21,13 @@ const CAMERA_MODES = {
 		targetAhead: 28,
 		targetHeight: 1.2,
 	},
+	trackside: {
+		fov: 30,
+		near: 1,
+		far: 1000,
+		height: 10,
+		targetHeight: 1.2,
+	},
 	top: {
 		fov: 45,
 		near: 1,
@@ -37,6 +44,7 @@ export class CameraRig {
 		this.forward = new THREE.Vector3();
 		this.up = new THREE.Vector3();
 		this.trackView = null;
+		this.tracksideViews = [];
 		this.canvas = canvas;
 		this.applyModeSettings();
 	}
@@ -49,6 +57,7 @@ export class CameraRig {
 	setTrack(track) {
 		if (!track || !track.bounds) {
 			this.trackView = null;
+			this.tracksideViews = [];
 			return;
 		}
 		const min = torcsToThree(track.bounds.minX, track.bounds.maxY, 0);
@@ -60,6 +69,22 @@ export class CameraRig {
 		);
 		const span = Math.max(Math.abs(max.x - min.x), Math.abs(max.z - min.z), 100);
 		this.trackView = { center, height: span * 0.78 };
+		this.tracksideViews = this.makeTracksideViews(min, max, center, span);
+	}
+
+	makeTracksideViews(min, max, center, span) {
+		const settings = CAMERA_MODES.trackside;
+		const margin = Math.max(24, span * 0.16);
+		const height = Math.max(settings.height, span * 0.035);
+		return [
+			new THREE.Vector3(min.x - margin, height, min.z - margin),
+			new THREE.Vector3(max.x + margin, height, min.z - margin),
+			new THREE.Vector3(max.x + margin, height, max.z + margin),
+			new THREE.Vector3(min.x - margin, height, max.z + margin),
+		].map((position) => ({
+			position,
+			center,
+		}));
 	}
 
 	applyModeSettings() {
@@ -87,6 +112,16 @@ export class CameraRig {
 			this.camera.lookAt(this.target);
 			return;
 		}
+		if (this.mode === "trackside") {
+			const settings = CAMERA_MODES.trackside;
+			const view = this.selectTracksideView(car);
+			this.camera.position.copy(view.position);
+			this.target.copy(car).lerp(view.center, 0.12);
+			this.target.y += settings.targetHeight;
+			this.camera.up.set(0, 1, 0);
+			this.camera.lookAt(this.target);
+			return;
+		}
 
 		this.camera.up.set(0, 1, 0);
 		getTorcsPoseQuaternion(values, this.carRotation);
@@ -111,5 +146,26 @@ export class CameraRig {
 			.add(new THREE.Vector3(0, settings.targetHeight, 0));
 		this.camera.position.copy(cameraPos);
 		this.camera.lookAt(this.target);
+	}
+
+	selectTracksideView(car) {
+		if (!this.tracksideViews.length) {
+			return {
+				position: car.clone().add(new THREE.Vector3(-36, 12, -28)),
+				center: car,
+			};
+		}
+		let selected = this.tracksideViews[0];
+		let bestDistance = Number.POSITIVE_INFINITY;
+		for (const view of this.tracksideViews) {
+			const dx = view.position.x - car.x;
+			const dz = view.position.z - car.z;
+			const distance = dx * dx + dz * dz;
+			if (distance < bestDistance) {
+				bestDistance = distance;
+				selected = view;
+			}
+		}
+		return selected;
 	}
 }
