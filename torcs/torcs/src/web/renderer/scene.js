@@ -5,9 +5,33 @@ const ROAD_Y = 0.03;
 const WHEEL_ORDER = [0, 1, 2, 3];
 const WHEEL_HEAT_COOL = new THREE.Color(0x343936);
 const WHEEL_HEAT_HOT = new THREE.Color(0xff5b32);
+const TORCS_TO_THREE_BASIS = new THREE.Matrix4().set(
+	1, 0, 0, 0,
+	0, 0, 1, 0,
+	0, -1, 0, 0,
+	0, 0, 0, 1,
+);
+const THREE_TO_TORCS_BASIS = new THREE.Matrix4().copy(TORCS_TO_THREE_BASIS).invert();
+const TORCS_POS_MATRIX = new THREE.Matrix4();
+const CAR_ROTATION_MATRIX = new THREE.Matrix4();
 
 function torcsToThree(x, y, z = 0) {
 	return new THREE.Vector3(x, z, -y);
+}
+
+function setObjectQuaternionFromTorcsPosMat(object, values) {
+	const offset = SNAPSHOT.posMat0;
+
+	// PLIB stores row-vector transforms; Three.js uses column-vector matrices.
+	TORCS_POS_MATRIX.set(
+		values[offset + 0], values[offset + 4], values[offset + 8], 0,
+		values[offset + 1], values[offset + 5], values[offset + 9], 0,
+		values[offset + 2], values[offset + 6], values[offset + 10], 0,
+		0, 0, 0, 1,
+	);
+	CAR_ROTATION_MATRIX.multiplyMatrices(TORCS_TO_THREE_BASIS, TORCS_POS_MATRIX);
+	CAR_ROTATION_MATRIX.multiply(THREE_TO_TORCS_BASIS);
+	object.quaternion.setFromRotationMatrix(CAR_ROTATION_MATRIX);
 }
 
 function makeLine(points, color, opacity, yOffset = ROAD_Y) {
@@ -336,7 +360,7 @@ export class TorcsScene {
 		}
 
 		this.car.position.copy(torcsToThree(values[SNAPSHOT.x], values[SNAPSHOT.y], values[SNAPSHOT.z]));
-		this.car.rotation.set(values[SNAPSHOT.pitch], values[SNAPSHOT.yaw], -values[SNAPSHOT.roll], "YXZ");
+		setObjectQuaternionFromTorcsPosMat(this.car, values);
 		this.selectCarLod(camera);
 		this.updateGeneratedWheels(values);
 
