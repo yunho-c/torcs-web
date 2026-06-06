@@ -9,6 +9,7 @@ checkout.sh
 torcs_
 gaga
 tags
+__pycache__/
 
 # Temporary local screenshot comparisons while browser graphics are still being tuned.
 torcs-screenshot/

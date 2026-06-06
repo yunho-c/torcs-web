@@ -89,6 +89,34 @@ kids 0
 
 		self.assertNotIn("alphaMode", material)
 
+	def test_parse_track_metadata_includes_material_controls(self):
+		content = """<?xml version="1.0"?>
+<params name="Test Track">
+<section name="Header">
+<attstr name="name" val="Test Track"/>
+<attstr name="category" val="road"/>
+</section>
+<section name="Graphic">
+<attstr name="3d description" val="test.acc"/>
+<attstr name="background image" val="background.png"/>
+<attnum name="specular color R" val="0.11"/>
+<attnum name="specular color G" val="0.12"/>
+<attnum name="specular color B" val="0.13"/>
+<attnum name="shininess" val="17"/>
+</section>
+</params>
+"""
+		with tempfile.TemporaryDirectory() as tmp_dir:
+			source_root = Path(tmp_dir)
+			track_path = source_root / convert.TRACK_XML
+			track_path.parent.mkdir(parents=True)
+			track_path.write_text(content, encoding="utf-8")
+
+			metadata = convert.parse_track_metadata(source_root)
+
+		self.assertEqual(metadata["specularColor"], [0.11, 0.12, 0.13])
+		self.assertEqual(metadata["shininess"], 17.0)
+
 
 if __name__ == "__main__":
 	unittest.main()

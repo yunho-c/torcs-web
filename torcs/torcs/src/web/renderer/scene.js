@@ -8,6 +8,9 @@ const WHEEL_HEAT_HOT = new THREE.Color(0xff5b32);
 const DEFAULT_BACKGROUND = new THREE.Color(0x0b0d0c);
 const DEFAULT_AMBIENT = new THREE.Color(0xd8e0db);
 const DEFAULT_SUN = new THREE.Color(0xfff0d2);
+const BACKGROUND_RADIUS = 1800;
+const BACKGROUND_HEIGHT = 1200;
+const BACKGROUND_VERTICAL_BIAS = 0.28;
 const TORCS_TO_THREE_BASIS = new THREE.Matrix4().set(
 	1, 0, 0, 0,
 	0, 0, 1, 0,
@@ -235,6 +238,12 @@ export class TorcsScene {
 		}
 		this.sunLight.position.copy(lightPosition);
 		this.setBackgroundDome(backgroundTexture);
+		if (entry && entry.backgroundTexture && !backgroundTexture) {
+			console.warn("TORCS web renderer track background texture is configured but unavailable", {
+				background: entry.background,
+				backgroundTexture: entry.backgroundTexture,
+			});
+		}
 	}
 
 	setBackgroundDome(texture) {
@@ -248,21 +257,32 @@ export class TorcsScene {
 			this.backgroundDome = null;
 		}
 		if (!texture) {
+			console.warn("TORCS web renderer skipped background dome because no texture was provided");
 			return;
 		}
 		texture.wrapS = THREE.RepeatWrapping;
 		texture.wrapT = THREE.ClampToEdgeWrapping;
-		texture.repeat.set(1, 1);
-		const geometry = new THREE.CylinderGeometry(900, 900, 260, 36, 1, true);
+		texture.repeat.set(-1, 1);
+		texture.offset.x = 1;
+		const geometry = new THREE.CylinderGeometry(
+			BACKGROUND_RADIUS,
+			BACKGROUND_RADIUS,
+			BACKGROUND_HEIGHT,
+			96,
+			1,
+			true,
+		);
 		const material = new THREE.MeshBasicMaterial({
 			map: texture,
 			color: 0xffffff,
 			side: THREE.BackSide,
+			depthTest: false,
 			depthWrite: false,
 			fog: false,
 		});
 		this.backgroundDome = new THREE.Mesh(geometry, material);
 		this.backgroundDome.renderOrder = -1000;
+		this.backgroundDome.frustumCulled = false;
 		this.groups.background.add(this.backgroundDome);
 	}
 
@@ -470,7 +490,11 @@ export class TorcsScene {
 
 	render(camera) {
 		if (this.backgroundDome && camera) {
-			this.backgroundDome.position.set(camera.position.x, 110, camera.position.z);
+			this.backgroundDome.position.set(
+				camera.position.x,
+				camera.position.y + BACKGROUND_HEIGHT * BACKGROUND_VERTICAL_BIAS,
+				camera.position.z,
+			);
 		}
 		this.renderer.render(this.scene, camera);
 	}

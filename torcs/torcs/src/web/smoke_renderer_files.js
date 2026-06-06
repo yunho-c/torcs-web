@@ -228,6 +228,11 @@ requireText(byPath["renderer/assets.js"], "./web-assets/", "asset manifest base 
 requireText(byPath["renderer/assets.js"], "export class AssetManager", "asset manager export");
 requireText(byPath["renderer/assets.js"], "Promise.all(entry.lods.map", "all car LOD loading");
 requireText(byPath["renderer/assets.js"], "entry.backgroundTexture", "track background texture loading");
+requireText(byPath["renderer/assets.js"], "renderer.capabilities.getMaxAnisotropy()", "renderer anisotropy capability");
+requireText(byPath["renderer/assets.js"], "texture.anisotropy = Math.max(1, this.getMaxAnisotropy())", "anisotropic texture sampling");
+requireText(byPath["renderer/assets.js"], "texture.minFilter = THREE.LinearMipmapLinearFilter", "mipmapped distant texture filtering");
+requireText(byPath["renderer/assets.js"], "new THREE.MeshLambertMaterial", "legacy matte material conversion");
+requireText(byPath["renderer/assets.js"], "TORCS web renderer failed to load track background texture", "background texture load warning");
 
 requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_get_snapshot_size", "snapshot size export");
 requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_write_snapshot", "snapshot write export");
@@ -236,6 +241,7 @@ requireText(byPath["renderer/runtime.js"], "export class TorcsRuntime", "runtime
 
 requireText(byPath["renderer/main.js"], "createTorcsRuntime", "runtime factory import");
 requireText(byPath["renderer/main.js"], "new AssetManager", "asset manager creation");
+requireText(byPath["renderer/main.js"], "new AssetManager(\"./web-assets/\", scene.renderer)", "asset renderer capability handoff");
 requireText(byPath["renderer/main.js"], "new TorcsScene", "scene creation");
 requireText(byPath["renderer/main.js"], "runtime.readTrackSamples()", "track sample ingestion");
 requireText(byPath["renderer/main.js"], "scene.setTrackAtmosphere(track ? track.entry : null, track ? track.backgroundTexture : null)", "track atmosphere handoff");
@@ -247,7 +253,13 @@ requireText(byPath["renderer/scene.js"], "setTrackVisual(model)", "converted tra
 requireText(byPath["renderer/scene.js"], "setTrackAtmosphere(entry, backgroundTexture = null)", "track atmosphere hook");
 requireText(byPath["renderer/scene.js"], "backgroundColor.clone().multiplyScalar(0.8)", "native fog color scaling");
 requireText(byPath["renderer/scene.js"], "new THREE.Fog(fogColor, 300, 600)", "linear TORCS fog range");
-requireText(byPath["renderer/scene.js"], "new THREE.CylinderGeometry(900, 900, 260, 36, 1, true)", "background dome geometry");
+requireText(byPath["renderer/scene.js"], "const BACKGROUND_RADIUS = 1800", "native panoramic backdrop radius");
+requireText(byPath["renderer/scene.js"], "const BACKGROUND_HEIGHT = 1200", "native panoramic backdrop height");
+requireText(byPath["renderer/scene.js"], "texture.repeat.set(-1, 1)", "native background horizontal orientation");
+requireText(byPath["renderer/scene.js"], "TORCS web renderer track background texture is configured but unavailable", "missing configured background warning");
+requireText(byPath["renderer/scene.js"], "TORCS web renderer skipped background dome because no texture was provided", "background dome skipped warning");
+requireText(byPath["renderer/scene.js"], "new THREE.CylinderGeometry(", "background dome geometry");
+requireText(byPath["renderer/scene.js"], "camera.position.y + BACKGROUND_HEIGHT * BACKGROUND_VERTICAL_BIAS", "camera-following sky backdrop");
 requireText(byPath["renderer/scene.js"], "color: 0xffffff", "unlit untinted background texture");
 requireText(byPath["renderer/scene.js"], "torcsToThree(entry.lightPosition[0], entry.lightPosition[1], entry.lightPosition[2])", "track light position conversion");
 requireText(byPath["renderer/scene.js"], "setCarVisual(asset)", "converted car LOD hook");
@@ -294,8 +306,11 @@ if (typeof track.backgroundType !== "number") {
 	fail("TORCS web renderer smoke test found missing background type metadata");
 }
 checkPng(track.backgroundTexture);
-for (const field of ["backgroundColor", "ambientColor", "diffuseColor", "lightPosition"]) {
+for (const field of ["backgroundColor", "ambientColor", "diffuseColor", "specularColor", "lightPosition"]) {
 	checkNumberTriplet(track, field, track.source);
+}
+if (typeof track.shininess !== "number" || !Number.isFinite(track.shininess)) {
+	fail("TORCS web renderer smoke test found malformed track shininess metadata");
 }
 for (const lod of car.lods) {
 	checkGlb(lod.asset);

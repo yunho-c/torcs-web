@@ -79,6 +79,12 @@ def check_number_triplet(entry, field, label):
 		raise ValueError(f"{label} has non-numeric {field}")
 
 
+def check_number(entry, field, label):
+	value = entry.get(field)
+	if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value):
+		raise ValueError(f"{label} missing numeric {field}")
+
+
 def main():
 	if len(sys.argv) != 2:
 		return fail("usage: validate_assets.py <manifest.json>")
@@ -101,8 +107,9 @@ def main():
 			label = track.get("source", "track")
 			if not isinstance(track.get("backgroundType"), int):
 				raise ValueError(f"{label} missing background type")
-			for field in ["backgroundColor", "ambientColor", "diffuseColor", "lightPosition"]:
+			for field in ["backgroundColor", "ambientColor", "diffuseColor", "specularColor", "lightPosition"]:
 				check_number_triplet(track, field, label)
+			check_number(track, "shininess", label)
 			if track.get("backgroundTexture"):
 				check_texture(require(root, track["backgroundTexture"]))
 			for texture in track.get("textures", {}).values():

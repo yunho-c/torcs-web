@@ -110,6 +110,12 @@ def parse_track_metadata(source_root):
 			attnum(graphic, "diffuse color G", 1.0),
 			attnum(graphic, "diffuse color B", 1.0),
 		],
+		"specularColor": [
+			attnum(graphic, "specular color R", 0.3),
+			attnum(graphic, "specular color G", 0.3),
+			attnum(graphic, "specular color B", 0.3),
+		],
+		"shininess": attnum(graphic, "shininess", 50.0),
 		"lightPosition": [
 			attnum(graphic, "light position x", 0.0),
 			attnum(graphic, "light position y", 10000.0),
@@ -606,6 +612,8 @@ def main():
 				"backgroundColor": track_meta["backgroundColor"],
 				"ambientColor": track_meta["ambientColor"],
 				"diffuseColor": track_meta["diffuseColor"],
+				"specularColor": track_meta["specularColor"],
+				"shininess": track_meta["shininess"],
 				"lightPosition": track_meta["lightPosition"],
 				"textures": {name: track_texture_outputs[name] for name in track_result["textures"] if name in track_texture_outputs},
 				"primitiveCount": track_result["primitives"],
