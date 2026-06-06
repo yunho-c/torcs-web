@@ -10,6 +10,9 @@ torcs_
 gaga
 tags
 
+# Temporary local screenshot comparisons while browser graphics are still being tuned.
+torcs-screenshot/
+
 # Visual Studio user/caches
 .vs/
 *.user

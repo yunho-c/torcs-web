@@ -372,6 +372,13 @@ Tasks:
 - Reproduce track lighting values from XML where present.
 - Add linear fog using track background color.
 - Add background image/dome support.
+- Reproduce native skybox/backdrop rendering for clouds, mountains, and horizon
+  imagery rather than relying on a flat clear color or barely visible dome.
+- Fix the hazy ground-surface look by auditing material parameters, especially
+  specular response, shininess/roughness, and color-space handling at glancing
+  camera angles.
+- Improve distant road and ground texture clarity with appropriate mipmap,
+  anisotropic filtering, and texture sampling settings.
 - Tune FOV and near/far ranges against native screenshots.
 
 Success criteria:
