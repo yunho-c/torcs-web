@@ -248,6 +248,24 @@ async function checkAudioModelBehavior() {
 		assertAudio(eventNames.includes(name), "latched one-shot event", { name, eventNames });
 	}
 
+	const repeatedDragCrashModel = new CarAudioModel();
+	const firstDragImpact = repeatedDragCrashModel.update(makeAudioSnapshot(SNAPSHOT, {
+		collisionEvent: 3,
+	}), carSound);
+	const continuedDragImpact = repeatedDragCrashModel.update(makeAudioSnapshot(SNAPSHOT, {
+		collisionEvent: 3,
+	}), carSound);
+	assertAudio(
+		firstDragImpact.events.some((event) => event.name === "crash"),
+		"new drag collision crash event",
+		{ events: firstDragImpact.events },
+	);
+	assertAudio(
+		!continuedDragImpact.events.some((event) => event.name === "crash"),
+		"continued drag collision suppresses repeated crash",
+		{ events: continuedDragImpact.events },
+	);
+
 	const mixedModel = new CarAudioModel();
 	const mixedValues = makeAudioSnapshot(SNAPSHOT, {
 		wheelOtherSurfaceContribution0: 0.4,
@@ -262,6 +280,21 @@ async function checkAudioModelBehavior() {
 	assertAudio(mixed.grassSkid.volume > 0, "mixed surface dirt skid", mixed.grassSkid);
 	assertAudio(mixed.curbRide.volume > 0, "curb style loop", mixed.curbRide);
 	assertAudio(mixed.skidTyres[0].volume > 0, "wheel skid loop", mixed.skidTyres[0]);
+
+	const stationaryTyres = new CarAudioModel().update(makeAudioSnapshot(SNAPSHOT, {
+		speed: 0.2,
+	}), carSound);
+	assertAudio(stationaryTyres.engine.volume > 0, "stationary engine remains audible", stationaryTyres.engine);
+	assertAudio(stationaryTyres.roadRide.volume === 0, "stationary road ride is gated", stationaryTyres.roadRide);
+	assertAudio(stationaryTyres.skidTyres.every((tyre) => tyre.volume === 0), "stationary tyre skid is gated", {
+		skidTyres: stationaryTyres.skidTyres,
+	});
+
+	const spinningTyres = new CarAudioModel().update(makeAudioSnapshot(SNAPSHOT, {
+		speed: 0,
+		wheelSpinVelocity0: 1,
+	}), carSound);
+	assertAudio(spinningTyres.skidTyres[0].volume > 0, "wheel spin bypasses stationary tyre gate", spinningTyres.skidTyres[0]);
 
 	const mutedModel = new CarAudioModel();
 	mutedModel.update(makeAudioSnapshot(SNAPSHOT, {

@@ -238,6 +238,9 @@ export class CarAudioModel {
 			return model;
 		}
 
+		const wheelSpinning = [0, 1, 2, 3].some((wheelIndex) =>
+			values[SNAPSHOT.wheelSpinVelocity0 + wheelIndex] > 0.1);
+
 		this.smoothAccel = this.smoothAccel * 0.5 + 0.5 * (accel * 0.99 + 0.01);
 		model.engine.volume = 0.65;
 		model.engine.lowpass = (0.75 * revRatio2 + 0.25) * this.smoothAccel +
@@ -269,76 +272,79 @@ export class CarAudioModel {
 		this.backfireVolume *= 0.45 + 0.5 * Math.exp(-model.backfireLoop.pitch);
 		model.backfireLoop.volume = this.backfireVolume;
 
-		for (let wheelIndex = 0; wheelIndex < WHEEL_COUNT; wheelIndex += 1) {
-			const wheelSkid = values[SNAPSHOT.wheelSkidIntensity0 + wheelIndex];
-			const reaction = values[SNAPSHOT.wheelReaction0 + wheelIndex];
-			const roughnessFreq = values[SNAPSHOT.wheelRoughnessFrequency0 + wheelIndex];
-			const roughness = values[SNAPSHOT.wheelRoughness0 + wheelIndex];
-			const otherContribution = values[SNAPSHOT.wheelOtherSurfaceContribution0 + wheelIndex];
-			const otherRoughnessFreq = values[SNAPSHOT.wheelOtherRoughnessFrequency0 + wheelIndex];
-			const otherRoughness = values[SNAPSHOT.wheelOtherRoughness0 + wheelIndex];
-			const mainKind = values[SNAPSHOT.wheelSurfaceKind0 + wheelIndex];
-			const otherKind = values[SNAPSHOT.wheelOtherSurfaceKind0 + wheelIndex];
-			const mainStyle = values[SNAPSHOT.wheelSurfaceStyle0 + wheelIndex];
-			const otherStyle = values[SNAPSHOT.wheelOtherSurfaceStyle0 + wheelIndex];
-			const tmpvol = speed * 0.01;
-			const ride = 0.001 * reaction;
-			const mainOffroad = this.isOffRoad(mainKind);
-			const otherOffroad = this.isOffRoad(otherKind);
-			const hasOther = otherContribution > 0;
-			let roadContribution = mainOffroad ? 0 : 1;
-			let dirtContribution = mainOffroad ? 1 : 0;
+		if (speed >= 0.3 || wheelSpinning) {
+			for (let wheelIndex = 0; wheelIndex < WHEEL_COUNT; wheelIndex += 1) {
+				const wheelSkid = values[SNAPSHOT.wheelSkidIntensity0 + wheelIndex];
+				const reaction = values[SNAPSHOT.wheelReaction0 + wheelIndex];
+				const roughnessFreq = values[SNAPSHOT.wheelRoughnessFrequency0 + wheelIndex];
+				const roughness = values[SNAPSHOT.wheelRoughness0 + wheelIndex];
+				const otherContribution = values[SNAPSHOT.wheelOtherSurfaceContribution0 + wheelIndex];
+				const otherRoughnessFreq = values[SNAPSHOT.wheelOtherRoughnessFrequency0 + wheelIndex];
+				const otherRoughness = values[SNAPSHOT.wheelOtherRoughness0 + wheelIndex];
+				const mainKind = values[SNAPSHOT.wheelSurfaceKind0 + wheelIndex];
+				const otherKind = values[SNAPSHOT.wheelOtherSurfaceKind0 + wheelIndex];
+				const mainStyle = values[SNAPSHOT.wheelSurfaceStyle0 + wheelIndex];
+				const otherStyle = values[SNAPSHOT.wheelOtherSurfaceStyle0 + wheelIndex];
+				const tmpvol = speed * 0.01;
+				const ride = 0.001 * reaction;
+				const mainOffroad = this.isOffRoad(mainKind);
+				const otherOffroad = this.isOffRoad(otherKind);
+				const hasOther = otherContribution > 0;
+				let roadContribution = mainOffroad ? 0 : 1;
+				let dirtContribution = mainOffroad ? 1 : 0;
 
-			if (hasOther && mainOffroad !== otherOffroad) {
-				roadContribution = mainOffroad ? otherContribution : 1 - otherContribution;
-				dirtContribution = mainOffroad ? 1 - otherContribution : otherContribution;
-			}
+				if (hasOther && mainOffroad !== otherOffroad) {
+					roadContribution = mainOffroad ? otherContribution : 1 - otherContribution;
+					dirtContribution = mainOffroad ? 1 - otherContribution : otherContribution;
+				}
 
-			const curbContribution = mainStyle === TR_CURB ? 1 - otherContribution :
-				(hasOther && otherStyle === TR_CURB ? otherContribution : 0);
-			if (reaction > 0 && curbContribution > 0) {
-				const curbFreq = mainStyle === TR_CURB ? roughnessFreq : otherRoughnessFreq;
-				const volume = tmpvol * (5 + ride / 3) * curbContribution;
-				if (volume > model.curbRide.volume) {
-					model.curbRide.volume = volume;
-					model.curbRide.pitch = tmpvol * (0.75 + 0.25 * curbFreq);
+				const curbContribution = mainStyle === TR_CURB ? 1 - otherContribution :
+					(hasOther && otherStyle === TR_CURB ? otherContribution : 0);
+				if (reaction > 0 && curbContribution > 0) {
+					const curbFreq = mainStyle === TR_CURB ? roughnessFreq : otherRoughnessFreq;
+					const volume = tmpvol * (5 + ride / 3) * curbContribution;
+					if (volume > model.curbRide.volume) {
+						model.curbRide.volume = volume;
+						model.curbRide.pitch = tmpvol * (0.75 + 0.25 * curbFreq);
+					}
 				}
-			}
 
-			if (roadContribution > 0) {
-				const roadFreq = !mainOffroad ? roughnessFreq : otherRoughnessFreq;
-				const volume = tmpvol * (1 + ride * 0.25) * roadContribution;
-				if (volume > model.roadRide.volume) {
-					model.roadRide.volume = volume;
-					model.roadRide.pitch = tmpvol * (0.75 + 0.25 * roadFreq);
+				if (roadContribution > 0) {
+					const roadFreq = !mainOffroad ? roughnessFreq : otherRoughnessFreq;
+					const volume = tmpvol * (1 + ride * 0.25) * roadContribution;
+					if (volume > model.roadRide.volume) {
+						model.roadRide.volume = volume;
+						model.roadRide.pitch = tmpvol * (0.75 + 0.25 * roadFreq);
+					}
+					if (wheelSkid > 0.05) {
+						const slipAccel = values[SNAPSHOT.wheelSlipAccel0 + wheelIndex];
+						const slip = Math.tanh((slipAccel + 10) * 0.01);
+						model.skidTyres[wheelIndex] = {
+							volume: (wheelSkid - 0.05) * roadContribution,
+							pitch: (0.3 - 0.3 * slip + 0.3 * roadFreq) / (1 + 0.5 * Math.tanh(reaction * 0.0001)),
+							position: wheelPosition(values, wheelIndex, this.wheelPositions[wheelIndex]),
+						};
+					}
 				}
-				if (wheelSkid > 0.05) {
-					const slipAccel = values[SNAPSHOT.wheelSlipAccel0 + wheelIndex];
-					const slip = Math.tanh((slipAccel + 10) * 0.01);
-					model.skidTyres[wheelIndex] = {
-						volume: (wheelSkid - 0.05) * roadContribution,
-						pitch: (0.3 - 0.3 * slip + 0.3 * roadFreq) / (1 + 0.5 * Math.tanh(reaction * 0.0001)),
-						position: wheelPosition(values, wheelIndex, this.wheelPositions[wheelIndex]),
-					};
-				}
-			}
 
-			if (dirtContribution > 0) {
-				const dirtFreq = mainOffroad ? roughnessFreq : otherRoughnessFreq;
-				const dirtRoughness = mainOffroad ? roughness : otherRoughness;
-				const volume = (0.5 + 0.2 * Math.tanh(0.5 * dirtRoughness)) * tmpvol * ride * dirtContribution;
-				if (volume > model.grassRide.volume) {
-					model.grassRide.volume = volume;
-					model.grassRide.pitch = tmpvol * (0.5 + 0.5 * dirtFreq);
-				}
-				if (wheelSkid * dirtContribution > model.grassSkid.volume) {
-					model.grassSkid.volume = wheelSkid * dirtContribution;
-					model.grassSkid.pitch = 1;
+				if (dirtContribution > 0) {
+					const dirtFreq = mainOffroad ? roughnessFreq : otherRoughnessFreq;
+					const dirtRoughness = mainOffroad ? roughness : otherRoughness;
+					const volume = (0.5 + 0.2 * Math.tanh(0.5 * dirtRoughness)) * tmpvol * ride * dirtContribution;
+					if (volume > model.grassRide.volume) {
+						model.grassRide.volume = volume;
+						model.grassRide.pitch = tmpvol * (0.5 + 0.5 * dirtFreq);
+					}
+					if (wheelSkid * dirtContribution > model.grassSkid.volume) {
+						model.grassSkid.volume = wheelSkid * dirtContribution;
+						model.grassSkid.pitch = 1;
+					}
 				}
 			}
 		}
 
 		const collision = values[SNAPSHOT.collisionEvent] | 0;
+		const previousDragCollisionVolume = this.dragCollisionVolume;
 		let skidMetal = 0;
 		if (collision & 1) {
 			skidMetal = speed * 0.01;
@@ -356,7 +362,7 @@ export class CarAudioModel {
 		if (collision & 8) {
 			model.events.push({ name: "bang", position: this.carPosition, volume: 0.95 });
 		}
-		if (collision && (!(collision & 1) || (collision & 2))) {
+		if (collision && (!(collision & 1) || ((collision & 2) && skidMetal > previousDragCollisionVolume))) {
 			model.events.push({ name: "crash", position: this.carPosition, volume: 1 });
 		}
 		return model;
