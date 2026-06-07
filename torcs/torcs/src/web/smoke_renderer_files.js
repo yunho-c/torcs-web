@@ -418,6 +418,9 @@ requireText(byPath["torcs_web_renderer.html"], "id=\"audio\"", "audio unlock but
 requireText(byPath["torcs_web_renderer.html"], "id=\"volume\"", "audio volume slider");
 requireText(byPath["torcs_web_renderer.html"], "id=\"audio-state\"", "audio status readout");
 requireText(byPath["torcs_web_renderer.html"], "id=\"track-map\"", "Phase 5 track map canvas");
+requireText(byPath["torcs_web_renderer.html"], "id=\"car-count\"", "Phase 6 car count control");
+requireText(byPath["torcs_web_renderer.html"], "id=\"current-car\"", "Phase 6 current car selector");
+requireText(byPath["torcs_web_renderer.html"], "id=\"standings\"", "Phase 6 standings panel");
 for (const id of ["position", "fuel", "current-lap", "last-lap", "best-lap", "top-speed"]) {
 	requireText(byPath["torcs_web_renderer.html"], `id="${id}"`, `Phase 5 HUD field ${id}`);
 }
@@ -439,6 +442,11 @@ requireText(byPath["renderer/assets.js"], "TORCS web renderer failed to load tra
 
 requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_get_snapshot_size", "snapshot size export");
 requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_write_snapshot", "snapshot write export");
+requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_start_multi_with_files", "Phase 6 multi-car runtime start export");
+requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_get_car_count", "Phase 6 car count export");
+requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_write_car_snapshot", "Phase 6 per-car snapshot export");
+requireText(byPath["renderer/runtime.js"], "readSnapshots()", "Phase 6 multi-car snapshot reader");
+requireText(byPath["renderer/runtime.js"], "Float64Array.from(values)", "Phase 6 copied per-car snapshot buffer");
 requireText(byPath["renderer/runtime.js"], "export const SNAPSHOT", "snapshot layout export");
 requireText(byPath["renderer/runtime.js"], "export class TorcsRuntime", "runtime adapter export");
 requireText(byPath["renderer/runtime.js"], "wheelSkidIntensity0: 116", "Phase 4 skid snapshot field");
@@ -463,6 +471,10 @@ requireText(byPath["renderer/main.js"], "new AssetManager(\"./web-assets/\", sce
 requireText(byPath["renderer/main.js"], "audio.enabled ? \"Stop\" : \"Audio\"", "audio button start/stop label");
 requireText(byPath["renderer/main.js"], "new TorcsScene", "scene creation");
 requireText(byPath["renderer/main.js"], "runtime.readTrackSamples()", "track sample ingestion");
+requireText(byPath["renderer/main.js"], "runtime.readSnapshots()", "Phase 6 snapshot array ingestion");
+requireText(byPath["renderer/main.js"], "scene.updateCars(snapshots, cameras.camera)", "Phase 6 multi-car scene update");
+requireText(byPath["renderer/main.js"], "elements.currentCar.addEventListener", "Phase 6 current-car selector binding");
+requireText(byPath["renderer/main.js"], "elements.carCount.value", "Phase 6 car count startup control");
 requireText(byPath["renderer/main.js"], "scene.setTrackAtmosphere(track ? track.entry : null, track ? track.backgroundTexture : null)", "track atmosphere handoff");
 requireText(byPath["renderer/main.js"], "assets.loadEffects()", "effect texture asset loading");
 requireText(byPath["renderer/main.js"], "scene.setEffectTextures(effects ? effects.textures : null)", "effect texture scene handoff");
@@ -473,7 +485,9 @@ requireText(byPath["renderer/main.js"], "input.updateGamepad()", "Phase 5 gamepa
 
 requireText(byPath["renderer/hud.js"], "fmtTime(value)", "Phase 5 lap time formatting");
 requireText(byPath["renderer/hud.js"], "setTrack(track)", "Phase 5 track map setup");
-requireText(byPath["renderer/hud.js"], "drawMap(values)", "Phase 5 track map rendering");
+requireText(byPath["renderer/hud.js"], "drawMap(values, snapshots = [], selectedCarIndex = 0)", "Phase 6 multi-car track map rendering");
+requireText(byPath["renderer/hud.js"], "updateStandings(snapshots, selectedCarIndex)", "Phase 6 standings rendering");
+requireText(byPath["renderer/hud.js"], "car.driverName", "Phase 6 standings driver names");
 requireText(byPath["renderer/hud.js"], "SNAPSHOT.fuel", "Phase 5 fuel HUD snapshot field");
 requireText(byPath["renderer/hud.js"], "SNAPSHOT.currentLapTime", "Phase 5 current lap HUD snapshot field");
 requireText(byPath["renderer/hud.js"], "SNAPSHOT.racePosition", "Phase 5 race position HUD snapshot field");
@@ -518,6 +532,11 @@ requireText(byPath["renderer/scene.js"], "camera.position.y + BACKGROUND_HEIGHT 
 requireText(byPath["renderer/scene.js"], "color: 0xffffff", "unlit untinted background texture");
 requireText(byPath["renderer/scene.js"], "torcsToThree(entry.lightPosition[0], entry.lightPosition[1], entry.lightPosition[2])", "track light position conversion");
 requireText(byPath["renderer/scene.js"], "setCarVisual(asset)", "converted car LOD hook");
+requireText(byPath["renderer/scene.js"], "updateCars(snapshots, camera = null)", "Phase 6 multi-car scene update");
+requireText(byPath["renderer/scene.js"], "createOpponentCar(values, carIndex)", "Phase 6 opponent car creation");
+requireText(byPath["renderer/scene.js"], "tintClone(item.scene, opponent.color)", "Phase 6 distinct opponent car visual tint");
+requireText(byPath["renderer/scene.js"], "setObjectQuaternionFromTorcsPosMat(opponent.root, values)", "Phase 6 opponent pose matrix conversion");
+requireText(byPath["renderer/scene.js"], "selectOpponentLod(opponent, camera)", "Phase 6 opponent LOD switching");
 requireText(byPath["renderer/scene.js"], "export { getTorcsPoseQuaternion, torcsToThree }", "shared TORCS pose export");
 requireText(byPath["renderer/scene.js"], "createGeneratedWheels(values)", "generated wheel fallback");
 requireText(byPath["renderer/scene.js"], "setObjectQuaternionFromTorcsPosMat(this.car, values)", "car body pose matrix conversion");

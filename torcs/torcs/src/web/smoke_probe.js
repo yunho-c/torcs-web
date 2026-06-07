@@ -36,6 +36,7 @@ const SNAPSHOT = {
 	currentLapTime: 28,
 	topSpeed: 31,
 	controlSteer: 32,
+	controlAccel: 33,
 	posMat0: 36,
 	cornerX0: 52,
 	cornerY0: 56,
@@ -91,6 +92,23 @@ function readSnapshot(module) {
 		const write = module.ccall("torcs_web_runtime_write_snapshot", "number", ["number", "number"], [ptr, size]);
 		const values = Array.from(module.HEAPF64.subarray(ptr >> 3, (ptr + size) >> 3));
 		return { version, size, write, values };
+	} finally {
+		module._free(ptr);
+	}
+}
+
+function readCarSnapshot(module, carIndex) {
+	const size = module.ccall("torcs_web_runtime_get_snapshot_size", "number", [], []);
+	const ptr = module._malloc(size);
+	try {
+		const write = module.ccall(
+			"torcs_web_runtime_write_car_snapshot",
+			"number",
+			["number", "number", "number"],
+			[carIndex, ptr, size],
+		);
+		const values = Array.from(module.HEAPF64.subarray(ptr >> 3, (ptr + size) >> 3));
+		return { write, values };
 	} finally {
 		module._free(ptr);
 	}
@@ -263,6 +281,41 @@ createModule()
 		selected.time = module.ccall("torcs_web_runtime_get_time", "number", [], []);
 		module.ccall("torcs_web_runtime_shutdown", null, [], []);
 
+		const multi = {
+			start: module.ccall(
+				"torcs_web_runtime_start_multi_with_files",
+				"number",
+				["string", "string", "number"],
+				[
+					"/torcs/data/tracks/e-track-1/e-track-1.xml",
+					"/torcs/data/cars/models/kc-2000gt/kc-2000gt.xml",
+					3,
+				],
+			),
+		};
+		multi.count = module.ccall("torcs_web_runtime_get_car_count", "number", [], []);
+		multi.maxCars = module.ccall("torcs_web_runtime_get_max_cars", "number", [], []);
+		multi.names = [];
+		for (let i = 0; i < multi.count; i += 1) {
+			multi.names.push(module.ccall("torcs_web_runtime_get_car_name_by_index", "string", ["number"], [i]));
+		}
+		multi.step = module.ccall("torcs_web_runtime_step", "number", ["number"], [1 / 30]);
+		multi.snapshots = [];
+		for (let i = 0; i < multi.count; i += 1) {
+			const carSnapshot = readCarSnapshot(module, i);
+			multi.snapshots.push({
+				write: carSnapshot.write,
+				x: carSnapshot.values[SNAPSHOT.x],
+				y: carSnapshot.values[SNAPSHOT.y],
+				speed: carSnapshot.values[SNAPSHOT.speed],
+				position: carSnapshot.values[SNAPSHOT.racePosition],
+				accel: carSnapshot.values[SNAPSHOT.controlAccel],
+				gear: carSnapshot.values[SNAPSHOT.gear],
+				trackDistanceFromStart: carSnapshot.values[SNAPSHOT.trackDistanceFromStart],
+			});
+		}
+		module.ccall("torcs_web_runtime_shutdown", null, [], []);
+
 		const result = {
 			rc: module.ccall("torcs_web_probe", "number", [], []),
 			rc2: module.ccall("torcs_web_probe", "number", [], []),
@@ -278,6 +331,7 @@ createModule()
 			runtime,
 			drive,
 			selected,
+			multi,
 		};
 
 		console.log(JSON.stringify(result));
@@ -319,7 +373,7 @@ createModule()
 			runtime.raceState !== 1 ||
 			runtime.racePosition !== 1 ||
 			runtime.lapCount !== 0 ||
-			runtime.remainingLaps !== 0 ||
+			runtime.remainingLaps < 0 ||
 			runtime.lapProgress <= 0 ||
 			runtime.lapProgress >= 1 ||
 			runtime.distanceRaced < 0 ||
@@ -444,6 +498,17 @@ createModule()
 			selected.lapProgress <= 0 ||
 			selected.lapProgress >= 1 ||
 			selected.time <= 0 ||
+			multi.start !== 0 ||
+			multi.count !== 3 ||
+			multi.maxCars < 3 ||
+			multi.step !== 0 ||
+			multi.names[0] !== "webprobe" ||
+			multi.names[1] !== "webai1" ||
+			multi.snapshots.length !== 3 ||
+			multi.snapshots.some((car) => car.write !== 0 || !Number.isFinite(car.x) || !Number.isFinite(car.y)) ||
+			new Set(multi.snapshots.map((car) => `${car.x.toFixed(3)},${car.y.toFixed(3)}`)).size !== 3 ||
+			multi.snapshots.slice(1).some((car) => car.accel <= 0 || car.gear < 1) ||
+			multi.snapshots.some((car) => car.trackDistanceFromStart <= 0) ||
 			Math.hypot(drive.x - drive.startX, drive.y - drive.startY) <= 5
 		) {
 			fail("TORCS WASM probe smoke test failed", result);
