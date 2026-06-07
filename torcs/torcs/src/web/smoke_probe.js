@@ -299,6 +299,11 @@ createModule()
 		for (let i = 0; i < multi.count; i += 1) {
 			multi.names.push(module.ccall("torcs_web_runtime_get_car_name_by_index", "string", ["number"], [i]));
 		}
+		multi.initialPositions = [];
+		for (let i = 0; i < multi.count; i += 1) {
+			const carSnapshot = readCarSnapshot(module, i);
+			multi.initialPositions.push(carSnapshot.values[SNAPSHOT.racePosition]);
+		}
 		multi.step = module.ccall("torcs_web_runtime_step", "number", ["number"], [1 / 30]);
 		multi.snapshots = [];
 		for (let i = 0; i < multi.count; i += 1) {
@@ -504,9 +509,12 @@ createModule()
 			multi.step !== 0 ||
 			multi.names[0] !== "webprobe" ||
 			multi.names[1] !== "webai1" ||
+			new Set(multi.initialPositions).size !== multi.count ||
+			multi.initialPositions.some((position) => position < 1 || position > multi.count) ||
 			multi.snapshots.length !== 3 ||
 			multi.snapshots.some((car) => car.write !== 0 || !Number.isFinite(car.x) || !Number.isFinite(car.y)) ||
 			new Set(multi.snapshots.map((car) => `${car.x.toFixed(3)},${car.y.toFixed(3)}`)).size !== 3 ||
+			new Set(multi.snapshots.map((car) => car.position)).size !== multi.count ||
 			multi.snapshots.slice(1).some((car) => car.accel <= 0 || car.gear < 1) ||
 			multi.snapshots.some((car) => car.trackDistanceFromStart <= 0) ||
 			Math.hypot(drive.x - drive.startX, drive.y - drive.startY) <= 5

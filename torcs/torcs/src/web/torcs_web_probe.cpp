@@ -540,13 +540,23 @@ updateRuntimeRaceProgress(int carIndex)
 static void
 updateRuntimeRacePositions(void)
 {
+	int previousPositions[TORCS_WEB_RUNTIME_MAX_CARS];
 	int i;
 	int j;
 
 	for (i = 0; i < Runtime.carCount; i++) {
+		previousPositions[i] = Runtime.carList[i]._pos > 0 ? Runtime.carList[i]._pos : i + 1;
+	}
+
+	for (i = 0; i < Runtime.carCount; i++) {
 		int position = 1;
 		for (j = 0; j < Runtime.carCount; j++) {
-			if (i != j && Runtime.carList[j]._distRaced > Runtime.carList[i]._distRaced) {
+			const tdble distDelta = Runtime.carList[j]._distRaced - Runtime.carList[i]._distRaced;
+			if (i != j &&
+				(distDelta > 0.001f ||
+				 (fabs(distDelta) <= 0.001f &&
+				  (previousPositions[j] < previousPositions[i] ||
+				   (previousPositions[j] == previousPositions[i] && j < i))))) {
 				position++;
 			}
 		}
