@@ -40,7 +40,7 @@ const cameras = new CameraRig(elements.canvas);
 const assets = new AssetManager("./web-assets/", scene.renderer);
 const audio = new TorcsAudio("./web-assets/", (status) => {
 	elements.audioState.textContent = status;
-	elements.audio.textContent = audio.enabled ? "Mute" : "Audio";
+	elements.audio.textContent = audio.enabled ? "Stop" : "Audio";
 });
 let runtime = null;
 let running = false;
@@ -178,7 +178,6 @@ elements.audio.addEventListener("click", async () => {
 		}
 	} catch (error) {
 		console.warn("TORCS web audio failed to start", error);
-		elements.audioState.textContent = "error";
 	}
 });
 elements.volume.addEventListener("input", () => {

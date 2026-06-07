@@ -406,25 +406,36 @@ export class TorcsAudio {
 
 	async enable(carPath) {
 		this.setStatus("loading");
-		await this.ensureContext();
-		this.stopLoops();
-		this.raceAudio = await this.assetLoader.loadRaceAudio(carPath);
-		if (!this.raceAudio) {
+		try {
+			await this.ensureContext();
+			this.stopLoops();
 			this.enabled = false;
-			this.setStatus("unavailable");
-			return false;
+			this.raceAudio = null;
+			const raceAudio = await this.assetLoader.loadRaceAudio(carPath);
+			if (!raceAudio) {
+				this.setStatus("unavailable");
+				return false;
+			}
+			this.raceAudio = raceAudio;
+			this.enabled = true;
+			this.model.reset();
+			this.createLoops();
+			this.setStatus("active");
+			return true;
+		} catch (error) {
+			this.enabled = false;
+			this.raceAudio = null;
+			this.stopLoops();
+			this.setStatus("error");
+			throw error;
 		}
-		this.enabled = true;
-		this.model.reset();
-		this.createLoops();
-		this.setStatus("active");
-		return true;
 	}
 
 	disable() {
 		this.enabled = false;
+		this.raceAudio = null;
 		this.stopLoops();
-		this.setStatus("locked");
+		this.setStatus("off");
 	}
 
 	async reload(carPath) {

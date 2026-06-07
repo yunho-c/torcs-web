@@ -274,6 +274,7 @@ requireText(byPath["renderer/main.js"], "import { TorcsAudio } from \"./audio.js
 requireText(byPath["renderer/main.js"], "new AssetManager", "asset manager creation");
 requireText(byPath["renderer/main.js"], "new TorcsAudio(\"./web-assets/\"", "audio runtime creation");
 requireText(byPath["renderer/main.js"], "new AssetManager(\"./web-assets/\", scene.renderer)", "asset renderer capability handoff");
+requireText(byPath["renderer/main.js"], "audio.enabled ? \"Stop\" : \"Audio\"", "audio button start/stop label");
 requireText(byPath["renderer/main.js"], "new TorcsScene", "scene creation");
 requireText(byPath["renderer/main.js"], "runtime.readTrackSamples()", "track sample ingestion");
 requireText(byPath["renderer/main.js"], "scene.setTrackAtmosphere(track ? track.entry : null, track ? track.backgroundTexture : null)", "track atmosphere handoff");
@@ -288,6 +289,9 @@ requireText(byPath["renderer/audio.js"], "export class CarAudioModel", "native c
 requireText(byPath["renderer/audio.js"], "context.createPanner()", "positional Web Audio source");
 requireText(byPath["renderer/audio.js"], "context.createBiquadFilter()", "engine low-pass filter");
 requireText(byPath["renderer/audio.js"], "decodeAudioData", "manifest sample decoding");
+requireText(byPath["renderer/audio.js"], "this.enabled = false;\n\t\t\tthis.raceAudio = null;\n\t\t\tconst raceAudio", "stale audio state cleared before asset load");
+requireText(byPath["renderer/audio.js"], "this.setStatus(\"error\")", "audio load failure status");
+requireText(byPath["renderer/audio.js"], "this.setStatus(\"off\")", "audio stop status");
 requireText(byPath["renderer/audio.js"], "SNAPSHOT.gearChangeEvent", "latched gear-change event use");
 requireText(byPath["renderer/audio.js"], "SNAPSHOT.collisionEvent", "latched collision event use");
 requireText(byPath["renderer/audio.js"], "SNAPSHOT.wheelOtherSurfaceContribution0", "mixed-surface audio use");
