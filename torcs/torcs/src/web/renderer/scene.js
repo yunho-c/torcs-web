@@ -338,7 +338,9 @@ export class TorcsScene {
 			this.carBox.visible = true;
 		}
 		for (const opponent of this.opponentCars) {
-			this.setOpponentVisual(opponent);
+			if (opponent) {
+				this.setOpponentVisual(opponent);
+			}
 		}
 	}
 
