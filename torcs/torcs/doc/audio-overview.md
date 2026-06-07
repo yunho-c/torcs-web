@@ -355,6 +355,117 @@ API itself; it is the data model and source budgeting:
   `CarSoundData`, so a port that reads the same state later must define who owns
   those one-shot events.
 
+## Web Port Implementation Plan
+
+The web version should not port OpenAL, PLIB, or the full `ssggraph` audio
+module. The better target is a browser-native Web Audio system that preserves
+the TORCS sound model: `CarSoundData` formulas, source budgeting, and
+snapshot-driven updates.
+
+### 1. Add Audio Assets to the Web Manifest
+
+Extend `tools/web-assets/convert_torcs_assets.py` so the browser asset bundle
+includes the sound files needed by the selected cars and global race effects:
+
+- Copy each car's XML `Sound/engine sample`, with the same lookup behavior as
+  native TORCS: prefer `cars/<car-name>/<sample>`, then fall back to
+  `data/sound/<sample>`.
+- Copy global effect samples from `data/data/sound`: tire skid, road ride,
+  grass/dirt ride, curb ride, metal skid, turbo, axle, backfire, crash variants,
+  suspension bang, bottom crash, and gear change.
+- Optionally copy `data/data/music/torcs1.ogg` for browser menu music, keeping it
+  separate from race audio.
+- Add manifest metadata for car engine sample, RPM scale, turbo settings, global
+  effect samples, and optional menu music.
+- Update `validate_assets.py` and renderer smoke checks so missing referenced
+  audio files fail early.
+
+### 2. Extend the WASM Snapshot for Audio
+
+The current web snapshot already exports several useful audio inputs: RPM,
+redline, gear, controls, wheel slip, wheel skid intensity, wheel positions,
+collision, and damage. Add the remaining values needed to reproduce
+`CarSoundData` without exposing native pointers:
+
+- Car velocity vector.
+- Current gear ratio.
+- Wheel reaction/load values.
+- Wheel surface class, at least road, dirt/grass, curb, and other.
+- Surface roughness and rough-wave length, or a precomputed roughness frequency.
+- Other-surface contribution and other-surface class when a tire overlaps a
+  neighboring surface.
+- Smoke/backfire intensity.
+- Latched collision event bits or counters so one-shots are not missed between
+  browser frames.
+
+Bump the snapshot version and update `renderer/runtime.js`, `smoke_probe.js`,
+and renderer smoke assertions together with the C++ snapshot layout.
+
+### 3. Create a Browser Audio Runtime
+
+Add a focused `src/web/renderer/audio.js` module built on Web Audio:
+
+| Class | Responsibility |
+| --- | --- |
+| `TorcsAudio` | Own `AudioContext`, master gain, lifecycle, user-unlock state, listener updates, and per-frame audio update. |
+| `AudioAssets` | Load and decode manifest audio with `fetch()` and `decodeAudioData()`. |
+| `CarAudioModel` | JavaScript port of the `CarSoundData` pitch, volume, filter, surface, turbo, axle, skid, and event calculations. |
+| `AudioSourcePool` | Browser equivalent of `SoundInterface` source budgeting and category arbitration. |
+
+Use `AudioBufferSourceNode` for looping and one-shot samples, `GainNode` for
+volume, optional `BiquadFilterNode` for low-pass-like behavior, and `PannerNode`
+for car, wheel, and event positions. Keep audio state snapshot-driven, just like
+the renderer.
+
+### 4. Port Behavior in Small Layers
+
+Implement the audio behavior incrementally:
+
+1. Engine loop only: pitch from `rpmScale * engineRpm / 600`, volume/filter from
+   accelerator and redline ratio, and panning from car position.
+2. One-shots: gear change, crash variants, suspension bang, and bottom crash.
+3. Continuous shared loops: tire skid, road ride, grass/dirt ride, curb ride,
+   and metal skid.
+4. Turbo, axle, and backfire loop.
+5. Optional menu music as a separate browser audio path.
+
+Preserve native source budgeting where it matters:
+
+- Cap active engine loops.
+- Pick the loudest car for shared loop categories.
+- Pick the loudest contributing car per wheel index for tire skid.
+- Fire one-shot sounds from explicit latched events, not from continuously true
+  state.
+
+### 5. Wire Audio into the Renderer
+
+Integrate audio from `renderer/main.js`:
+
+- Initialize or resume `AudioContext` only after a user gesture, because
+  browsers block autoplay.
+- Load audio assets alongside the visual manifest.
+- On every simulation/render tick, read the snapshot, update the listener from
+  the active Three.js camera, and call `audio.update(snapshot, camera, dt)`.
+- Add minimal UI controls for mute, volume, and status: locked, loading, active,
+  and error.
+
+### 6. Test and Acceptance Criteria
+
+Add smoke and browser checks:
+
+- Manifest contains audio metadata for the loaded car and required global
+  effects.
+- Referenced audio files exist and are nonempty.
+- Snapshot version and required audio fields are present.
+- `audio.js` exposes the expected lifecycle and update APIs.
+- In a browser, engine audio starts only after user interaction, RPM pitch rises
+  under acceleration, gear-change sound fires once per shift, skid appears under
+  meaningful slip, and crash sounds do not repeat every frame.
+
+The first complete web-audio milestone is a one-car E-Track 1 run where engine
+pitch/volume, gear-change, skid, and collision audio are synchronized with the
+rendered car and recognizably match TORCS' native behavior.
+
 ## Known Quirks and Caveats
 
 - Race sound is tied to the graphics module lifecycle, so headless races do not

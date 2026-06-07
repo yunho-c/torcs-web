@@ -59,6 +59,14 @@ const SNAPSHOT = {
 	collision: 114,
 	damage: 115,
 	wheelSkidIntensity0: 116,
+	wheelSurfaceKind0: 120,
+	wheelReaction0: 124,
+	engineSmoke: 128,
+	exhaustCount: 129,
+	exhaustPower: 130,
+	exhaustX0: 131,
+	exhaustY0: 133,
+	exhaustZ0: 135,
 };
 
 function readSnapshot(module) {
@@ -315,10 +323,10 @@ createModule()
 			runtime.trackWidth <= 0 ||
 			runtime.trackSegments <= 0 ||
 			runtime.trackSamples !== runtime.trackSegments * 12 ||
-			runtime.snapshot.version !== 3 ||
-			runtime.snapshot.size !== 120 * 8 ||
+			runtime.snapshot.version !== 4 ||
+			runtime.snapshot.size !== 137 * 8 ||
 			runtime.snapshot.write !== 0 ||
-			runtime.snapshot.values.length !== 120 ||
+			runtime.snapshot.values.length !== 137 ||
 			Math.abs(runtime.snapshot.values[SNAPSHOT.time] - runtime.time) > 0.000001 ||
 			Math.abs(runtime.snapshot.values[SNAPSHOT.x] - runtime.x) > 0.000001 ||
 			Math.abs(runtime.snapshot.values[SNAPSHOT.y] - runtime.y) > 0.000001 ||
@@ -364,6 +372,14 @@ createModule()
 			runtime.snapshot.values[SNAPSHOT.collision] < 0 ||
 			runtime.snapshot.values[SNAPSHOT.damage] < 0 ||
 			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.wheelSkidIntensity0]) ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.wheelSurfaceKind0]) ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.wheelReaction0]) ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.engineSmoke]) ||
+			runtime.snapshot.values[SNAPSHOT.exhaustCount] < 0 ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.exhaustPower]) ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.exhaustX0]) ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.exhaustY0]) ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.exhaustZ0]) ||
 			!Number.isFinite(runtime.trackCenterX) ||
 			!Number.isFinite(runtime.trackCenterY) ||
 			!Number.isFinite(runtime.trackRightX) ||

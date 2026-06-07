@@ -44,8 +44,8 @@ extern "C" int simuv2(tModInfo *modInfo);
 
 #define TORCS_WEB_SIM_IDENT 0
 #define TORCS_WEB_TRACK_SAMPLES_PER_SEG 12
-#define TORCS_WEB_RUNTIME_SNAPSHOT_VERSION 3
-#define TORCS_WEB_RUNTIME_SNAPSHOT_DOUBLE_COUNT 120
+#define TORCS_WEB_RUNTIME_SNAPSHOT_VERSION 4
+#define TORCS_WEB_RUNTIME_SNAPSHOT_DOUBLE_COUNT 137
 
 enum TorcsWebRuntimeSnapshotField {
 	TORCS_WEB_SNAPSHOT_TIME = 0,
@@ -107,7 +107,15 @@ enum TorcsWebRuntimeSnapshotField {
 	TORCS_WEB_SNAPSHOT_LIGHT_COMMAND,
 	TORCS_WEB_SNAPSHOT_COLLISION,
 	TORCS_WEB_SNAPSHOT_DAMAGE,
-	TORCS_WEB_SNAPSHOT_WHEEL_SKID_0
+	TORCS_WEB_SNAPSHOT_WHEEL_SKID_0,
+	TORCS_WEB_SNAPSHOT_WHEEL_SURFACE_0 = 120,
+	TORCS_WEB_SNAPSHOT_WHEEL_REACTION_0 = 124,
+	TORCS_WEB_SNAPSHOT_ENGINE_SMOKE = 128,
+	TORCS_WEB_SNAPSHOT_EXHAUST_COUNT,
+	TORCS_WEB_SNAPSHOT_EXHAUST_POWER,
+	TORCS_WEB_SNAPSHOT_EXHAUST_X_0,
+	TORCS_WEB_SNAPSHOT_EXHAUST_Y_0 = 133,
+	TORCS_WEB_SNAPSHOT_EXHAUST_Z_0 = 135
 };
 
 struct CarElt;
@@ -289,6 +297,57 @@ clampControl(tdble value, tdble minValue, tdble maxValue)
 		return maxValue;
 	}
 	return value;
+}
+
+static int
+getSurfaceEffectKind(const tTrackSeg *seg)
+{
+	const char *material;
+
+	if (!seg || !seg->surface || !seg->surface->material) {
+		return 0;
+	}
+
+	material = seg->surface->material;
+	if (strstr(material, "sand")) {
+		return 1;
+	}
+	if (strstr(material, "dirt")) {
+		return 2;
+	}
+	if (strstr(material, "mud")) {
+		return 3;
+	}
+	if (strstr(material, "gravel")) {
+		return 4;
+	}
+	if (strstr(material, "grass")) {
+		return 5;
+	}
+	return 0;
+}
+
+static void
+loadCarVisualAttributes(tCarElt *car, void *handle)
+{
+	int i;
+	char path[64];
+
+	if (!car || !handle) {
+		return;
+	}
+
+	car->_exhaustNb = GfParmGetEltNb(handle, SECT_EXHAUST);
+	if (car->_exhaustNb > 2) {
+		car->_exhaustNb = 2;
+	}
+	car->_exhaustPower = GfParmGetNum(handle, SECT_EXHAUST, PRM_POWER, NULL, 1.0f);
+	for (i = 0; i < car->_exhaustNb; i++) {
+		snprintf(path, sizeof(path), "%s/%d", SECT_EXHAUST, i + 1);
+		car->_exhaustPos[i].x = GfParmGetNum(handle, path, PRM_XPOS, NULL, -car->_dimension_x / 2.0f);
+		car->_exhaustPos[i].y = -GfParmGetNum(handle, path, PRM_YPOS, NULL, car->_dimension_y / 2.0f);
+		car->_exhaustPos[i].z = GfParmGetNum(handle, path, PRM_ZPOS, NULL, 0.1f);
+	}
 }
 
 static tdble
@@ -503,11 +562,21 @@ writeRuntimeSnapshotValues(double *values)
 		values[TORCS_WEB_SNAPSHOT_WHEEL_RADIUS_0 + i] = Runtime.car._wheelRadius(i);
 		values[TORCS_WEB_SNAPSHOT_WHEEL_WIDTH_0 + i] = Runtime.car._tireWidth(i);
 		values[TORCS_WEB_SNAPSHOT_WHEEL_SKID_0 + i] = Runtime.car._skid[i];
+		values[TORCS_WEB_SNAPSHOT_WHEEL_SURFACE_0 + i] = getSurfaceEffectKind(Runtime.car.priv.wheel[i].seg);
+		values[TORCS_WEB_SNAPSHOT_WHEEL_REACTION_0 + i] = Runtime.car._reaction[i];
 	}
 	values[TORCS_WEB_SNAPSHOT_CAR_STEER_LOCK] = Runtime.car._steerLock;
 	values[TORCS_WEB_SNAPSHOT_LIGHT_COMMAND] = Runtime.car._lightCmd;
 	values[TORCS_WEB_SNAPSHOT_COLLISION] = Runtime.car.priv.simcollision;
 	values[TORCS_WEB_SNAPSHOT_DAMAGE] = Runtime.car._dammage;
+	values[TORCS_WEB_SNAPSHOT_ENGINE_SMOKE] = Runtime.car.priv.smoke;
+	values[TORCS_WEB_SNAPSHOT_EXHAUST_COUNT] = Runtime.car._exhaustNb;
+	values[TORCS_WEB_SNAPSHOT_EXHAUST_POWER] = Runtime.car._exhaustPower;
+	for (i = 0; i < 2; i++) {
+		values[TORCS_WEB_SNAPSHOT_EXHAUST_X_0 + i] = Runtime.car._exhaustPos[i].x;
+		values[TORCS_WEB_SNAPSHOT_EXHAUST_Y_0 + i] = Runtime.car._exhaustPos[i].y;
+		values[TORCS_WEB_SNAPSHOT_EXHAUST_Z_0 + i] = Runtime.car._exhaustPos[i].z;
+	}
 
 	values[TORCS_WEB_SNAPSHOT_TRACK_LENGTH] = Runtime.trackData ? Runtime.trackData->length : 0.0;
 	values[TORCS_WEB_SNAPSHOT_TRACK_WIDTH] = Runtime.trackData ? Runtime.trackData->width : 0.0;
@@ -940,6 +1009,7 @@ torcs_web_runtime_start_with_files(const char *trackFile, const char *carFile)
 	Runtime.simItf.init(1, Runtime.trackData, 1.0f, 1.0f, 1.0f);
 	Runtime.simStarted = 1;
 	Runtime.simItf.config(&(Runtime.car), &(Runtime.reInfo));
+	loadCarVisualAttributes(&(Runtime.car), Runtime.carHandle);
 	Runtime.car.ctrl.gear = 0;
 	Runtime.car.ctrl.accelCmd = 0.0f;
 	Runtime.car.ctrl.brakeCmd = 0.0f;

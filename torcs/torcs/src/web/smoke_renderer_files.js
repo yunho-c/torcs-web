@@ -243,6 +243,9 @@ requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_write_snapshot", "
 requireText(byPath["renderer/runtime.js"], "export const SNAPSHOT", "snapshot layout export");
 requireText(byPath["renderer/runtime.js"], "export class TorcsRuntime", "runtime adapter export");
 requireText(byPath["renderer/runtime.js"], "wheelSkidIntensity0: 116", "Phase 4 skid snapshot field");
+requireText(byPath["renderer/runtime.js"], "wheelSurfaceKind0: 120", "Phase 5 wheel surface snapshot field");
+requireText(byPath["renderer/runtime.js"], "wheelReaction0: 124", "Phase 5 wheel reaction snapshot field");
+requireText(byPath["renderer/runtime.js"], "exhaustCount: 129", "Phase 5 exhaust snapshot field");
 requireText(byPath["renderer/runtime.js"], "lightCommand: 113", "Phase 4 light snapshot field");
 requireText(byPath["renderer/runtime.js"], "collision: 114", "Phase 4 collision snapshot field");
 
@@ -304,6 +307,11 @@ requireText(byPath["renderer/effects.js"], "updateLights(values, car)", "head re
 requireText(byPath["renderer/effects.js"], "updateCollision(values, car, time)", "collision feedback hook");
 requireText(byPath["renderer/effects.js"], "resetDynamics()", "dynamic effect lifecycle reset");
 requireText(byPath["renderer/effects.js"], "SNAPSHOT.wheelSkidIntensity0", "skid snapshot field use");
+requireText(byPath["renderer/effects.js"], "SNAPSHOT.wheelSurfaceKind0", "surface-aware effect use");
+requireText(byPath["renderer/effects.js"], "SNAPSHOT.wheelReaction0", "reaction-aware smoke use");
+requireText(byPath["renderer/effects.js"], "SNAPSHOT.exhaustCount", "native exhaust metadata use");
+requireText(byPath["renderer/effects.js"], "this.previousEngineLevel - engineLevel", "native RPM-drop fire trigger");
+requireText(byPath["renderer/effects.js"], "textures[\"grey-tracks.rgb\"]", "native skid texture use");
 requireText(byPath["renderer/effects.js"], "SNAPSHOT.lightCommand", "light snapshot field use");
 requireText(byPath["renderer/effects.js"], "SNAPSHOT.collision", "collision snapshot field use");
 requireText(byPath["renderer/effects.js"], "makeRadialTexture", "effect texture fallback");

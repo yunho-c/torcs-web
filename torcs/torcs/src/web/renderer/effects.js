@@ -4,13 +4,25 @@ import { SNAPSHOT } from "./runtime.js";
 const WHEEL_COUNT = 4;
 const ROAD_EFFECT_Y = 0.075;
 const MAX_SKID_SEGMENTS = 220;
-const SKID_MIN_INTENSITY = 0.12;
+const MAX_SMOKE_PARTICLES = 300;
+const SKID_INTERVAL = 0.05;
 const SKID_MIN_DISTANCE = 0.18;
-const SMOKE_MIN_INTENSITY = 0.16;
-const SMOKE_LIFE = 1.6;
-const FIRE_LIFE = 0.16;
+const SMOKE_INTERVAL = 0.01;
+const SMOKE_LIFE = 2.0;
+const FIRE_INTERVAL = SMOKE_INTERVAL * 8;
+const FIRE_LIFE = SMOKE_LIFE / 8;
+const FIRE_STEP0_LIFE = SMOKE_LIFE / 50;
 const COLLISION_FLASH_LIFE = 0.45;
 const HEAD_LIGHT_MASK = 0x00000003;
+
+const SURFACE_EFFECTS = [
+	{ color: [0, 0, 0], smoke: [0.8, 0.8, 0.8], sensitivity: 0.5, threshold: 0.1, initSpeed: 0.01, lifeCoefficient: 30, speedCoefficient: 0, slingMud: 0 },
+	{ color: [0.8, 0.6, 0.35], smoke: [0.8, 0.74, 0.5], sensitivity: 0.9, threshold: 0.05, initSpeed: 0.5, lifeCoefficient: 12.5, speedCoefficient: 0.25, slingMud: 1 },
+	{ color: [0.7, 0.55, 0.45], smoke: [0.76, 0.66, 0.56], sensitivity: 0.9, threshold: 0, initSpeed: 0.45, lifeCoefficient: 10, speedCoefficient: 0.5, slingMud: 1 },
+	{ color: [0.5, 0.35, 0.15], smoke: [0.65, 0.5, 0.4], sensitivity: 1, threshold: 0.2, initSpeed: 0.4, lifeCoefficient: 30, speedCoefficient: 0.05, slingMud: 1 },
+	{ color: [0.6, 0.6, 0.6], smoke: [0.6, 0.6, 0.6], sensitivity: 0.7, threshold: 0.1, initSpeed: 0.35, lifeCoefficient: 20, speedCoefficient: 0.1, slingMud: 1 },
+	{ color: [0.75, 0.5, 0.3], smoke: [0.5, 0.55, 0.35], sensitivity: 0.8, threshold: 0.1, initSpeed: 0.3, lifeCoefficient: 25, speedCoefficient: 0, slingMud: 1 },
+];
 
 const tempVector = new THREE.Vector3();
 const tempVector2 = new THREE.Vector3();
@@ -59,13 +71,27 @@ function getWheelLocal(values, index, yOffset = 0) {
 }
 
 function getWheelSkidIntensity(values, index) {
-	const explicitSkid = values[SNAPSHOT.wheelSkidIntensity0 + index];
-	if (Number.isFinite(explicitSkid) && explicitSkid > 0) {
-		return clamp01(Math.tanh(explicitSkid * 0.7));
+	const rawSkid = getRawWheelSkid(values, index);
+	if (rawSkid > 0) {
+		return clamp01(Math.tanh(getSurfaceEffect(values, index).sensitivity * rawSkid));
 	}
 	const slipAccel = Math.abs(values[SNAPSHOT.wheelSlipAccel0 + index] || 0);
 	const slipSide = Math.abs(values[SNAPSHOT.wheelSlipSide0 + index] || 0);
 	return clamp01(slipAccel * 0.08 + slipSide * 0.035);
+}
+
+function getRawWheelSkid(values, index) {
+	const explicitSkid = values[SNAPSHOT.wheelSkidIntensity0 + index];
+	return Number.isFinite(explicitSkid) ? Math.max(0, explicitSkid) : 0;
+}
+
+function getSurfaceEffect(values, index) {
+	const kind = Math.trunc(values[SNAPSHOT.wheelSurfaceKind0 + index] || 0);
+	return SURFACE_EFFECTS[kind] || SURFACE_EFFECTS[0];
+}
+
+function makeColor(rgb) {
+	return new THREE.Color(rgb[0], rgb[1], rgb[2]);
 }
 
 function worldFromCarLocal(car, local, target = new THREE.Vector3()) {
@@ -83,6 +109,7 @@ export class TorcsEffects {
 			rearlight: makeRadialTexture("rgba(255,45,28,0.88)", "rgba(255,0,0,0)"),
 			brakelight: makeRadialTexture("rgba(255,58,35,0.95)", "rgba(255,0,0,0)"),
 			shadow: null,
+			skid: null,
 		};
 		this.shadow = this.createShadow();
 		this.skidMarks = this.createSkidMarks();
@@ -92,8 +119,13 @@ export class TorcsEffects {
 		this.fireParticles = [];
 		this.lastWheelPoints = Array.from({ length: WHEEL_COUNT }, () => null);
 		this.lastSmokeTime = Array.from({ length: WHEEL_COUNT }, () => 0);
+		this.lastSkidTime = Array.from({ length: WHEEL_COUNT }, () => 0);
+		this.smoothSkidColors = Array.from({ length: WHEEL_COUNT }, () => new THREE.Color(0, 0, 0));
 		this.skidSegments = [];
 		this.lastTime = 0;
+		this.previousEngineLevel = null;
+		this.fireCount = 0;
+		this.lastFireTime = 0;
 		this.previousDamage = 0;
 		this.collisionUntil = 0;
 	}
@@ -106,6 +138,9 @@ export class TorcsEffects {
 		this.textures.frontlight = textures["frontlight1.rgb"] || textures["frontlight2.rgb"] || this.textures.frontlight;
 		this.textures.rearlight = textures["rearlight1.rgb"] || textures["rearlight2.rgb"] || this.textures.rearlight;
 		this.textures.brakelight = textures["breaklight1.rgb"] || textures["breaklight2.rgb"] || this.textures.brakelight;
+		this.textures.skid = textures["grey-tracks.rgb"] || this.textures.skid;
+		this.skidMarks.material.map = this.textures.skid;
+		this.skidMarks.material.needsUpdate = true;
 		this.refreshSpriteTextures();
 	}
 
@@ -130,8 +165,13 @@ export class TorcsEffects {
 		this.fireParticles = [];
 		this.lastWheelPoints = Array.from({ length: WHEEL_COUNT }, () => null);
 		this.lastSmokeTime = Array.from({ length: WHEEL_COUNT }, () => 0);
+		this.lastSkidTime = Array.from({ length: WHEEL_COUNT }, () => 0);
+		this.smoothSkidColors = Array.from({ length: WHEEL_COUNT }, () => new THREE.Color(0, 0, 0));
 		this.skidSegments = [];
 		this.lastTime = 0;
+		this.previousEngineLevel = null;
+		this.fireCount = 0;
+		this.lastFireTime = 0;
 		this.previousDamage = 0;
 		this.collisionUntil = 0;
 		this.collisionFlash.material.opacity = 0;
@@ -163,6 +203,7 @@ export class TorcsEffects {
 			geometry,
 			new THREE.MeshBasicMaterial({
 				vertexColors: true,
+				map: this.textures.skid,
 				transparent: true,
 				opacity: 0.72,
 				depthWrite: false,
@@ -256,23 +297,33 @@ export class TorcsEffects {
 	updateSkidMarks(values, car) {
 		const speed = Math.abs(values[SNAPSHOT.speed] || 0);
 		for (let index = 0; index < WHEEL_COUNT; index += 1) {
-			const intensity = getWheelSkidIntensity(values, index);
+			const rawSkid = getRawWheelSkid(values, index);
+			const surface = getSurfaceEffect(values, index);
+			const intensity = rawSkid > 0.1 ? Math.tanh(surface.sensitivity * rawSkid) : 0;
 			const wheelWidth = Math.max(0.08, values[SNAPSHOT.wheelWidth0 + index] || 0.2);
-			const local = getWheelLocal(values, index, -Math.max(0.02, values[SNAPSHOT.wheelRadius0 + index] || 0.3));
-			const left = worldFromCarLocal(car, local.clone().add(new THREE.Vector3(0, 0, -wheelWidth * 0.46)));
-			const right = worldFromCarLocal(car, local.clone().add(new THREE.Vector3(0, 0, wheelWidth * 0.46)));
+			const tireHeight = Math.max(0.02, values[SNAPSHOT.wheelRadius0 + index] - wheelWidth * 0.5 || 0.12);
+			const local = getWheelLocal(values, index, -Math.max(0.02, values[SNAPSHOT.wheelRadius0 + index] * 0.95 || 0.3));
+			local.x -= tireHeight;
+			const sling = surface.slingMud;
+			const leftOffset = speed > 0 ? (-sling - 1) * wheelWidth * 0.5 : (sling + 1) * wheelWidth * 0.5;
+			const rightOffset = speed > 0 ? (sling + 1) * wheelWidth * 0.5 : (-sling - 1) * wheelWidth * 0.5;
+			const left = worldFromCarLocal(car, local.clone().add(new THREE.Vector3(0, 0, leftOffset)));
+			const right = worldFromCarLocal(car, local.clone().add(new THREE.Vector3(0, 0, rightOffset)));
 			left.y = ROAD_EFFECT_Y;
 			right.y = ROAD_EFFECT_Y;
 
 			const last = this.lastWheelPoints[index];
-			if (speed > 1 && intensity > SKID_MIN_INTENSITY && last &&
+			this.smoothSkidColors[index].lerp(makeColor(surface.color), 0.1);
+			if (speed > 1 && intensity > 0.1 && timeSince(this.lastSkidTime[index], values[SNAPSHOT.time]) >= SKID_INTERVAL && last &&
 				last.center.distanceTo(left.clone().add(right).multiplyScalar(0.5)) > SKID_MIN_DISTANCE) {
+				this.lastSkidTime[index] = values[SNAPSHOT.time];
 				this.skidSegments.push({
 					left0: last.left.clone(),
 					right0: last.right.clone(),
 					left1: left.clone(),
 					right1: right.clone(),
 					alpha: clamp01(intensity),
+					color: this.smoothSkidColors[index].clone(),
 				});
 				if (this.skidSegments.length > MAX_SKID_SEGMENTS) {
 					this.skidSegments.splice(0, this.skidSegments.length - MAX_SKID_SEGMENTS);
@@ -294,7 +345,7 @@ export class TorcsEffects {
 			const alpha = segment.alpha * 0.72;
 			for (const point of [segment.left0, segment.right0, segment.left1, segment.right0, segment.right1, segment.left1]) {
 				positions.push(point.x, point.y, point.z);
-				colors.push(0.03, 0.025, 0.02, alpha);
+				colors.push(segment.color.r, segment.color.g, segment.color.b, alpha);
 			}
 		}
 		this.skidMarks.geometry.dispose();
@@ -306,27 +357,35 @@ export class TorcsEffects {
 	updateSmoke(values, car, time, deltaTime) {
 		const speed = Math.abs(values[SNAPSHOT.speed] || 0);
 		for (let index = 0; index < WHEEL_COUNT; index += 1) {
-			const intensity = getWheelSkidIntensity(values, index);
-			if (speed < 1 || intensity < SMOKE_MIN_INTENSITY || time - this.lastSmokeTime[index] < 0.08) {
+			const rawSkid = getRawWheelSkid(values, index);
+			const surface = getSurfaceEffect(values, index);
+			const reaction = Math.max(0, values[SNAPSHOT.wheelReaction0 + index] || 0);
+			const spdFx = Math.tanh(0.001 * reaction) * surface.speedCoefficient * speed;
+			const emit = rawSkid + 0.025 * Math.random() * spdFx > Math.random() + surface.threshold;
+			if (speed < 0.03 || !emit || time - this.lastSmokeTime[index] < SMOKE_INTERVAL || this.smokeParticles.length >= MAX_SMOKE_PARTICLES) {
 				continue;
 			}
+			const intensity = getWheelSkidIntensity(values, index);
 			const radius = Math.max(0.08, values[SNAPSHOT.wheelRadius0 + index] || 0.3);
-			const world = worldFromCarLocal(car, getWheelLocal(values, index, -radius * 0.65));
+			const world = worldFromCarLocal(car, getWheelLocal(values, index, -radius + 0.1));
 			world.y = Math.max(world.y + 0.16, ROAD_EFFECT_Y + 0.16);
-			const sprite = new THREE.Sprite(makeSpriteMaterial(this.textures.smoke, 0xded8cc, 0.42));
-			const size = 0.65 + intensity * 1.4;
+			const color = makeColor(surface.smoke);
+			const sprite = new THREE.Sprite(makeSpriteMaterial(this.textures.smoke, color, 0.42));
+			const size = 0.2 + 0.1 * spdFx + intensity * 1.4;
 			sprite.scale.set(size, size, 1);
 			sprite.position.copy(world);
 			const sideSlip = values[SNAPSHOT.wheelSlipSide0 + index] || 0;
 			const accelSlip = values[SNAPSHOT.wheelSlipAccel0 + index] || 0;
+			const lifeRand = 1 - Math.random() * Math.random();
+			const life = Math.max(0.08, SMOKE_LIFE * (rawSkid * speed + Math.random() * spdFx) / Math.max(1, surface.lifeCoefficient * lifeRand));
 			this.smokeParticles.push({
 				sprite,
 				age: 0,
-				life: SMOKE_LIFE * (0.65 + intensity),
+				life,
 				velocity: new THREE.Vector3(
-					-accelSlip * 0.035,
-					0.32 + intensity * 0.22,
-					sideSlip * 0.035,
+					-accelSlip * surface.initSpeed * 0.08,
+					0.1 + Math.random() * surface.initSpeed,
+					sideSlip * surface.initSpeed * 0.08,
 				).multiplyScalar(deltaTime * 60),
 			});
 			this.groups.smoke.add(sprite);
@@ -335,30 +394,44 @@ export class TorcsEffects {
 	}
 
 	updateFire(values, car, time, deltaTime) {
-		const throttle = clamp01(values[SNAPSHOT.controlAccel] || 0);
-		const rpm = values[SNAPSHOT.engineRpm] || 0;
-		const redline = Math.max(1, values[SNAPSHOT.engineRedline] || 1);
-		if (throttle < 0.85 || rpm / redline < 0.55 || time % 0.22 > 0.04) {
+		const exhaustCount = Math.min(2, Math.max(0, Math.trunc(values[SNAPSHOT.exhaustCount] || 0)));
+		if (exhaustCount <= 0 || Math.abs(values[SNAPSHOT.speed] || 0) <= 3 || time - this.lastFireTime <= FIRE_INTERVAL) {
 			return;
 		}
-		const local = new THREE.Vector3(
-			-Math.max(0.6, values[SNAPSHOT.dimensionX] * 0.52),
-			Math.max(0.22, values[SNAPSHOT.dimensionZ] * 0.22),
-			-Math.max(0.2, values[SNAPSHOT.dimensionY] * 0.24),
-		);
-		const world = worldFromCarLocal(car, local);
-		const kind = this.fireParticles.length % 2;
-		const sprite = new THREE.Sprite(makeSpriteMaterial(kind === 0 ? this.textures.fire0 : this.textures.fire1, 0xffb24a, 0.85, true));
-		sprite.position.copy(world);
-		sprite.scale.set(0.5, 0.34, 1);
-		this.fireParticles.push({
-			sprite,
-			kind,
-			age: 0,
-			life: FIRE_LIFE,
-			velocity: tempVector.copy(world).sub(car.position).normalize().multiplyScalar(0.035 * deltaTime * 60),
-		});
-		this.groups.smoke.add(sprite);
+		const rpm = Math.max(0, values[SNAPSHOT.engineRpm] || 0);
+		const redline = Math.max(1, values[SNAPSHOT.engineRedline] || 1);
+		const engineLevel = rpm / redline;
+		if (this.previousEngineLevel !== null) {
+			const drop = this.previousEngineLevel - engineLevel;
+			if (drop > 0.1) {
+				this.fireCount = Math.max(this.fireCount, Math.trunc(10 * drop * Math.max(0.1, values[SNAPSHOT.exhaustPower] || 1)));
+			}
+		}
+		this.previousEngineLevel = engineLevel;
+		this.lastFireTime = time;
+		if (this.fireCount <= 0) {
+			return;
+		}
+		this.fireCount -= 1;
+		for (let index = 0; index < exhaustCount; index += 1) {
+			const local = torcsToThree(
+				values[SNAPSHOT.exhaustX0 + index],
+				values[SNAPSHOT.exhaustY0 + index],
+				values[SNAPSHOT.exhaustZ0 + index],
+			);
+			const world = worldFromCarLocal(car, local);
+			const sprite = new THREE.Sprite(makeSpriteMaterial(this.textures.fire0, 0xffb24a, 0.85, true));
+			sprite.position.copy(world);
+			sprite.scale.set(0.8, 0.8, 1);
+			this.fireParticles.push({
+				sprite,
+				kind: 0,
+				age: 0,
+				life: FIRE_LIFE,
+				velocity: tempVector.copy(world).sub(car.position).normalize().multiplyScalar(0.035 * deltaTime * 60),
+			});
+			this.groups.smoke.add(sprite);
+		}
 	}
 
 	updateLights(values, car) {
@@ -411,6 +484,11 @@ export class TorcsEffects {
 				continue;
 			}
 			const t = particle.age / particle.life;
+			if (particle.life === FIRE_LIFE && particle.kind === 0 && particle.age >= FIRE_STEP0_LIFE) {
+				particle.kind = 1;
+				particle.sprite.material.map = this.textures.fire1;
+				particle.sprite.material.needsUpdate = true;
+			}
 			particle.sprite.position.addScaledVector(particle.velocity, deltaTime * 60);
 			particle.sprite.material.opacity = (1 - t) * (particle.life <= FIRE_LIFE ? 0.9 : 0.42);
 			particle.sprite.scale.multiplyScalar(1 + deltaTime * (particle.life <= FIRE_LIFE ? 1.8 : 0.7));
@@ -419,4 +497,8 @@ export class TorcsEffects {
 			}
 		}
 	}
+}
+
+function timeSince(previous, now) {
+	return Number.isFinite(now) ? now - previous : Number.POSITIVE_INFINITY;
 }

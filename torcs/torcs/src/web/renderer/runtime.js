@@ -59,6 +59,14 @@ export const SNAPSHOT = {
 	collision: 114,
 	damage: 115,
 	wheelSkidIntensity0: 116,
+	wheelSurfaceKind0: 120,
+	wheelReaction0: 124,
+	engineSmoke: 128,
+	exhaustCount: 129,
+	exhaustPower: 130,
+	exhaustX0: 131,
+	exhaustY0: 133,
+	exhaustZ0: 135,
 };
 
 const TRACK_SIDE = {
