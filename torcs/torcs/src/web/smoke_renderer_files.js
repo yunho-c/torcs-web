@@ -389,6 +389,7 @@ async function checkTrackAlignment(trackAsset) {
 }
 
 const files = [
+	"../CMakeLists.txt",
 	"torcs_web_renderer.html",
 	"renderer/main.js",
 	"renderer/assets.js",
@@ -449,6 +450,12 @@ requireText(byPath["renderer/runtime.js"], "readSnapshots()", "Phase 6 multi-car
 requireText(byPath["renderer/runtime.js"], "Float64Array.from(values)", "Phase 6 copied per-car snapshot buffer");
 requireText(byPath["renderer/runtime.js"], "export const SNAPSHOT", "snapshot layout export");
 requireText(byPath["renderer/runtime.js"], "export class TorcsRuntime", "runtime adapter export");
+
+requireText(byPath["../CMakeLists.txt"], "'_torcs_web_runtime_start_multi_with_files'", "Phase 6 multi-car Emscripten export");
+requireText(byPath["../CMakeLists.txt"], "'_torcs_web_runtime_get_car_count'", "Phase 6 car-count Emscripten export");
+requireText(byPath["../CMakeLists.txt"], "'_torcs_web_runtime_get_car_name_by_index'", "Phase 6 car-name Emscripten export");
+requireText(byPath["../CMakeLists.txt"], "'_torcs_web_runtime_write_car_snapshot'", "Phase 6 per-car snapshot Emscripten export");
+
 requireText(byPath["renderer/runtime.js"], "wheelSkidIntensity0: 116", "Phase 4 skid snapshot field");
 requireText(byPath["renderer/runtime.js"], "wheelSurfaceKind0: 120", "Phase 5 wheel surface snapshot field");
 requireText(byPath["renderer/runtime.js"], "wheelReaction0: 124", "Phase 5 wheel reaction snapshot field");

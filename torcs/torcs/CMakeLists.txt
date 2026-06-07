@@ -148,6 +148,7 @@ if(EMSCRIPTEN)
 		"'_torcs_web_check_headless_sim_init'"
 		"'_torcs_web_check_headless_sim_update'"
 		"'_torcs_web_runtime_start'"
+		"'_torcs_web_runtime_start_multi_with_files'"
 		"'_torcs_web_runtime_start_with_files'"
 		"'_torcs_web_runtime_shutdown'"
 		"'_torcs_web_runtime_set_controls'"
@@ -196,6 +197,10 @@ if(EMSCRIPTEN)
 		"'_torcs_web_runtime_get_track_sample_y'"
 		"'_torcs_web_runtime_get_snapshot_version'"
 		"'_torcs_web_runtime_get_snapshot_size'"
+		"'_torcs_web_runtime_get_max_cars'"
+		"'_torcs_web_runtime_get_car_count'"
+		"'_torcs_web_runtime_get_car_name_by_index'"
+		"'_torcs_web_runtime_write_car_snapshot'"
 		"'_torcs_web_runtime_write_snapshot'"
 	)
 	list(JOIN TORCS_WEB_EXPORTED_FUNCTIONS "," TORCS_WEB_EXPORTED_FUNCTIONS_ARG)
