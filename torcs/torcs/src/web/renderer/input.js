@@ -3,6 +3,7 @@ export class InputController {
 		this.elements = elements;
 		this.onChange = onChange;
 		this.keys = new Set();
+		this.gamepadGearButtons = new Set();
 		this.bind();
 	}
 
@@ -18,6 +19,12 @@ export class InputController {
 
 	setValue(input, value) {
 		input.value = String(value);
+	}
+
+	setRangeValue(input, value) {
+		const min = Number(input.min);
+		const max = Number(input.max);
+		this.setValue(input, Math.max(min, Math.min(max, value)).toFixed(3));
 	}
 
 	changeGear(delta) {
@@ -37,6 +44,40 @@ export class InputController {
 		this.setValue(this.elements.accel, throttle ? 1 : 0);
 		this.setValue(this.elements.brake, brake ? 1 : 0);
 		this.onChange(this.getControls());
+	}
+
+	getGamepad() {
+		if (!navigator.getGamepads) {
+			return null;
+		}
+		return Array.from(navigator.getGamepads()).find((gamepad) => gamepad && gamepad.connected) || null;
+	}
+
+	updateGamepad() {
+		const gamepad = this.getGamepad();
+		if (!gamepad) {
+			return false;
+		}
+		const axis = (index) => Math.abs(gamepad.axes[index] || 0) > 0.08 ? gamepad.axes[index] : 0;
+		const button = (index) => gamepad.buttons[index] ? gamepad.buttons[index].value : 0;
+		const pressed = (index) => button(index) > 0.5;
+
+		this.setRangeValue(this.elements.steer, axis(0));
+		this.setRangeValue(this.elements.accel, button(7));
+		this.setRangeValue(this.elements.brake, button(6));
+
+		for (const [index, delta] of [[5, 1], [4, -1]]) {
+			if (pressed(index)) {
+				if (!this.gamepadGearButtons.has(index)) {
+					this.changeGear(delta);
+				}
+				this.gamepadGearButtons.add(index);
+			} else {
+				this.gamepadGearButtons.delete(index);
+			}
+		}
+		this.onChange(this.getControls());
+		return true;
 	}
 
 	handleKey(event, pressed) {

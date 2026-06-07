@@ -178,6 +178,33 @@
 			backdrop-filter: blur(8px);
 		}
 
+		.map-panel {
+			position: fixed;
+			right: 14px;
+			top: 96px;
+			width: min(260px, calc(100vw - 28px));
+			display: grid;
+			gap: 8px;
+			padding: 10px;
+			border: 1px solid var(--line);
+			background: var(--panel);
+			backdrop-filter: blur(8px);
+		}
+
+		.map-panel span {
+			color: var(--muted);
+			font-size: 0.7rem;
+			text-transform: uppercase;
+		}
+
+		#track-map {
+			width: 100%;
+			aspect-ratio: 1;
+			display: block;
+			border: 1px solid var(--line);
+			background: rgba(15, 18, 16, 0.76);
+		}
+
 		.metric {
 			min-height: 70px;
 			padding: 10px;
@@ -214,18 +241,42 @@
 			}
 
 			.controls {
-				bottom: 220px;
+				right: 14px;
+				bottom: 250px;
+				width: auto;
+			}
+
+			.controls > label,
+			.controls .assets,
+			.controls .audio-row {
+				display: none;
+			}
+
+			.map-panel {
+				top: 84px;
+				right: 14px;
+				width: 144px;
 			}
 
 			.hud {
 				left: 14px;
 				right: 14px;
 				width: auto;
-				grid-template-columns: repeat(2, minmax(0, 1fr));
+				grid-template-columns: repeat(4, minmax(0, 1fr));
+			}
+
+			.metric {
+				min-height: 56px;
+				padding: 7px;
+			}
+
+			.metric strong {
+				margin-top: 5px;
+				font-size: 0.92rem;
 			}
 
 			.metric:nth-child(2n) {
-				border-right: 0;
+				border-right: 1px solid var(--line);
 			}
 
 			.metric:nth-child(4n) {
@@ -297,12 +348,23 @@
 		</label>
 	</form>
 
+	<div class="map-panel">
+		<span>Track Map</span>
+		<canvas id="track-map"></canvas>
+	</div>
+
 	<div class="hud">
 		<div class="metric"><span>Time</span><strong id="time">0.000</strong></div>
 		<div class="metric"><span>Speed km/h</span><strong id="speed">0.0</strong></div>
 		<div class="metric"><span>Gear</span><strong id="gear">0</strong></div>
 		<div class="metric"><span>RPM</span><strong id="rpm">0</strong></div>
-		<div class="metric"><span>Lap</span><strong id="lap">0</strong></div>
+		<div class="metric"><span>Position</span><strong id="position">0</strong></div>
+		<div class="metric"><span>Fuel l</span><strong id="fuel">0.0</strong></div>
+		<div class="metric"><span>Lap</span><strong id="lap">0 / 0</strong></div>
+		<div class="metric"><span>Current</span><strong id="current-lap">--:--.---</strong></div>
+		<div class="metric"><span>Last</span><strong id="last-lap">--:--.---</strong></div>
+		<div class="metric"><span>Best</span><strong id="best-lap">--:--.---</strong></div>
+		<div class="metric"><span>Top km/h</span><strong id="top-speed">0.0</strong></div>
 		<div class="metric"><span>Progress %</span><strong id="progress">0.0</strong></div>
 		<div class="metric"><span>Segment</span><strong id="segment">0</strong></div>
 		<div class="metric"><span>Offset</span><strong id="offset">0.00</strong></div>

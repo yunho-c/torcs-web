@@ -28,10 +28,17 @@ const elements = {
 	speed: document.getElementById("speed"),
 	gear: document.getElementById("gear"),
 	rpm: document.getElementById("rpm"),
+	position: document.getElementById("position"),
+	fuel: document.getElementById("fuel"),
 	lap: document.getElementById("lap"),
+	currentLap: document.getElementById("current-lap"),
+	lastLap: document.getElementById("last-lap"),
+	bestLap: document.getElementById("best-lap"),
+	topSpeed: document.getElementById("top-speed"),
 	progress: document.getElementById("progress"),
 	segment: document.getElementById("segment"),
 	offset: document.getElementById("offset"),
+	map: document.getElementById("track-map"),
 };
 
 const hud = new Hud(elements);
@@ -85,6 +92,7 @@ function step(deltaTime = 1 / 60) {
 	if (!runtime || !runtime.active) {
 		return;
 	}
+	input.updateGamepad();
 	applyControls();
 	runtime.step(deltaTime);
 	readAndRender(deltaTime);
@@ -97,6 +105,7 @@ function animate(time) {
 
 	if (scene.resize()) {
 		cameras.updateProjection();
+		hud.resizeMap();
 	}
 	if (running) {
 		step(delta);
@@ -144,6 +153,7 @@ async function startSession() {
 	const trackSamples = runtime.readTrackSamples();
 	scene.setTrack(trackSamples);
 	cameras.setTrack(trackSamples);
+	hud.setTrack(trackSamples);
 	snapshot = runtime.readSnapshot();
 	cameras.update(snapshot);
 	scene.updateCar(snapshot, cameras.camera);
@@ -192,6 +202,7 @@ elements.camera.addEventListener("change", () => {
 window.addEventListener("resize", () => {
 	scene.resize();
 	cameras.updateProjection();
+	hud.resizeMap();
 	if (snapshot) {
 		readAndRender();
 	}

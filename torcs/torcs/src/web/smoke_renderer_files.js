@@ -162,6 +162,7 @@ async function importAudioModuleForSmoke() {
 \t},
 };`,
 		);
+		fs.writeFileSync(path.join(tempDir, "package.json"), "{\"type\":\"module\"}\n", "utf8");
 		fs.writeFileSync(path.join(rendererDir, "audio.js"), audioSource, "utf8");
 		fs.writeFileSync(path.join(rendererDir, "runtime.js"), byPath["renderer/runtime.js"].content, "utf8");
 		const tag = Date.now();
@@ -416,6 +417,10 @@ requireText(byPath["torcs_web_renderer.html"], "<option value=\"trackside\">Trac
 requireText(byPath["torcs_web_renderer.html"], "id=\"audio\"", "audio unlock button");
 requireText(byPath["torcs_web_renderer.html"], "id=\"volume\"", "audio volume slider");
 requireText(byPath["torcs_web_renderer.html"], "id=\"audio-state\"", "audio status readout");
+requireText(byPath["torcs_web_renderer.html"], "id=\"track-map\"", "Phase 5 track map canvas");
+for (const id of ["position", "fuel", "current-lap", "last-lap", "best-lap", "top-speed"]) {
+	requireText(byPath["torcs_web_renderer.html"], `id="${id}"`, `Phase 5 HUD field ${id}`);
+}
 
 requireText(byPath["renderer/assets.js"], "GLTFLoader", "GLTF loader import");
 requireText(byPath["renderer/assets.js"], "TextureLoader", "texture loader import");
@@ -463,6 +468,20 @@ requireText(byPath["renderer/main.js"], "assets.loadEffects()", "effect texture 
 requireText(byPath["renderer/main.js"], "scene.setEffectTextures(effects ? effects.textures : null)", "effect texture scene handoff");
 requireText(byPath["renderer/main.js"], "audio.update(snapshot, cameras.camera, deltaTime)", "snapshot-driven audio update");
 requireText(byPath["renderer/main.js"], "audio.enable(elements.car.value)", "user-gesture audio unlock");
+requireText(byPath["renderer/main.js"], "hud.setTrack(trackSamples)", "Phase 5 HUD track-map handoff");
+requireText(byPath["renderer/main.js"], "input.updateGamepad()", "Phase 5 gamepad polling");
+
+requireText(byPath["renderer/hud.js"], "fmtTime(value)", "Phase 5 lap time formatting");
+requireText(byPath["renderer/hud.js"], "setTrack(track)", "Phase 5 track map setup");
+requireText(byPath["renderer/hud.js"], "drawMap(values)", "Phase 5 track map rendering");
+requireText(byPath["renderer/hud.js"], "SNAPSHOT.fuel", "Phase 5 fuel HUD snapshot field");
+requireText(byPath["renderer/hud.js"], "SNAPSHOT.currentLapTime", "Phase 5 current lap HUD snapshot field");
+requireText(byPath["renderer/hud.js"], "SNAPSHOT.racePosition", "Phase 5 race position HUD snapshot field");
+
+requireText(byPath["renderer/input.js"], "navigator.getGamepads", "Phase 5 browser gamepad API");
+requireText(byPath["renderer/input.js"], "updateGamepad()", "Phase 5 gamepad control update");
+requireText(byPath["renderer/input.js"], "this.setRangeValue(this.elements.steer, axis(0))", "Phase 5 gamepad steering");
+requireText(byPath["renderer/input.js"], "this.changeGear(delta)", "Phase 5 gamepad gear buttons");
 
 requireText(byPath["renderer/audio.js"], "export class TorcsAudio", "audio runtime export");
 requireText(byPath["renderer/audio.js"], "export class AudioAssets", "audio asset loader export");
