@@ -67,6 +67,18 @@ const SNAPSHOT = {
 	exhaustX0: 131,
 	exhaustY0: 133,
 	exhaustZ0: 135,
+	velocityX: 137,
+	velocityY: 138,
+	velocityZ: 139,
+	gearRatio: 140,
+	gearChangeEvent: 141,
+	collisionEvent: 142,
+	wheelRoughnessFrequency0: 143,
+	wheelRoughness0: 147,
+	wheelOtherSurfaceContribution0: 151,
+	wheelOtherSurfaceKind0: 155,
+	wheelOtherRoughnessFrequency0: 159,
+	wheelOtherRoughness0: 163,
 };
 
 function readSnapshot(module) {
@@ -323,10 +335,10 @@ createModule()
 			runtime.trackWidth <= 0 ||
 			runtime.trackSegments <= 0 ||
 			runtime.trackSamples !== runtime.trackSegments * 12 ||
-			runtime.snapshot.version !== 4 ||
-			runtime.snapshot.size !== 137 * 8 ||
+			runtime.snapshot.version !== 5 ||
+			runtime.snapshot.size !== 167 * 8 ||
 			runtime.snapshot.write !== 0 ||
-			runtime.snapshot.values.length !== 137 ||
+			runtime.snapshot.values.length !== 167 ||
 			Math.abs(runtime.snapshot.values[SNAPSHOT.time] - runtime.time) > 0.000001 ||
 			Math.abs(runtime.snapshot.values[SNAPSHOT.x] - runtime.x) > 0.000001 ||
 			Math.abs(runtime.snapshot.values[SNAPSHOT.y] - runtime.y) > 0.000001 ||
@@ -380,6 +392,18 @@ createModule()
 			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.exhaustX0]) ||
 			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.exhaustY0]) ||
 			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.exhaustZ0]) ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.velocityX]) ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.velocityY]) ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.velocityZ]) ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.gearRatio]) ||
+			runtime.snapshot.values[SNAPSHOT.gearChangeEvent] < 0 ||
+			runtime.snapshot.values[SNAPSHOT.collisionEvent] < 0 ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.wheelRoughnessFrequency0]) ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.wheelRoughness0]) ||
+			runtime.snapshot.values[SNAPSHOT.wheelOtherSurfaceContribution0] < 0 ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.wheelOtherSurfaceKind0]) ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.wheelOtherRoughnessFrequency0]) ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.wheelOtherRoughness0]) ||
 			!Number.isFinite(runtime.trackCenterX) ||
 			!Number.isFinite(runtime.trackCenterY) ||
 			!Number.isFinite(runtime.trackRightX) ||

@@ -255,6 +255,12 @@ requireText(byPath["renderer/runtime.js"], "wheelSkidIntensity0: 116", "Phase 4 
 requireText(byPath["renderer/runtime.js"], "wheelSurfaceKind0: 120", "Phase 5 wheel surface snapshot field");
 requireText(byPath["renderer/runtime.js"], "wheelReaction0: 124", "Phase 5 wheel reaction snapshot field");
 requireText(byPath["renderer/runtime.js"], "exhaustCount: 129", "Phase 5 exhaust snapshot field");
+requireText(byPath["renderer/runtime.js"], "velocityX: 137", "audio velocity snapshot field");
+requireText(byPath["renderer/runtime.js"], "gearRatio: 140", "audio gear ratio snapshot field");
+requireText(byPath["renderer/runtime.js"], "gearChangeEvent: 141", "audio gear-change event snapshot field");
+requireText(byPath["renderer/runtime.js"], "collisionEvent: 142", "audio collision event snapshot field");
+requireText(byPath["renderer/runtime.js"], "wheelRoughnessFrequency0: 143", "audio wheel roughness snapshot field");
+requireText(byPath["renderer/runtime.js"], "wheelOtherSurfaceContribution0: 151", "audio mixed-surface snapshot field");
 requireText(byPath["renderer/runtime.js"], "lightCommand: 113", "Phase 4 light snapshot field");
 requireText(byPath["renderer/runtime.js"], "collision: 114", "Phase 4 collision snapshot field");
 

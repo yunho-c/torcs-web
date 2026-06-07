@@ -18,6 +18,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten/emscripten.h>
@@ -44,8 +45,8 @@ extern "C" int simuv2(tModInfo *modInfo);
 
 #define TORCS_WEB_SIM_IDENT 0
 #define TORCS_WEB_TRACK_SAMPLES_PER_SEG 12
-#define TORCS_WEB_RUNTIME_SNAPSHOT_VERSION 4
-#define TORCS_WEB_RUNTIME_SNAPSHOT_DOUBLE_COUNT 137
+#define TORCS_WEB_RUNTIME_SNAPSHOT_VERSION 5
+#define TORCS_WEB_RUNTIME_SNAPSHOT_DOUBLE_COUNT 167
 
 enum TorcsWebRuntimeSnapshotField {
 	TORCS_WEB_SNAPSHOT_TIME = 0,
@@ -115,7 +116,19 @@ enum TorcsWebRuntimeSnapshotField {
 	TORCS_WEB_SNAPSHOT_EXHAUST_POWER,
 	TORCS_WEB_SNAPSHOT_EXHAUST_X_0,
 	TORCS_WEB_SNAPSHOT_EXHAUST_Y_0 = 133,
-	TORCS_WEB_SNAPSHOT_EXHAUST_Z_0 = 135
+	TORCS_WEB_SNAPSHOT_EXHAUST_Z_0 = 135,
+	TORCS_WEB_SNAPSHOT_CAR_VEL_X = 137,
+	TORCS_WEB_SNAPSHOT_CAR_VEL_Y,
+	TORCS_WEB_SNAPSHOT_CAR_VEL_Z,
+	TORCS_WEB_SNAPSHOT_GEAR_RATIO,
+	TORCS_WEB_SNAPSHOT_GEAR_CHANGE_EVENT,
+	TORCS_WEB_SNAPSHOT_COLLISION_EVENT,
+	TORCS_WEB_SNAPSHOT_WHEEL_ROUGHNESS_FREQ_0,
+	TORCS_WEB_SNAPSHOT_WHEEL_ROUGHNESS_0 = 147,
+	TORCS_WEB_SNAPSHOT_WHEEL_OTHER_SURFACE_CONTRIBUTION_0 = 151,
+	TORCS_WEB_SNAPSHOT_WHEEL_OTHER_SURFACE_KIND_0 = 155,
+	TORCS_WEB_SNAPSHOT_WHEEL_OTHER_ROUGHNESS_FREQ_0 = 159,
+	TORCS_WEB_SNAPSHOT_WHEEL_OTHER_ROUGHNESS_0 = 163
 };
 
 struct CarElt;
@@ -153,6 +166,9 @@ typedef struct TorcsWebRuntime {
 	tdble				previousTrackDistance;
 	tdble				totalDistance;
 	double				lapStartTime;
+	int					previousGear;
+	int					gearChangeEvents;
+	int					collisionEvents;
 } tTorcsWebRuntime;
 
 static tTorcsWebRuntime Runtime;
@@ -325,6 +341,28 @@ getSurfaceEffectKind(const tTrackSeg *seg)
 		return 5;
 	}
 	return 0;
+}
+
+static tdble
+getSurfaceRoughnessFrequency(const tTrackSeg *seg)
+{
+	tdble roughnessFreq;
+
+	if (!seg || !seg->surface) {
+		return 1.0f;
+	}
+
+	roughnessFreq = 2.0f * (tdble)3.14159265358979323846 * seg->surface->kRoughWaveLen;
+	if (roughnessFreq > 2.0f) {
+		roughnessFreq = 2.0f + (tdble)tanh(roughnessFreq - 2.0f);
+	}
+	return roughnessFreq;
+}
+
+static tdble
+getSurfaceRoughness(const tTrackSeg *seg)
+{
+	return (seg && seg->surface) ? seg->surface->kRoughness : 0.0f;
 }
 
 static void
@@ -522,6 +560,12 @@ writeRuntimeSnapshotValues(double *values)
 	values[TORCS_WEB_SNAPSHOT_CAR_GEAR] = Runtime.car._gear;
 	values[TORCS_WEB_SNAPSHOT_ENGINE_RPM] = Runtime.car._enginerpm;
 	values[TORCS_WEB_SNAPSHOT_ENGINE_REDLINE] = Runtime.car._enginerpmRedLine;
+	values[TORCS_WEB_SNAPSHOT_CAR_VEL_X] = Runtime.car.pub.DynGCg.vel.x;
+	values[TORCS_WEB_SNAPSHOT_CAR_VEL_Y] = Runtime.car.pub.DynGCg.vel.y;
+	values[TORCS_WEB_SNAPSHOT_CAR_VEL_Z] = Runtime.car.pub.DynGCg.vel.z;
+	values[TORCS_WEB_SNAPSHOT_GEAR_RATIO] = Runtime.car._gearRatio[Runtime.car._gear + Runtime.car._gearOffset];
+	values[TORCS_WEB_SNAPSHOT_GEAR_CHANGE_EVENT] = Runtime.gearChangeEvents;
+	values[TORCS_WEB_SNAPSHOT_COLLISION_EVENT] = Runtime.collisionEvents;
 	values[TORCS_WEB_SNAPSHOT_TRACK_SEGMENT_ID] = Runtime.car._trkPos.seg ? Runtime.car._trkPos.seg->id : -1;
 	values[TORCS_WEB_SNAPSHOT_TRACK_SEGMENT_TYPE] = Runtime.car._trkPos.seg ? Runtime.car._trkPos.seg->type : 0;
 	values[TORCS_WEB_SNAPSHOT_TRACK_TO_START] = Runtime.car._trkPos.toStart;
@@ -564,6 +608,12 @@ writeRuntimeSnapshotValues(double *values)
 		values[TORCS_WEB_SNAPSHOT_WHEEL_SKID_0 + i] = Runtime.car._skid[i];
 		values[TORCS_WEB_SNAPSHOT_WHEEL_SURFACE_0 + i] = getSurfaceEffectKind(Runtime.car.priv.wheel[i].seg);
 		values[TORCS_WEB_SNAPSHOT_WHEEL_REACTION_0 + i] = Runtime.car._reaction[i];
+		values[TORCS_WEB_SNAPSHOT_WHEEL_ROUGHNESS_FREQ_0 + i] = getSurfaceRoughnessFrequency(Runtime.car.priv.wheel[i].seg);
+		values[TORCS_WEB_SNAPSHOT_WHEEL_ROUGHNESS_0 + i] = getSurfaceRoughness(Runtime.car.priv.wheel[i].seg);
+		values[TORCS_WEB_SNAPSHOT_WHEEL_OTHER_SURFACE_CONTRIBUTION_0 + i] = Runtime.car.priv.otherSurfaceContribution[i];
+		values[TORCS_WEB_SNAPSHOT_WHEEL_OTHER_SURFACE_KIND_0 + i] = getSurfaceEffectKind(Runtime.car.priv.otherSurfaceSeg[i]);
+		values[TORCS_WEB_SNAPSHOT_WHEEL_OTHER_ROUGHNESS_FREQ_0 + i] = getSurfaceRoughnessFrequency(Runtime.car.priv.otherSurfaceSeg[i]);
+		values[TORCS_WEB_SNAPSHOT_WHEEL_OTHER_ROUGHNESS_0 + i] = getSurfaceRoughness(Runtime.car.priv.otherSurfaceSeg[i]);
 	}
 	values[TORCS_WEB_SNAPSHOT_CAR_STEER_LOCK] = Runtime.car._steerLock;
 	values[TORCS_WEB_SNAPSHOT_LIGHT_COMMAND] = Runtime.car._lightCmd;
@@ -1015,6 +1065,9 @@ torcs_web_runtime_start_with_files(const char *trackFile, const char *carFile)
 	Runtime.car.ctrl.brakeCmd = 0.0f;
 	Runtime.car.ctrl.clutchCmd = 1.0f;
 	Runtime.car.ctrl.lightCmd = RM_LIGHT_HEAD1 | RM_LIGHT_HEAD2;
+	Runtime.previousGear = Runtime.car._gear;
+	Runtime.gearChangeEvents = 0;
+	Runtime.collisionEvents = 0;
 	Runtime.active = 1;
 	initRuntimeRaceProgress();
 	return 0;
@@ -1070,6 +1123,12 @@ torcs_web_runtime_step(double deltaTime)
 		step = remaining > RCM_MAX_DT_SIMU ? RCM_MAX_DT_SIMU : remaining;
 		Runtime.situation.deltaTime = step;
 		Runtime.simItf.update(&(Runtime.situation), step, -1);
+		if (Runtime.car._gear != Runtime.previousGear) {
+			Runtime.gearChangeEvents++;
+			Runtime.previousGear = Runtime.car._gear;
+		}
+		Runtime.collisionEvents |= Runtime.car.priv.collision;
+		Runtime.car.priv.collision = 0;
 		Runtime.situation.currentTime += step;
 		updateRuntimeRaceProgress();
 		remaining -= step;
@@ -1421,7 +1480,12 @@ torcs_web_runtime_write_snapshot(void *buffer, int byteSize)
 	}
 
 	writeRuntimeSnapshotValues((double *)buffer);
-	return Runtime.active ? 0 : -1;
+	if (!Runtime.active) {
+		return -1;
+	}
+	Runtime.gearChangeEvents = 0;
+	Runtime.collisionEvents = 0;
+	return 0;
 }
 
 }

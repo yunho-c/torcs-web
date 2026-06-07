@@ -67,6 +67,18 @@ export const SNAPSHOT = {
 	exhaustX0: 131,
 	exhaustY0: 133,
 	exhaustZ0: 135,
+	velocityX: 137,
+	velocityY: 138,
+	velocityZ: 139,
+	gearRatio: 140,
+	gearChangeEvent: 141,
+	collisionEvent: 142,
+	wheelRoughnessFrequency0: 143,
+	wheelRoughness0: 147,
+	wheelOtherSurfaceContribution0: 151,
+	wheelOtherSurfaceKind0: 155,
+	wheelOtherRoughnessFrequency0: 159,
+	wheelOtherRoughness0: 163,
 };
 
 const TRACK_SIDE = {
