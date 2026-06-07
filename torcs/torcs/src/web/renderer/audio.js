@@ -3,6 +3,7 @@ import { SNAPSHOT } from "./runtime.js";
 
 const WHEEL_COUNT = 4;
 const TR_CURB = 1;
+const RM_CAR_STATE_NO_SIMU = 0x000000FF;
 const VOLUME_CUTOFF = 0.001;
 
 function clamp(value, min, max) {
@@ -209,15 +210,13 @@ export class CarAudioModel {
 		const revRatio = engineRpm / redline;
 		const revRatio2 = revRatio * revRatio;
 
-		this.smoothAccel = this.smoothAccel * 0.5 + 0.5 * (accel * 0.99 + 0.01);
 		this.carPosition = torcsToAudioPosition(values, this.carPosition);
 
 		const model = {
 			engine: {
-				volume: 0.65,
+				volume: 0,
 				pitch: enginePitch,
-				lowpass: (0.75 * revRatio2 + 0.25) * this.smoothAccel +
-					(1 - this.smoothAccel) * 0.25 * revRatio2,
+				lowpass: 1,
 				position: this.carPosition,
 			},
 			axle: { volume: 0, pitch: 1, position: this.carPosition },
@@ -231,6 +230,18 @@ export class CarAudioModel {
 			skidTyres: Array.from({ length: WHEEL_COUNT }, () => ({ volume: 0, pitch: 1, position: this.carPosition })),
 			events: [],
 		};
+
+		if ((values[SNAPSHOT.state] | 0) & RM_CAR_STATE_NO_SIMU) {
+			this.turboVolume = 0;
+			this.backfireVolume = 0;
+			this.dragCollisionVolume = 0;
+			return model;
+		}
+
+		this.smoothAccel = this.smoothAccel * 0.5 + 0.5 * (accel * 0.99 + 0.01);
+		model.engine.volume = 0.65;
+		model.engine.lowpass = (0.75 * revRatio2 + 0.25) * this.smoothAccel +
+			(1 - this.smoothAccel) * 0.25 * revRatio2;
 
 		model.axle.volume = 0.2 * Math.tanh(100 * Math.abs(this.preAxle - enginePitch));
 		model.axle.pitch = (this.preAxle + enginePitch) * 0.05 * Math.abs(gearRatio);

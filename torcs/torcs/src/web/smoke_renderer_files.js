@@ -292,6 +292,8 @@ requireText(byPath["renderer/audio.js"], "decodeAudioData", "manifest sample dec
 requireText(byPath["renderer/audio.js"], "this.enabled = false;\n\t\t\tthis.raceAudio = null;\n\t\t\tconst raceAudio", "stale audio state cleared before asset load");
 requireText(byPath["renderer/audio.js"], "this.setStatus(\"error\")", "audio load failure status");
 requireText(byPath["renderer/audio.js"], "this.setStatus(\"off\")", "audio stop status");
+requireText(byPath["renderer/audio.js"], "RM_CAR_STATE_NO_SIMU", "native no-simulation mute mask");
+requireText(byPath["renderer/audio.js"], "SNAPSHOT.state", "car state audio mute input");
 requireText(byPath["renderer/audio.js"], "SNAPSHOT.gearChangeEvent", "latched gear-change event use");
 requireText(byPath["renderer/audio.js"], "SNAPSHOT.collisionEvent", "latched collision event use");
 requireText(byPath["renderer/audio.js"], "SNAPSHOT.wheelOtherSurfaceContribution0", "mixed-surface audio use");
