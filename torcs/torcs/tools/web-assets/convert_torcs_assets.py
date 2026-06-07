@@ -21,6 +21,18 @@ AC_SURFACE_LINE_STRIP = 2
 AC_SURFACE_TRIANGLES = 3
 AC_SURFACE_TRIANGLE_STRIP = 4
 TREE_ALPHA_CUTOFF = 0.65
+EFFECT_TEXTURES = [
+	"smoke.rgb",
+	"fire0.rgb",
+	"fire1.rgb",
+	"frontlight1.rgb",
+	"frontlight2.rgb",
+	"rearlight1.rgb",
+	"rearlight2.rgb",
+	"breaklight1.rgb",
+	"breaklight2.rgb",
+	"grey-tracks.rgb",
+]
 
 
 @dataclass
@@ -39,7 +51,7 @@ def parse_args():
 
 
 def clear_generated_output(output_dir):
-	for name in ("tracks", "cars", "manifest.json"):
+	for name in ("tracks", "cars", "effects", "manifest.json"):
 		path = output_dir / name
 		if path.is_dir():
 			shutil.rmtree(path)
@@ -592,6 +604,12 @@ def main():
 		name: relative_to_output(convert_texture(source, car_dir), output_dir)
 		for name, source in sorted(car_texture_sources.items())
 	}
+	effects_dir = output_dir / "effects"
+	effect_texture_outputs = {}
+	for name in EFFECT_TEXTURES:
+		resolved = resolve_texture(source_root, source_root / "data/data/textures", name)
+		if resolved:
+			effect_texture_outputs[name] = relative_to_output(convert_texture(resolved, effects_dir), output_dir)
 
 	manifest = {
 		"version": 1,
@@ -639,11 +657,15 @@ def main():
 				},
 			},
 		},
+		"effects": {
+			"textures": effect_texture_outputs,
+		},
 	}
 	(output_dir / "manifest.json").write_text(json.dumps(manifest, indent="\t") + "\n", encoding="utf-8")
 	texture_outputs = set(track_texture_outputs.values()) | set(car_texture_outputs.values())
 	if track_background_output:
 		texture_outputs.add(track_background_output)
+	texture_outputs |= set(effect_texture_outputs.values())
 	print(json.dumps({
 		"manifest": relative_to_output(output_dir / "manifest.json", output_dir),
 		"track": manifest["tracks"][track_meta["xml"]]["asset"],

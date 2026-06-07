@@ -1,0 +1,401 @@
+import * as THREE from "three";
+import { SNAPSHOT } from "./runtime.js";
+
+const WHEEL_COUNT = 4;
+const ROAD_EFFECT_Y = 0.075;
+const MAX_SKID_SEGMENTS = 220;
+const SKID_MIN_INTENSITY = 0.12;
+const SKID_MIN_DISTANCE = 0.18;
+const SMOKE_MIN_INTENSITY = 0.16;
+const SMOKE_LIFE = 1.6;
+const FIRE_LIFE = 0.16;
+const COLLISION_FLASH_LIFE = 0.45;
+const HEAD_LIGHT_MASK = 0x00000003;
+
+const tempVector = new THREE.Vector3();
+const tempVector2 = new THREE.Vector3();
+
+function clamp01(value) {
+	return Math.max(0, Math.min(1, value));
+}
+
+function makeRadialTexture(inner, outer) {
+	const canvas = document.createElement("canvas");
+	canvas.width = 64;
+	canvas.height = 64;
+	const context = canvas.getContext("2d");
+	const gradient = context.createRadialGradient(32, 32, 3, 32, 32, 31);
+	gradient.addColorStop(0, inner);
+	gradient.addColorStop(1, outer);
+	context.fillStyle = gradient;
+	context.fillRect(0, 0, 64, 64);
+	const texture = new THREE.CanvasTexture(canvas);
+	texture.colorSpace = THREE.SRGBColorSpace;
+	texture.needsUpdate = true;
+	return texture;
+}
+
+function makeSpriteMaterial(texture, color, opacity, additive = false) {
+	return new THREE.SpriteMaterial({
+		map: texture,
+		color,
+		transparent: true,
+		opacity,
+		depthWrite: false,
+		blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
+	});
+}
+
+function torcsToThree(x, y, z = 0) {
+	return new THREE.Vector3(x, z, -y);
+}
+
+function getWheelLocal(values, index, yOffset = 0) {
+	return torcsToThree(
+		values[SNAPSHOT.wheelRelX0 + index],
+		values[SNAPSHOT.wheelRelY0 + index],
+		values[SNAPSHOT.wheelRelZ0 + index] + yOffset,
+	);
+}
+
+function getWheelSkidIntensity(values, index) {
+	const explicitSkid = values[SNAPSHOT.wheelSkidIntensity0 + index];
+	if (Number.isFinite(explicitSkid) && explicitSkid > 0) {
+		return clamp01(Math.tanh(explicitSkid * 0.7));
+	}
+	const slipAccel = Math.abs(values[SNAPSHOT.wheelSlipAccel0 + index] || 0);
+	const slipSide = Math.abs(values[SNAPSHOT.wheelSlipSide0 + index] || 0);
+	return clamp01(slipAccel * 0.08 + slipSide * 0.035);
+}
+
+function worldFromCarLocal(car, local, target = new THREE.Vector3()) {
+	return target.copy(local).applyMatrix4(car.matrixWorld);
+}
+
+export class TorcsEffects {
+	constructor(groups) {
+		this.groups = groups;
+		this.textures = {
+			smoke: makeRadialTexture("rgba(220,220,220,0.82)", "rgba(220,220,220,0)"),
+			fire0: makeRadialTexture("rgba(255,230,80,0.95)", "rgba(255,80,20,0)"),
+			fire1: makeRadialTexture("rgba(255,130,20,0.95)", "rgba(80,20,0,0)"),
+			frontlight: makeRadialTexture("rgba(255,246,210,0.9)", "rgba(255,246,210,0)"),
+			rearlight: makeRadialTexture("rgba(255,45,28,0.88)", "rgba(255,0,0,0)"),
+			brakelight: makeRadialTexture("rgba(255,58,35,0.95)", "rgba(255,0,0,0)"),
+			shadow: null,
+		};
+		this.shadow = this.createShadow();
+		this.skidMarks = this.createSkidMarks();
+		this.lightSprites = this.createLightSprites();
+		this.collisionFlash = this.createCollisionFlash();
+		this.smokeParticles = [];
+		this.fireParticles = [];
+		this.lastWheelPoints = Array.from({ length: WHEEL_COUNT }, () => null);
+		this.lastSmokeTime = Array.from({ length: WHEEL_COUNT }, () => 0);
+		this.skidSegments = [];
+		this.lastTime = 0;
+		this.previousDamage = 0;
+		this.collisionUntil = 0;
+	}
+
+	setTextures(textures = {}) {
+		textures = textures || {};
+		this.textures.smoke = textures["smoke.rgb"] || this.textures.smoke;
+		this.textures.fire0 = textures["fire0.rgb"] || this.textures.fire0;
+		this.textures.fire1 = textures["fire1.rgb"] || this.textures.fire1;
+		this.textures.frontlight = textures["frontlight1.rgb"] || textures["frontlight2.rgb"] || this.textures.frontlight;
+		this.textures.rearlight = textures["rearlight1.rgb"] || textures["rearlight2.rgb"] || this.textures.rearlight;
+		this.textures.brakelight = textures["breaklight1.rgb"] || textures["breaklight2.rgb"] || this.textures.brakelight;
+		this.refreshSpriteTextures();
+	}
+
+	setCarAsset(asset) {
+		this.textures.shadow = asset && asset.shadowTexture ? asset.shadowTexture : null;
+		this.shadow.material.map = this.textures.shadow;
+		this.shadow.material.color.set(this.textures.shadow ? 0xffffff : 0x000000);
+		this.shadow.material.opacity = this.textures.shadow ? 0.54 : 0.34;
+		this.shadow.material.needsUpdate = true;
+	}
+
+	createShadow() {
+		const shadow = new THREE.Mesh(
+			new THREE.CircleGeometry(1, 40),
+			new THREE.MeshBasicMaterial({
+				color: 0x000000,
+				transparent: true,
+				opacity: 0.34,
+				depthWrite: false,
+				map: null,
+			}),
+		);
+		shadow.rotation.x = -Math.PI / 2;
+		shadow.renderOrder = 5;
+		this.groups.shadows.add(shadow);
+		return shadow;
+	}
+
+	createSkidMarks() {
+		const geometry = new THREE.BufferGeometry();
+		geometry.setAttribute("position", new THREE.Float32BufferAttribute([], 3));
+		geometry.setAttribute("color", new THREE.Float32BufferAttribute([], 4));
+		const mesh = new THREE.Mesh(
+			geometry,
+			new THREE.MeshBasicMaterial({
+				vertexColors: true,
+				transparent: true,
+				opacity: 0.72,
+				depthWrite: false,
+				side: THREE.DoubleSide,
+			}),
+		);
+		mesh.renderOrder = 4;
+		this.groups.skidMarks.add(mesh);
+		return mesh;
+	}
+
+	createLightSprites() {
+		const specs = [
+			{ key: "headL", type: "frontlight", color: 0xfff1ca, size: [1.15, 0.46] },
+			{ key: "headR", type: "frontlight", color: 0xfff1ca, size: [1.15, 0.46] },
+			{ key: "rearL", type: "rearlight", color: 0xff2a22, size: [0.55, 0.24] },
+			{ key: "rearR", type: "rearlight", color: 0xff2a22, size: [0.55, 0.24] },
+			{ key: "brakeL", type: "brakelight", color: 0xff321f, size: [0.78, 0.32] },
+			{ key: "brakeR", type: "brakelight", color: 0xff321f, size: [0.78, 0.32] },
+		];
+		const sprites = {};
+		for (const spec of specs) {
+			const sprite = new THREE.Sprite(makeSpriteMaterial(this.textures[spec.type], spec.color, 0, true));
+			sprite.scale.set(spec.size[0], spec.size[1], 1);
+			sprite.userData.type = spec.type;
+			this.groups.carLights.add(sprite);
+			sprites[spec.key] = sprite;
+		}
+		return sprites;
+	}
+
+	createCollisionFlash() {
+		const mesh = new THREE.Mesh(
+			new THREE.RingGeometry(1.3, 1.55, 32),
+			new THREE.MeshBasicMaterial({
+				color: 0xffd37a,
+				transparent: true,
+				opacity: 0,
+				depthWrite: false,
+				side: THREE.DoubleSide,
+				blending: THREE.AdditiveBlending,
+			}),
+		);
+		mesh.rotation.x = -Math.PI / 2;
+		mesh.renderOrder = 30;
+		this.groups.smoke.add(mesh);
+		return mesh;
+	}
+
+	refreshSpriteTextures() {
+		for (const sprite of Object.values(this.lightSprites)) {
+			sprite.material.map = this.textures[sprite.userData.type];
+			sprite.material.needsUpdate = true;
+		}
+		for (const particle of this.smokeParticles) {
+			particle.sprite.material.map = this.textures.smoke;
+		}
+		for (const particle of this.fireParticles) {
+			particle.sprite.material.map = particle.kind === 0 ? this.textures.fire0 : this.textures.fire1;
+		}
+	}
+
+	update(values, car, camera = null) {
+		if (!car) {
+			return;
+		}
+		car.updateMatrixWorld(true);
+		const time = Number.isFinite(values[SNAPSHOT.time]) ? values[SNAPSHOT.time] : 0;
+		const deltaTime = Math.min(0.1, Math.max(0.001, this.lastTime ? time - this.lastTime : 1 / 60));
+		this.lastTime = time;
+		this.updateShadow(values, car);
+		this.updateSkidMarks(values, car);
+		this.updateSmoke(values, car, time, deltaTime);
+		this.updateFire(values, car, time, deltaTime);
+		this.updateLights(values, car);
+		this.updateCollision(values, car, time);
+		this.updateParticles(this.smokeParticles, this.groups.smoke, deltaTime, camera);
+		this.updateParticles(this.fireParticles, this.groups.smoke, deltaTime, camera);
+	}
+
+	updateShadow(values, car) {
+		this.shadow.position.set(car.position.x, ROAD_EFFECT_Y, car.position.z);
+		this.shadow.scale.set(
+			Math.max(1.2, values[SNAPSHOT.dimensionX] * 0.62),
+			Math.max(0.9, values[SNAPSHOT.dimensionY] * 0.82),
+			1,
+		);
+		this.shadow.rotation.z = -car.rotation.y;
+	}
+
+	updateSkidMarks(values, car) {
+		const speed = Math.abs(values[SNAPSHOT.speed] || 0);
+		for (let index = 0; index < WHEEL_COUNT; index += 1) {
+			const intensity = getWheelSkidIntensity(values, index);
+			const wheelWidth = Math.max(0.08, values[SNAPSHOT.wheelWidth0 + index] || 0.2);
+			const local = getWheelLocal(values, index, -Math.max(0.02, values[SNAPSHOT.wheelRadius0 + index] || 0.3));
+			const left = worldFromCarLocal(car, local.clone().add(new THREE.Vector3(0, 0, -wheelWidth * 0.46)));
+			const right = worldFromCarLocal(car, local.clone().add(new THREE.Vector3(0, 0, wheelWidth * 0.46)));
+			left.y = ROAD_EFFECT_Y;
+			right.y = ROAD_EFFECT_Y;
+
+			const last = this.lastWheelPoints[index];
+			if (speed > 1 && intensity > SKID_MIN_INTENSITY && last &&
+				last.center.distanceTo(left.clone().add(right).multiplyScalar(0.5)) > SKID_MIN_DISTANCE) {
+				this.skidSegments.push({
+					left0: last.left.clone(),
+					right0: last.right.clone(),
+					left1: left.clone(),
+					right1: right.clone(),
+					alpha: clamp01(intensity),
+				});
+				if (this.skidSegments.length > MAX_SKID_SEGMENTS) {
+					this.skidSegments.splice(0, this.skidSegments.length - MAX_SKID_SEGMENTS);
+				}
+			}
+			this.lastWheelPoints[index] = {
+				left,
+				right,
+				center: left.clone().add(right).multiplyScalar(0.5),
+			};
+		}
+		this.rebuildSkidGeometry();
+	}
+
+	rebuildSkidGeometry() {
+		const positions = [];
+		const colors = [];
+		for (const segment of this.skidSegments) {
+			const alpha = segment.alpha * 0.72;
+			for (const point of [segment.left0, segment.right0, segment.left1, segment.right0, segment.right1, segment.left1]) {
+				positions.push(point.x, point.y, point.z);
+				colors.push(0.03, 0.025, 0.02, alpha);
+			}
+		}
+		this.skidMarks.geometry.dispose();
+		this.skidMarks.geometry = new THREE.BufferGeometry();
+		this.skidMarks.geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+		this.skidMarks.geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 4));
+	}
+
+	updateSmoke(values, car, time, deltaTime) {
+		const speed = Math.abs(values[SNAPSHOT.speed] || 0);
+		for (let index = 0; index < WHEEL_COUNT; index += 1) {
+			const intensity = getWheelSkidIntensity(values, index);
+			if (speed < 1 || intensity < SMOKE_MIN_INTENSITY || time - this.lastSmokeTime[index] < 0.08) {
+				continue;
+			}
+			const radius = Math.max(0.08, values[SNAPSHOT.wheelRadius0 + index] || 0.3);
+			const world = worldFromCarLocal(car, getWheelLocal(values, index, -radius * 0.65));
+			world.y = Math.max(world.y + 0.16, ROAD_EFFECT_Y + 0.16);
+			const sprite = new THREE.Sprite(makeSpriteMaterial(this.textures.smoke, 0xded8cc, 0.42));
+			const size = 0.65 + intensity * 1.4;
+			sprite.scale.set(size, size, 1);
+			sprite.position.copy(world);
+			const sideSlip = values[SNAPSHOT.wheelSlipSide0 + index] || 0;
+			const accelSlip = values[SNAPSHOT.wheelSlipAccel0 + index] || 0;
+			this.smokeParticles.push({
+				sprite,
+				age: 0,
+				life: SMOKE_LIFE * (0.65 + intensity),
+				velocity: new THREE.Vector3(
+					-accelSlip * 0.035,
+					0.32 + intensity * 0.22,
+					sideSlip * 0.035,
+				).multiplyScalar(deltaTime * 60),
+			});
+			this.groups.smoke.add(sprite);
+			this.lastSmokeTime[index] = time;
+		}
+	}
+
+	updateFire(values, car, time, deltaTime) {
+		const throttle = clamp01(values[SNAPSHOT.controlAccel] || 0);
+		const rpm = values[SNAPSHOT.engineRpm] || 0;
+		const redline = Math.max(1, values[SNAPSHOT.engineRedline] || 1);
+		if (throttle < 0.85 || rpm / redline < 0.55 || time % 0.22 > 0.04) {
+			return;
+		}
+		const local = new THREE.Vector3(
+			-Math.max(0.6, values[SNAPSHOT.dimensionX] * 0.52),
+			Math.max(0.22, values[SNAPSHOT.dimensionZ] * 0.22),
+			-Math.max(0.2, values[SNAPSHOT.dimensionY] * 0.24),
+		);
+		const world = worldFromCarLocal(car, local);
+		const kind = this.fireParticles.length % 2;
+		const sprite = new THREE.Sprite(makeSpriteMaterial(kind === 0 ? this.textures.fire0 : this.textures.fire1, 0xffb24a, 0.85, true));
+		sprite.position.copy(world);
+		sprite.scale.set(0.5, 0.34, 1);
+		this.fireParticles.push({
+			sprite,
+			kind,
+			age: 0,
+			life: FIRE_LIFE,
+			velocity: tempVector.copy(world).sub(car.position).normalize().multiplyScalar(0.035 * deltaTime * 60),
+		});
+		this.groups.smoke.add(sprite);
+	}
+
+	updateLights(values, car) {
+		const dimX = Math.max(0.4, values[SNAPSHOT.dimensionX]);
+		const dimY = Math.max(0.4, values[SNAPSHOT.dimensionY]);
+		const dimZ = Math.max(0.2, values[SNAPSHOT.dimensionZ]);
+		const headOn = ((values[SNAPSHOT.lightCommand] || 0) & HEAD_LIGHT_MASK) !== 0;
+		const brake = clamp01(values[SNAPSHOT.controlBrake] || 0);
+		const lightPositions = {
+			headL: [dimX * 0.52, dimZ * 0.36, -dimY * 0.28],
+			headR: [dimX * 0.52, dimZ * 0.36, dimY * 0.28],
+			rearL: [-dimX * 0.54, dimZ * 0.34, -dimY * 0.28],
+			rearR: [-dimX * 0.54, dimZ * 0.34, dimY * 0.28],
+			brakeL: [-dimX * 0.56, dimZ * 0.38, -dimY * 0.26],
+			brakeR: [-dimX * 0.56, dimZ * 0.38, dimY * 0.26],
+		};
+		for (const [key, local] of Object.entries(lightPositions)) {
+			const sprite = this.lightSprites[key];
+			worldFromCarLocal(car, tempVector.set(local[0], local[1], local[2]), tempVector2);
+			sprite.position.copy(tempVector2);
+		}
+		this.lightSprites.headL.material.opacity = headOn ? 0.72 : 0;
+		this.lightSprites.headR.material.opacity = headOn ? 0.72 : 0;
+		this.lightSprites.rearL.material.opacity = 0.24 + brake * 0.22;
+		this.lightSprites.rearR.material.opacity = 0.24 + brake * 0.22;
+		this.lightSprites.brakeL.material.opacity = brake * 0.95;
+		this.lightSprites.brakeR.material.opacity = brake * 0.95;
+	}
+
+	updateCollision(values, car, time) {
+		const collision = values[SNAPSHOT.collision] || 0;
+		const damage = values[SNAPSHOT.damage] || 0;
+		if (collision !== 0 || damage > this.previousDamage) {
+			this.collisionUntil = time + COLLISION_FLASH_LIFE;
+		}
+		this.previousDamage = damage;
+		this.collisionFlash.position.set(car.position.x, ROAD_EFFECT_Y + 0.05, car.position.z);
+		this.collisionFlash.scale.setScalar(Math.max(1.2, values[SNAPSHOT.dimensionX] * 0.55));
+		this.collisionFlash.material.opacity = clamp01((this.collisionUntil - time) / COLLISION_FLASH_LIFE) * 0.72;
+	}
+
+	updateParticles(particles, group, deltaTime, camera) {
+		for (let index = particles.length - 1; index >= 0; index -= 1) {
+			const particle = particles[index];
+			particle.age += deltaTime;
+			if (particle.age >= particle.life) {
+				group.remove(particle.sprite);
+				particle.sprite.material.dispose();
+				particles.splice(index, 1);
+				continue;
+			}
+			const t = particle.age / particle.life;
+			particle.sprite.position.addScaledVector(particle.velocity, deltaTime * 60);
+			particle.sprite.material.opacity = (1 - t) * (particle.life <= FIRE_LIFE ? 0.9 : 0.42);
+			particle.sprite.scale.multiplyScalar(1 + deltaTime * (particle.life <= FIRE_LIFE ? 1.8 : 0.7));
+			if (camera) {
+				particle.sprite.quaternion.copy(camera.quaternion);
+			}
+		}
+	}
+}

@@ -98,19 +98,22 @@ function animate(time) {
 
 async function loadVisualAssets() {
 	try {
-		const [track, car] = await Promise.all([
+		const [track, car, effects] = await Promise.all([
 			assets.loadTrack(elements.track.value),
 			assets.loadCar(elements.car.value),
+			assets.loadEffects(),
 		]);
 		scene.setTrackVisual(track ? track.scene : null);
 		scene.setTrackAtmosphere(track ? track.entry : null, track ? track.backgroundTexture : null);
 		scene.setCarVisual(car);
+		scene.setEffectTextures(effects ? effects.textures : null);
 		return Boolean(track && car);
 	} catch (error) {
 		console.warn("TORCS web renderer asset load failed", error);
 		scene.setTrackVisual(null);
 		scene.setTrackAtmosphere(null, null);
 		scene.setCarVisual(null);
+		scene.setEffectTextures(null);
 		return false;
 	}
 }

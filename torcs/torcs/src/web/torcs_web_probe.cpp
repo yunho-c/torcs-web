@@ -44,8 +44,8 @@ extern "C" int simuv2(tModInfo *modInfo);
 
 #define TORCS_WEB_SIM_IDENT 0
 #define TORCS_WEB_TRACK_SAMPLES_PER_SEG 12
-#define TORCS_WEB_RUNTIME_SNAPSHOT_VERSION 2
-#define TORCS_WEB_RUNTIME_SNAPSHOT_DOUBLE_COUNT 116
+#define TORCS_WEB_RUNTIME_SNAPSHOT_VERSION 3
+#define TORCS_WEB_RUNTIME_SNAPSHOT_DOUBLE_COUNT 120
 
 enum TorcsWebRuntimeSnapshotField {
 	TORCS_WEB_SNAPSHOT_TIME = 0,
@@ -103,7 +103,11 @@ enum TorcsWebRuntimeSnapshotField {
 	TORCS_WEB_SNAPSHOT_WHEEL_STEER_ANGLE_0 = 100,
 	TORCS_WEB_SNAPSHOT_WHEEL_RADIUS_0 = 104,
 	TORCS_WEB_SNAPSHOT_WHEEL_WIDTH_0 = 108,
-	TORCS_WEB_SNAPSHOT_CAR_STEER_LOCK = 112
+	TORCS_WEB_SNAPSHOT_CAR_STEER_LOCK = 112,
+	TORCS_WEB_SNAPSHOT_LIGHT_COMMAND,
+	TORCS_WEB_SNAPSHOT_COLLISION,
+	TORCS_WEB_SNAPSHOT_DAMAGE,
+	TORCS_WEB_SNAPSHOT_WHEEL_SKID_0
 };
 
 struct CarElt;
@@ -498,8 +502,12 @@ writeRuntimeSnapshotValues(double *values)
 		values[TORCS_WEB_SNAPSHOT_WHEEL_STEER_ANGLE_0 + i] = Runtime.car.priv.wheel[i].relPos.az;
 		values[TORCS_WEB_SNAPSHOT_WHEEL_RADIUS_0 + i] = Runtime.car._wheelRadius(i);
 		values[TORCS_WEB_SNAPSHOT_WHEEL_WIDTH_0 + i] = Runtime.car._tireWidth(i);
+		values[TORCS_WEB_SNAPSHOT_WHEEL_SKID_0 + i] = Runtime.car._skid[i];
 	}
 	values[TORCS_WEB_SNAPSHOT_CAR_STEER_LOCK] = Runtime.car._steerLock;
+	values[TORCS_WEB_SNAPSHOT_LIGHT_COMMAND] = Runtime.car._lightCmd;
+	values[TORCS_WEB_SNAPSHOT_COLLISION] = Runtime.car.priv.simcollision;
+	values[TORCS_WEB_SNAPSHOT_DAMAGE] = Runtime.car._dammage;
 
 	values[TORCS_WEB_SNAPSHOT_TRACK_LENGTH] = Runtime.trackData ? Runtime.trackData->length : 0.0;
 	values[TORCS_WEB_SNAPSHOT_TRACK_WIDTH] = Runtime.trackData ? Runtime.trackData->width : 0.0;
@@ -936,6 +944,7 @@ torcs_web_runtime_start_with_files(const char *trackFile, const char *carFile)
 	Runtime.car.ctrl.accelCmd = 0.0f;
 	Runtime.car.ctrl.brakeCmd = 0.0f;
 	Runtime.car.ctrl.clutchCmd = 1.0f;
+	Runtime.car.ctrl.lightCmd = RM_LIGHT_HEAD1 | RM_LIGHT_HEAD2;
 	Runtime.active = 1;
 	initRuntimeRaceProgress();
 	return 0;

@@ -55,6 +55,10 @@ export const SNAPSHOT = {
 	wheelRadius0: 104,
 	wheelWidth0: 108,
 	carSteerLock: 112,
+	lightCommand: 113,
+	collision: 114,
+	damage: 115,
+	wheelSkidIntensity0: 116,
 };
 
 const TRACK_SIDE = {

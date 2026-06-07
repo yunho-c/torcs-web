@@ -55,6 +55,10 @@ const SNAPSHOT = {
 	wheelRadius0: 104,
 	wheelWidth0: 108,
 	carSteerLock: 112,
+	lightCommand: 113,
+	collision: 114,
+	damage: 115,
+	wheelSkidIntensity0: 116,
 };
 
 function readSnapshot(module) {
@@ -311,10 +315,10 @@ createModule()
 			runtime.trackWidth <= 0 ||
 			runtime.trackSegments <= 0 ||
 			runtime.trackSamples !== runtime.trackSegments * 12 ||
-			runtime.snapshot.version !== 2 ||
-			runtime.snapshot.size !== 116 * 8 ||
+			runtime.snapshot.version !== 3 ||
+			runtime.snapshot.size !== 120 * 8 ||
 			runtime.snapshot.write !== 0 ||
-			runtime.snapshot.values.length !== 116 ||
+			runtime.snapshot.values.length !== 120 ||
 			Math.abs(runtime.snapshot.values[SNAPSHOT.time] - runtime.time) > 0.000001 ||
 			Math.abs(runtime.snapshot.values[SNAPSHOT.x] - runtime.x) > 0.000001 ||
 			Math.abs(runtime.snapshot.values[SNAPSHOT.y] - runtime.y) > 0.000001 ||
@@ -356,6 +360,10 @@ createModule()
 			runtime.snapshot.values[SNAPSHOT.wheelRadius0] <= 0 ||
 			runtime.snapshot.values[SNAPSHOT.wheelWidth0] <= 0 ||
 			runtime.snapshot.values[SNAPSHOT.carSteerLock] <= 0 ||
+			(runtime.snapshot.values[SNAPSHOT.lightCommand] & 0x00000003) !== 0x00000003 ||
+			runtime.snapshot.values[SNAPSHOT.collision] < 0 ||
+			runtime.snapshot.values[SNAPSHOT.damage] < 0 ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.wheelSkidIntensity0]) ||
 			!Number.isFinite(runtime.trackCenterX) ||
 			!Number.isFinite(runtime.trackCenterY) ||
 			!Number.isFinite(runtime.trackRightX) ||

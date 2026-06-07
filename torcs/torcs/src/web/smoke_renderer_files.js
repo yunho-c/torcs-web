@@ -203,6 +203,7 @@ const files = [
 	"renderer/assets.js",
 	"renderer/runtime.js",
 	"renderer/scene.js",
+	"renderer/effects.js",
 	"renderer/cameras.js",
 	"renderer/input.js",
 	"renderer/hud.js",
@@ -228,6 +229,9 @@ requireText(byPath["renderer/assets.js"], "./web-assets/", "asset manifest base 
 requireText(byPath["renderer/assets.js"], "export class AssetManager", "asset manager export");
 requireText(byPath["renderer/assets.js"], "Promise.all(entry.lods.map", "all car LOD loading");
 requireText(byPath["renderer/assets.js"], "entry.backgroundTexture", "track background texture loading");
+requireText(byPath["renderer/assets.js"], "async loadEffects()", "effect texture loading");
+requireText(byPath["renderer/assets.js"], "manifest.effects && manifest.effects.textures", "effect texture manifest lookup");
+requireText(byPath["renderer/assets.js"], "shadowTexture", "car shadow texture loading");
 requireText(byPath["renderer/assets.js"], "renderer.capabilities.getMaxAnisotropy()", "renderer anisotropy capability");
 requireText(byPath["renderer/assets.js"], "texture.anisotropy = Math.max(1, this.getMaxAnisotropy())", "anisotropic texture sampling");
 requireText(byPath["renderer/assets.js"], "texture.minFilter = THREE.LinearMipmapLinearFilter", "mipmapped distant texture filtering");
@@ -238,6 +242,9 @@ requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_get_snapshot_size"
 requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_write_snapshot", "snapshot write export");
 requireText(byPath["renderer/runtime.js"], "export const SNAPSHOT", "snapshot layout export");
 requireText(byPath["renderer/runtime.js"], "export class TorcsRuntime", "runtime adapter export");
+requireText(byPath["renderer/runtime.js"], "wheelSkidIntensity0: 116", "Phase 4 skid snapshot field");
+requireText(byPath["renderer/runtime.js"], "lightCommand: 113", "Phase 4 light snapshot field");
+requireText(byPath["renderer/runtime.js"], "collision: 114", "Phase 4 collision snapshot field");
 
 requireText(byPath["renderer/main.js"], "createTorcsRuntime", "runtime factory import");
 requireText(byPath["renderer/main.js"], "new AssetManager", "asset manager creation");
@@ -245,8 +252,11 @@ requireText(byPath["renderer/main.js"], "new AssetManager(\"./web-assets/\", sce
 requireText(byPath["renderer/main.js"], "new TorcsScene", "scene creation");
 requireText(byPath["renderer/main.js"], "runtime.readTrackSamples()", "track sample ingestion");
 requireText(byPath["renderer/main.js"], "scene.setTrackAtmosphere(track ? track.entry : null, track ? track.backgroundTexture : null)", "track atmosphere handoff");
+requireText(byPath["renderer/main.js"], "assets.loadEffects()", "effect texture asset loading");
+requireText(byPath["renderer/main.js"], "scene.setEffectTextures(effects ? effects.textures : null)", "effect texture scene handoff");
 
 requireText(byPath["renderer/scene.js"], "import * as THREE from \"three\"", "Three.js module import");
+requireText(byPath["renderer/scene.js"], "import { TorcsEffects } from \"./effects.js\"", "effects module import");
 requireText(byPath["renderer/scene.js"], "new THREE.BoxGeometry", "simulated car box");
 requireText(byPath["renderer/scene.js"], "makeRoadMesh(track)", "sampled track road mesh");
 requireText(byPath["renderer/scene.js"], "setTrackVisual(model)", "converted track mesh hook");
@@ -275,9 +285,26 @@ requireText(byPath["renderer/scene.js"], "selectCarLod(camera)", "deterministic 
 requireText(byPath["renderer/scene.js"], "getCarLodFactor(camera, this.car.position", "TORCS-style car LOD factor");
 requireText(byPath["renderer/scene.js"], "lodFactor >= item.lod.threshold", "native car LOD threshold comparison");
 requireText(byPath["renderer/scene.js"], "next.lod.wheels !== false", "LOD wheel visibility flag");
+requireText(byPath["renderer/scene.js"], "skidMarks: new THREE.Group()", "skid-mark scene group");
+requireText(byPath["renderer/scene.js"], "carLights: new THREE.Group()", "car-light scene group");
+requireText(byPath["renderer/scene.js"], "smoke: new THREE.Group()", "smoke/fire scene group");
+requireText(byPath["renderer/scene.js"], "this.effects = new TorcsEffects(this.groups)", "effects layer creation");
+requireText(byPath["renderer/scene.js"], "this.effects.update(values, this.car, camera)", "snapshot-driven effects update");
 if (byPath["renderer/scene.js"].content.includes("this.car.rotation.set(values[SNAPSHOT.pitch]")) {
 	fail("TORCS web renderer smoke test found scalar Euler car body orientation");
 }
+
+requireText(byPath["renderer/effects.js"], "export class TorcsEffects", "effects layer export");
+requireText(byPath["renderer/effects.js"], "createShadow()", "planar car shadow effect");
+requireText(byPath["renderer/effects.js"], "createSkidMarks()", "dynamic skid-mark strips");
+requireText(byPath["renderer/effects.js"], "updateSmoke(values, car, time, deltaTime)", "smoke sprite update");
+requireText(byPath["renderer/effects.js"], "updateFire(values, car, time, deltaTime)", "exhaust fire sprite update");
+requireText(byPath["renderer/effects.js"], "updateLights(values, car)", "head rear brake light sprites");
+requireText(byPath["renderer/effects.js"], "updateCollision(values, car, time)", "collision feedback hook");
+requireText(byPath["renderer/effects.js"], "SNAPSHOT.wheelSkidIntensity0", "skid snapshot field use");
+requireText(byPath["renderer/effects.js"], "SNAPSHOT.lightCommand", "light snapshot field use");
+requireText(byPath["renderer/effects.js"], "SNAPSHOT.collision", "collision snapshot field use");
+requireText(byPath["renderer/effects.js"], "makeRadialTexture", "effect texture fallback");
 
 requireText(byPath["renderer/cameras.js"], "getTorcsPoseQuaternion(values, this.carRotation)", "camera pose matrix conversion");
 requireText(byPath["renderer/cameras.js"], "fov: 40", "TORCS chase camera FOV");
@@ -328,6 +355,13 @@ if (!car.wheelFallback || car.wheelFallback.source !== "runtime-snapshot" ||
 }
 for (const texture of Object.values(track.textures).concat(Object.values(car.textures))) {
 	checkPng(texture);
+}
+const effectTextures = manifest.effects && manifest.effects.textures;
+for (const name of ["smoke.rgb", "fire0.rgb", "fire1.rgb", "frontlight1.rgb", "rearlight1.rgb", "breaklight1.rgb", "grey-tracks.rgb"]) {
+	if (!effectTextures || !effectTextures[name]) {
+		fail("TORCS web renderer smoke test found missing effect texture metadata", { name });
+	}
+	checkPng(effectTextures[name]);
 }
 
 checkTrackAlignment(track.asset)

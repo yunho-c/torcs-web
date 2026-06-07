@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { TorcsEffects } from "./effects.js";
 import { SNAPSHOT } from "./runtime.js";
 
 const ROAD_Y = 0.03;
@@ -158,8 +159,11 @@ export class TorcsScene {
 		this.groups = {
 			background: new THREE.Group(),
 			land: new THREE.Group(),
-			cars: new THREE.Group(),
+			skidMarks: new THREE.Group(),
 			shadows: new THREE.Group(),
+			cars: new THREE.Group(),
+			carLights: new THREE.Group(),
+			smoke: new THREE.Group(),
 		};
 		for (const group of Object.values(this.groups)) {
 			this.scene.add(group);
@@ -173,12 +177,12 @@ export class TorcsScene {
 		this.carLods = [];
 		this.activeCarLod = null;
 		this.carDimensions = null;
-		this.carShadow = null;
 		this.generatedWheels = [];
 		this.footprint = null;
 		this.track = null;
 		this.trackVisual = null;
 		this.backgroundDome = null;
+		this.effects = new TorcsEffects(this.groups);
 	}
 
 	addLighting() {
@@ -291,6 +295,7 @@ export class TorcsScene {
 		if (!this.car) {
 			return;
 		}
+		this.effects.setCarAsset(asset);
 		if (this.carVisualRoot) {
 			this.car.remove(this.carVisualRoot);
 		}
@@ -315,6 +320,10 @@ export class TorcsScene {
 		}
 	}
 
+	setEffectTextures(textures) {
+		this.effects.setTextures(textures);
+	}
+
 	createCar(values) {
 		this.carDimensions = getCarDimensions(values);
 		this.car = new THREE.Group();
@@ -324,13 +333,6 @@ export class TorcsScene {
 		const material = new THREE.MeshLambertMaterial({ color: 0xc9483d });
 		this.carBox = new THREE.Mesh(geometry, material);
 		this.car.add(this.carBox);
-
-		this.carShadow = new THREE.Mesh(
-			new THREE.CircleGeometry(1, 32),
-			new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.34, depthWrite: false }),
-		);
-		this.carShadow.rotation.x = -Math.PI / 2;
-		this.groups.shadows.add(this.carShadow);
 
 		this.footprint = makeLine([], 0xf3ead6, 0.92, ROAD_Y + 0.08);
 		this.groups.cars.add(this.footprint);
@@ -457,13 +459,6 @@ export class TorcsScene {
 		this.selectCarLod(camera);
 		this.updateGeneratedWheels(values);
 
-		this.carShadow.position.set(this.car.position.x, ROAD_Y + 0.01, this.car.position.z);
-		this.carShadow.scale.set(
-			Math.max(1, values[SNAPSHOT.dimensionX] * 0.6),
-			Math.max(1, values[SNAPSHOT.dimensionY] * 0.8),
-			1,
-		);
-
 		const footprintPoints = [];
 		const order = [0, 1, 3, 2];
 		for (const index of order) {
@@ -475,6 +470,7 @@ export class TorcsScene {
 		}
 		this.footprint.geometry.dispose();
 		this.footprint.geometry = new THREE.BufferGeometry().setFromPoints(footprintPoints);
+		this.effects.update(values, this.car, camera);
 	}
 
 	resize() {

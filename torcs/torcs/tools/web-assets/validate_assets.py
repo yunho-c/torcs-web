@@ -128,6 +128,12 @@ def main():
 				check_object_names(lod, lod.get("model", "car LOD"))
 			for texture in car.get("textures", {}).values():
 				check_texture(require(root, texture))
+		effects = manifest.get("effects", {})
+		effect_textures = effects.get("textures", {})
+		for name in ["smoke.rgb", "fire0.rgb", "fire1.rgb", "frontlight1.rgb", "rearlight1.rgb", "breaklight1.rgb", "grey-tracks.rgb"]:
+			if name not in effect_textures:
+				raise ValueError(f"missing effect texture {name}")
+			check_texture(require(root, effect_textures[name]))
 	except Exception as exc:
 		return fail(f"TORCS web asset validation failed: {exc}")
 

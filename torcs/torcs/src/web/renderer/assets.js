@@ -107,6 +107,15 @@ export class AssetManager {
 		return texture;
 	}
 
+	async loadEffects() {
+		const manifest = await this.loadManifest();
+		const textures = {};
+		for (const [name, relativePath] of Object.entries((manifest.effects && manifest.effects.textures) || {})) {
+			textures[name] = await this.loadTexture(relativePath);
+		}
+		return { textures };
+	}
+
 	async loadTrack(trackPath) {
 		const manifest = await this.loadManifest();
 		const entry = manifest.tracks[normalizeRuntimePath(trackPath)];
@@ -141,6 +150,11 @@ export class AssetManager {
 			scene.visible = false;
 			return { lod, scene };
 		}));
-		return { entry, lods };
+		const shadowPath = entry.shadowTexture && entry.textures ? entry.textures[entry.shadowTexture] : "";
+		let shadowTexture = null;
+		if (shadowPath) {
+			shadowTexture = await this.loadTexture(shadowPath);
+		}
+		return { entry, lods, shadowTexture };
 	}
 }
