@@ -289,6 +289,7 @@ requireText(byPath["renderer/scene.js"], "skidMarks: new THREE.Group()", "skid-m
 requireText(byPath["renderer/scene.js"], "carLights: new THREE.Group()", "car-light scene group");
 requireText(byPath["renderer/scene.js"], "smoke: new THREE.Group()", "smoke/fire scene group");
 requireText(byPath["renderer/scene.js"], "this.effects = new TorcsEffects(this.groups)", "effects layer creation");
+requireText(byPath["renderer/scene.js"], "this.effects.resetDynamics()", "effects reset on new track/session");
 requireText(byPath["renderer/scene.js"], "this.effects.update(values, this.car, camera)", "snapshot-driven effects update");
 if (byPath["renderer/scene.js"].content.includes("this.car.rotation.set(values[SNAPSHOT.pitch]")) {
 	fail("TORCS web renderer smoke test found scalar Euler car body orientation");
@@ -301,6 +302,7 @@ requireText(byPath["renderer/effects.js"], "updateSmoke(values, car, time, delta
 requireText(byPath["renderer/effects.js"], "updateFire(values, car, time, deltaTime)", "exhaust fire sprite update");
 requireText(byPath["renderer/effects.js"], "updateLights(values, car)", "head rear brake light sprites");
 requireText(byPath["renderer/effects.js"], "updateCollision(values, car, time)", "collision feedback hook");
+requireText(byPath["renderer/effects.js"], "resetDynamics()", "dynamic effect lifecycle reset");
 requireText(byPath["renderer/effects.js"], "SNAPSHOT.wheelSkidIntensity0", "skid snapshot field use");
 requireText(byPath["renderer/effects.js"], "SNAPSHOT.lightCommand", "light snapshot field use");
 requireText(byPath["renderer/effects.js"], "SNAPSHOT.collision", "collision snapshot field use");

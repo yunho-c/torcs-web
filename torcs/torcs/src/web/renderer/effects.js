@@ -117,6 +117,27 @@ export class TorcsEffects {
 		this.shadow.material.needsUpdate = true;
 	}
 
+	resetDynamics() {
+		for (const particle of this.smokeParticles) {
+			this.groups.smoke.remove(particle.sprite);
+			particle.sprite.material.dispose();
+		}
+		for (const particle of this.fireParticles) {
+			this.groups.smoke.remove(particle.sprite);
+			particle.sprite.material.dispose();
+		}
+		this.smokeParticles = [];
+		this.fireParticles = [];
+		this.lastWheelPoints = Array.from({ length: WHEEL_COUNT }, () => null);
+		this.lastSmokeTime = Array.from({ length: WHEEL_COUNT }, () => 0);
+		this.skidSegments = [];
+		this.lastTime = 0;
+		this.previousDamage = 0;
+		this.collisionUntil = 0;
+		this.collisionFlash.material.opacity = 0;
+		this.rebuildSkidGeometry();
+	}
+
 	createShadow() {
 		const shadow = new THREE.Mesh(
 			new THREE.CircleGeometry(1, 40),

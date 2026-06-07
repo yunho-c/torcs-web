@@ -200,6 +200,7 @@ export class TorcsScene {
 	}
 
 	setTrack(track) {
+		this.effects.resetDynamics();
 		if (this.track) {
 			this.groups.land.remove(this.track);
 		}
