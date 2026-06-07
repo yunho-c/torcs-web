@@ -209,7 +209,8 @@ export class TorcsScene {
 		this.track = null;
 		this.trackVisual = null;
 		this.backgroundDome = null;
-		this.effects = new TorcsEffects(this.groups);
+		this.carEffects = [];
+		this.effects = this.createCarEffects(0);
 	}
 
 	addLighting() {
@@ -226,12 +227,24 @@ export class TorcsScene {
 		this.groups.land.add(grid);
 	}
 
+	createCarEffects(carIndex) {
+		const effects = new TorcsEffects(this.groups);
+		effects.setCarAsset(this.carAsset);
+		effects.setTextures(this.effectTextures);
+		effects.setVisible(false);
+		this.carEffects[carIndex] = effects;
+		return effects;
+	}
+
+	getCarEffects(carIndex) {
+		return this.carEffects[carIndex] || this.createCarEffects(carIndex);
+	}
+
 	setTrack(track) {
-		this.effects.resetDynamics();
-		for (const opponent of this.opponentCars) {
-			if (opponent) {
-				opponent.effects.resetDynamics();
-				opponent.effects.setVisible(false);
+		for (const effects of this.carEffects) {
+			if (effects) {
+				effects.resetDynamics();
+				effects.setVisible(false);
 			}
 		}
 		if (this.track) {
@@ -327,10 +340,9 @@ export class TorcsScene {
 
 	setCarVisual(asset) {
 		this.carAsset = asset;
-		this.effects.setCarAsset(asset);
-		for (const opponent of this.opponentCars) {
-			if (opponent) {
-				opponent.effects.setCarAsset(asset);
+		for (const effects of this.carEffects) {
+			if (effects) {
+				effects.setCarAsset(asset);
 			}
 		}
 		if (!this.car) {
@@ -367,10 +379,9 @@ export class TorcsScene {
 
 	setEffectTextures(textures) {
 		this.effectTextures = textures || null;
-		this.effects.setTextures(textures);
-		for (const opponent of this.opponentCars) {
-			if (opponent) {
-				opponent.effects.setTextures(textures);
+		for (const effects of this.carEffects) {
+			if (effects) {
+				effects.setTextures(textures);
 			}
 		}
 	}
@@ -508,15 +519,13 @@ export class TorcsScene {
 			box,
 			dimensions,
 			color,
-			effects: new TorcsEffects(this.groups),
+			effects: this.getCarEffects(carIndex),
 			visualRoot: null,
 			lods: [],
 			activeLod: null,
 			wheels: [],
 		};
 		this.opponentCars[carIndex] = opponent;
-		opponent.effects.setCarAsset(this.carAsset);
-		opponent.effects.setTextures(this.effectTextures);
 		opponent.effects.setVisible(false);
 		this.createOpponentWheels(opponent, values);
 		this.setOpponentVisual(opponent);
@@ -661,7 +670,9 @@ export class TorcsScene {
 			if (this.opponentCars[i]) {
 				const visible = activeOpponentIndexes.has(i);
 				this.opponentCars[i].root.visible = visible;
-				this.opponentCars[i].effects.setVisible(visible);
+				if (i !== selectedIndex) {
+					this.opponentCars[i].effects.setVisible(visible);
+				}
 			}
 		}
 	}
@@ -681,6 +692,9 @@ export class TorcsScene {
 
 		this.car.position.copy(torcsToThree(values[SNAPSHOT.x], values[SNAPSHOT.y], values[SNAPSHOT.z]));
 		setObjectQuaternionFromTorcsPosMat(this.car, values);
+		const carIndex = getSnapshotCarIndex(values, 0);
+		this.effects = this.getCarEffects(carIndex);
+		this.effects.setVisible(true);
 		this.selectCarLod(camera);
 		this.updateGeneratedWheels(values);
 

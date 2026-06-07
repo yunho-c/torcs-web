@@ -540,7 +540,10 @@ requireText(byPath["renderer/scene.js"], "getSnapshotCarIndex(values, index) ===
 requireText(byPath["renderer/scene.js"], "tintClone(item.scene, opponent.color)", "Phase 6 distinct opponent car visual tint");
 requireText(byPath["renderer/scene.js"], "setObjectQuaternionFromTorcsPosMat(opponent.root, values)", "Phase 6 opponent pose matrix conversion");
 requireText(byPath["renderer/scene.js"], "selectOpponentLod(opponent, camera)", "Phase 6 opponent LOD switching");
-requireText(byPath["renderer/scene.js"], "effects: new TorcsEffects(this.groups)", "Phase 6 per-opponent effect state");
+requireText(byPath["renderer/scene.js"], "this.carEffects = []", "Phase 6 per-car effect state registry");
+requireText(byPath["renderer/scene.js"], "getCarEffects(carIndex)", "Phase 6 car-index effect lookup");
+requireText(byPath["renderer/scene.js"], "effects: this.getCarEffects(carIndex)", "Phase 6 opponent uses car-index effect state");
+requireText(byPath["renderer/scene.js"], "if (i !== selectedIndex)", "Phase 6 selected effect visibility survives opponent hiding");
 requireText(byPath["renderer/scene.js"], "opponent.effects.update(values, opponent.root, camera)", "Phase 6 opponent effect snapshot update");
 requireText(byPath["renderer/effects.js"], "setVisible(visible)", "Phase 6 effect visibility control");
 requireText(byPath["renderer/scene.js"], "export { getTorcsPoseQuaternion, torcsToThree }", "shared TORCS pose export");
@@ -557,8 +560,8 @@ requireText(byPath["renderer/scene.js"], "next.lod.wheels !== false", "LOD wheel
 requireText(byPath["renderer/scene.js"], "skidMarks: new THREE.Group()", "skid-mark scene group");
 requireText(byPath["renderer/scene.js"], "carLights: new THREE.Group()", "car-light scene group");
 requireText(byPath["renderer/scene.js"], "smoke: new THREE.Group()", "smoke/fire scene group");
-requireText(byPath["renderer/scene.js"], "this.effects = new TorcsEffects(this.groups)", "effects layer creation");
-requireText(byPath["renderer/scene.js"], "this.effects.resetDynamics()", "effects reset on new track/session");
+requireText(byPath["renderer/scene.js"], "this.effects = this.createCarEffects(0)", "effects layer creation");
+requireText(byPath["renderer/scene.js"], "effects.resetDynamics()", "effects reset on new track/session");
 requireText(byPath["renderer/scene.js"], "this.effects.update(values, this.car, camera)", "snapshot-driven effects update");
 if (byPath["renderer/scene.js"].content.includes("this.car.rotation.set(values[SNAPSHOT.pitch]")) {
 	fail("TORCS web renderer smoke test found scalar Euler car body orientation");
