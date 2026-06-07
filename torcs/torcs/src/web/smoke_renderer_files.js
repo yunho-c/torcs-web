@@ -253,7 +253,7 @@ requireText(byPath["renderer/scene.js"], "setTrackVisual(model)", "converted tra
 requireText(byPath["renderer/scene.js"], "setTrackAtmosphere(entry, backgroundTexture = null)", "track atmosphere hook");
 requireText(byPath["renderer/scene.js"], "backgroundColor.clone().multiplyScalar(0.8)", "native fog color scaling");
 requireText(byPath["renderer/scene.js"], "new THREE.Fog(fogColor, 300, 600)", "linear TORCS fog range");
-requireText(byPath["renderer/scene.js"], "const BACKGROUND_RADIUS = 1800", "native panoramic backdrop radius");
+requireText(byPath["renderer/scene.js"], "const BACKGROUND_RADIUS = 500", "clipping-safe panoramic backdrop radius");
 requireText(byPath["renderer/scene.js"], "const BACKGROUND_HEIGHT = 1200", "native panoramic backdrop height");
 requireText(byPath["renderer/scene.js"], "texture.repeat.set(-1, 1)", "native background horizontal orientation");
 requireText(byPath["renderer/scene.js"], "TORCS web renderer track background texture is configured but unavailable", "missing configured background warning");

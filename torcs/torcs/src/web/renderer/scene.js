@@ -8,7 +8,8 @@ const WHEEL_HEAT_HOT = new THREE.Color(0xff5b32);
 const DEFAULT_BACKGROUND = new THREE.Color(0x0b0d0c);
 const DEFAULT_AMBIENT = new THREE.Color(0xd8e0db);
 const DEFAULT_SUN = new THREE.Color(0xfff0d2);
-const BACKGROUND_RADIUS = 1800;
+// Keep the panorama inside the chase/onboard camera far plane so it is not clipped.
+const BACKGROUND_RADIUS = 500;
 const BACKGROUND_HEIGHT = 1200;
 const BACKGROUND_VERTICAL_BIAS = 0.28;
 const TORCS_TO_THREE_BASIS = new THREE.Matrix4().set(
