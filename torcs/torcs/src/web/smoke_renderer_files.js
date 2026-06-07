@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const childProcess = require("node:child_process");
+const { pathToFileURL } = require("node:url");
 
 const root = path.resolve(process.argv[2] || ".");
 
@@ -135,6 +137,152 @@ function readPositionBounds(relativePath) {
 		fail("TORCS web renderer smoke test found GLB without position bounds", { file: relativePath });
 	}
 	return bounds;
+}
+
+async function importAudioModuleForSmoke() {
+	const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "torcs-audio-smoke-"));
+	const rendererDir = path.join(tempDir, "renderer");
+	fs.mkdirSync(rendererDir, { recursive: true });
+	try {
+		const audioSource = byPath["renderer/audio.js"].content.replace(
+			"import * as THREE from \"three\";",
+			`const THREE = {
+\tVector3: class {
+\t\tconstructor(x = 0, y = 0, z = 0) {
+\t\t\tthis.x = x;
+\t\t\tthis.y = y;
+\t\t\tthis.z = z;
+\t\t}
+\t\tset(x, y, z) {
+\t\t\tthis.x = x;
+\t\t\tthis.y = y;
+\t\t\tthis.z = z;
+\t\t\treturn this;
+\t\t}
+\t},
+};`,
+		);
+		fs.writeFileSync(path.join(rendererDir, "audio.js"), audioSource, "utf8");
+		fs.writeFileSync(path.join(rendererDir, "runtime.js"), byPath["renderer/runtime.js"].content, "utf8");
+		const tag = Date.now();
+		const audioModule = await import(`${pathToFileURL(path.join(rendererDir, "audio.js")).href}?smoke=${tag}`);
+		const runtimeModule = await import(`${pathToFileURL(path.join(rendererDir, "runtime.js")).href}?smoke=${tag}`);
+		return {
+			...audioModule,
+			SNAPSHOT: runtimeModule.SNAPSHOT,
+		};
+	} finally {
+		fs.rmSync(tempDir, { recursive: true, force: true });
+	}
+}
+
+function makeAudioSnapshot(SNAPSHOT, overrides = {}) {
+	const values = new Array(175).fill(0);
+	values[SNAPSHOT.x] = 10;
+	values[SNAPSHOT.y] = 20;
+	values[SNAPSHOT.z] = 1.5;
+	values[SNAPSHOT.yaw] = Math.PI / 3;
+	values[SNAPSHOT.speed] = 35;
+	values[SNAPSHOT.engineRpm] = 3600;
+	values[SNAPSHOT.engineRedline] = 7000;
+	values[SNAPSHOT.controlAccel] = 0.8;
+	values[SNAPSHOT.gearRatio] = 3.2;
+	values[SNAPSHOT.engineSmoke] = 0.7;
+	for (let i = 0; i < 4; i += 1) {
+		values[SNAPSHOT.wheelRelX0 + i] = i < 2 ? 1.1 : -1.1;
+		values[SNAPSHOT.wheelRelY0 + i] = i % 2 === 0 ? 0.7 : -0.7;
+		values[SNAPSHOT.wheelRelZ0 + i] = -0.3;
+		values[SNAPSHOT.wheelSkidIntensity0 + i] = i === 0 ? 0.42 : 0.02;
+		values[SNAPSHOT.wheelSlipAccel0 + i] = 4;
+		values[SNAPSHOT.wheelReaction0 + i] = 3200;
+		values[SNAPSHOT.wheelRoughnessFrequency0 + i] = 1.2;
+		values[SNAPSHOT.wheelRoughness0 + i] = 0.35;
+		values[SNAPSHOT.wheelOtherSurfaceContribution0 + i] = 0;
+		values[SNAPSHOT.wheelOtherSurfaceKind0 + i] = 0;
+		values[SNAPSHOT.wheelOtherRoughnessFrequency0 + i] = 1;
+		values[SNAPSHOT.wheelOtherRoughness0 + i] = 0.2;
+		values[SNAPSHOT.wheelSurfaceStyle0 + i] = 0;
+		values[SNAPSHOT.wheelOtherSurfaceStyle0 + i] = 0;
+	}
+	for (const [key, value] of Object.entries(overrides)) {
+		values[SNAPSHOT[key]] = value;
+	}
+	return values;
+}
+
+function assertAudio(condition, label, details = {}) {
+	if (!condition) {
+		fail("TORCS web renderer smoke test found audio model behavior mismatch", {
+			label,
+			...details,
+		});
+	}
+}
+
+async function checkAudioModelBehavior() {
+	const audioModule = await importAudioModuleForSmoke();
+	const { CarAudioModel, SNAPSHOT } = audioModule;
+	const carSound = {
+		rpmScale: 1.2,
+		turbo: true,
+		turboRpm: 100,
+		turboLag: 1,
+	};
+
+	const activeModel = new CarAudioModel();
+	const active = activeModel.update(makeAudioSnapshot(SNAPSHOT), carSound);
+	assertAudio(active.engine.volume > 0, "active engine loop", active.engine);
+	assertAudio(Math.abs(active.engine.pitch - 7.2) < 0.000001, "engine pitch follows rpm scale", active.engine);
+	assertAudio(active.roadRide.volume > 0, "active road ride loop", active.roadRide);
+	assertAudio(active.backfireLoop.volume > 0, "active backfire loop", active.backfireLoop);
+
+	const eventModel = new CarAudioModel();
+	const eventValues = makeAudioSnapshot(SNAPSHOT, {
+		gearChangeEvent: 1,
+		collisionEvent: 31,
+	});
+	const eventState = eventModel.update(eventValues, carSound);
+	const eventNames = eventState.events.map((event) => event.name).sort();
+	assertAudio(eventState.metalSkid.volume > 0, "latched drag collision loop", eventState.metalSkid);
+	for (const name of ["bang", "bottomCrash", "crash", "gearChange"]) {
+		assertAudio(eventNames.includes(name), "latched one-shot event", { name, eventNames });
+	}
+
+	const mixedModel = new CarAudioModel();
+	const mixedValues = makeAudioSnapshot(SNAPSHOT, {
+		wheelOtherSurfaceContribution0: 0.4,
+		wheelOtherSurfaceKind0: 1,
+		wheelOtherRoughnessFrequency0: 1.8,
+		wheelOtherRoughness0: 0.9,
+		wheelSurfaceStyle0: 1,
+	});
+	const mixed = mixedModel.update(mixedValues, carSound);
+	assertAudio(mixed.roadRide.volume > 0, "mixed surface road loop", mixed.roadRide);
+	assertAudio(mixed.grassRide.volume > 0, "mixed surface dirt loop", mixed.grassRide);
+	assertAudio(mixed.grassSkid.volume > 0, "mixed surface dirt skid", mixed.grassSkid);
+	assertAudio(mixed.curbRide.volume > 0, "curb style loop", mixed.curbRide);
+	assertAudio(mixed.skidTyres[0].volume > 0, "wheel skid loop", mixed.skidTyres[0]);
+
+	const mutedModel = new CarAudioModel();
+	mutedModel.update(makeAudioSnapshot(SNAPSHOT, {
+		gearChangeEvent: 1,
+		collisionEvent: 31,
+	}), carSound);
+	const muted = mutedModel.update(makeAudioSnapshot(SNAPSHOT, {
+		state: 1,
+		gearChangeEvent: 1,
+		collisionEvent: 31,
+	}), carSound);
+	assertAudio(muted.engine.volume === 0, "no-simulation engine mute", muted.engine);
+	assertAudio(muted.turbo.volume === 0, "no-simulation turbo mute", muted.turbo);
+	assertAudio(muted.backfireLoop.volume === 0, "no-simulation backfire mute", muted.backfireLoop);
+	assertAudio(muted.metalSkid.volume === 0, "no-simulation collision mute", muted.metalSkid);
+	assertAudio(muted.events.length === 0, "no-simulation event mute", { events: muted.events });
+
+	return {
+		enginePitch: active.engine.pitch,
+		events: eventNames,
+	};
 }
 
 async function checkTrackAlignment(trackAsset) {
@@ -440,12 +588,13 @@ crashSounds.forEach((entry, index) => {
 	checkWav(entry.asset);
 });
 
-checkTrackAlignment(track.asset)
-	.then((alignment) => {
+Promise.all([checkAudioModelBehavior(), checkTrackAlignment(track.asset)])
+	.then(([audioModel, alignment]) => {
 		console.log(JSON.stringify({
 			rendererFiles: files.length,
 			html: "torcs_web_renderer.html",
 			entrypoint: "renderer/main.js",
+			audioModel,
 			webAssetTracks: Object.keys(manifest.tracks).length,
 			webAssetCars: Object.keys(manifest.cars).length,
 			alignment,
