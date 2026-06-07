@@ -109,6 +109,10 @@
 			align-items: end;
 		}
 
+		.race-row {
+			grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+		}
+
 		button,
 		select,
 		input[type="number"] {
@@ -205,6 +209,29 @@
 			background: rgba(15, 18, 16, 0.76);
 		}
 
+		.standings {
+			display: grid;
+			gap: 3px;
+			font-size: 0.72rem;
+		}
+
+		.standing {
+			display: grid;
+			grid-template-columns: 24px 1fr auto;
+			gap: 8px;
+			align-items: center;
+			min-height: 24px;
+			padding: 3px 5px;
+			border: 1px solid transparent;
+			color: var(--muted);
+		}
+
+		.standing.active {
+			border-color: var(--gold);
+			color: var(--ink);
+			background: rgba(212, 173, 95, 0.12);
+		}
+
 		.metric {
 			min-height: 70px;
 			padding: 10px;
@@ -248,6 +275,7 @@
 
 			.controls > label,
 			.controls .assets,
+			.controls .race-row,
 			.controls .audio-row {
 				display: none;
 			}
@@ -327,6 +355,16 @@
 				<input id="gear-input" type="number" min="-1" max="5" step="1" value="1">
 			</label>
 		</div>
+		<div class="row race-row">
+			<label>Cars
+				<input id="car-count" type="number" min="1" max="4" step="1" value="3">
+			</label>
+			<label>Current Car
+				<select id="current-car">
+					<option value="0">webprobe</option>
+				</select>
+			</label>
+		</div>
 		<div class="row audio-row">
 			<button id="audio" type="button">Audio</button>
 			<label>Volume
@@ -351,6 +389,7 @@
 	<div class="map-panel">
 		<span>Track Map</span>
 		<canvas id="track-map"></canvas>
+		<div class="standings" id="standings"></div>
 	</div>
 
 	<div class="hud">

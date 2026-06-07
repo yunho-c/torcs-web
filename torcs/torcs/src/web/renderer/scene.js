@@ -9,6 +9,7 @@ const WHEEL_HEAT_HOT = new THREE.Color(0xff5b32);
 const DEFAULT_BACKGROUND = new THREE.Color(0x0b0d0c);
 const DEFAULT_AMBIENT = new THREE.Color(0xd8e0db);
 const DEFAULT_SUN = new THREE.Color(0xfff0d2);
+const OPPONENT_COLORS = [0x78bdc4, 0xd4ad5f, 0x87b56f, 0xb78bd9];
 // Keep the panorama inside the chase/onboard camera far plane so it is not clipped.
 const BACKGROUND_RADIUS = 500;
 const BACKGROUND_HEIGHT = BACKGROUND_RADIUS * 2;
@@ -145,6 +146,20 @@ function makeWheelSpokes(radius, width) {
 	return group;
 }
 
+function tintClone(root, color) {
+	const clone = root.clone(true);
+	const tint = new THREE.Color(color);
+	clone.traverse((node) => {
+		if (node.isMesh && node.material) {
+			node.material = node.material.clone();
+			if (node.material.color) {
+				node.material.color.lerp(tint, 0.22);
+			}
+		}
+	});
+	return clone;
+}
+
 export class TorcsScene {
 	constructor(canvas) {
 		this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -178,6 +193,8 @@ export class TorcsScene {
 		this.activeCarLod = null;
 		this.carDimensions = null;
 		this.generatedWheels = [];
+		this.opponentCars = [];
+		this.carAsset = null;
 		this.footprint = null;
 		this.track = null;
 		this.trackVisual = null;
@@ -293,6 +310,7 @@ export class TorcsScene {
 	}
 
 	setCarVisual(asset) {
+		this.carAsset = asset;
 		if (!this.car) {
 			return;
 		}
@@ -318,6 +336,9 @@ export class TorcsScene {
 			}
 		} else if (this.carBox) {
 			this.carBox.visible = true;
+		}
+		for (const opponent of this.opponentCars) {
+			this.setOpponentVisual(opponent);
 		}
 	}
 
@@ -439,6 +460,166 @@ export class TorcsScene {
 			const heat = clamp01(values[SNAPSHOT.wheelBrakeTemp0 + index]);
 			wheel.heat.material.color.copy(WHEEL_HEAT_COOL).lerp(WHEEL_HEAT_HOT, heat);
 			wheel.heat.material.opacity = 0.38 + heat * 0.5;
+		}
+	}
+
+	createOpponentCar(values, carIndex) {
+		const root = new THREE.Group();
+		root.userData.carIndex = carIndex;
+		this.groups.cars.add(root);
+		const dimensions = getCarDimensions(values);
+		const color = OPPONENT_COLORS[(carIndex - 1) % OPPONENT_COLORS.length];
+		const box = new THREE.Mesh(
+			new THREE.BoxGeometry(...dimensions),
+			new THREE.MeshLambertMaterial({ color }),
+		);
+		root.add(box);
+		const opponent = {
+			root,
+			box,
+			dimensions,
+			color,
+			visualRoot: null,
+			lods: [],
+			activeLod: null,
+			wheels: [],
+		};
+		this.opponentCars[carIndex] = opponent;
+		this.createOpponentWheels(opponent, values);
+		this.setOpponentVisual(opponent);
+		return opponent;
+	}
+
+	createOpponentWheels(opponent, values) {
+		for (const wheel of opponent.wheels) {
+			opponent.root.remove(wheel.root);
+		}
+		opponent.wheels = [];
+		for (const index of WHEEL_ORDER) {
+			const radius = Math.max(0.05, values[SNAPSHOT.wheelRadius0 + index] || 0.32);
+			const width = Math.max(0.04, values[SNAPSHOT.wheelWidth0 + index] || 0.18);
+			const root = new THREE.Group();
+			const steer = new THREE.Group();
+			const camber = new THREE.Group();
+			const spin = new THREE.Group();
+			const tire = new THREE.Mesh(
+				makeWheelGeometry(radius, width),
+				new THREE.MeshLambertMaterial({ color: 0x151716 }),
+			);
+			tire.rotation.x = Math.PI / 2;
+			const heat = new THREE.Mesh(
+				makeWheelGeometry(radius * 0.58, width * 1.08),
+				new THREE.MeshBasicMaterial({ color: WHEEL_HEAT_COOL.clone(), transparent: true, opacity: 0.52 }),
+			);
+			heat.rotation.x = Math.PI / 2;
+			spin.add(tire, heat, makeWheelSpokes(radius, width));
+			camber.add(spin);
+			steer.add(camber);
+			root.add(steer);
+			opponent.root.add(root);
+			opponent.wheels.push({ root, steer, camber, spin, tire, heat, radius, width });
+		}
+	}
+
+	setOpponentVisual(opponent) {
+		if (opponent.visualRoot) {
+			opponent.root.remove(opponent.visualRoot);
+		}
+		opponent.visualRoot = null;
+		opponent.lods = [];
+		opponent.activeLod = null;
+		if (!this.carAsset || !this.carAsset.lods || !this.carAsset.lods.length) {
+			opponent.box.visible = true;
+			return;
+		}
+		opponent.visualRoot = new THREE.Group();
+		opponent.lods = this.carAsset.lods
+			.slice()
+			.sort((a, b) => b.lod.threshold - a.lod.threshold)
+			.map((item) => ({
+				lod: item.lod,
+				scene: tintClone(item.scene, opponent.color),
+			}));
+		for (const item of opponent.lods) {
+			item.scene.visible = false;
+			opponent.visualRoot.add(item.scene);
+		}
+		opponent.root.add(opponent.visualRoot);
+		opponent.box.visible = false;
+	}
+
+	selectOpponentLod(opponent, camera) {
+		if (!opponent.lods.length) {
+			return;
+		}
+		let next = opponent.lods[opponent.lods.length - 1];
+		if (camera) {
+			const lodFactor = getCarLodFactor(camera, opponent.root.position, this.renderer.domElement);
+			for (const item of opponent.lods) {
+				if (lodFactor >= item.lod.threshold) {
+					next = item;
+					break;
+				}
+			}
+		}
+		if (next === opponent.activeLod) {
+			return;
+		}
+		for (const item of opponent.lods) {
+			item.scene.visible = item === next;
+		}
+		for (const wheel of opponent.wheels) {
+			wheel.root.visible = next.lod.wheels !== false;
+		}
+		opponent.activeLod = next;
+	}
+
+	updateOpponentWheels(opponent, values) {
+		for (let index = 0; index < opponent.wheels.length; index += 1) {
+			const wheel = opponent.wheels[index];
+			wheel.root.position.copy(torcsToThree(
+				values[SNAPSHOT.wheelRelX0 + index],
+				values[SNAPSHOT.wheelRelY0 + index],
+				values[SNAPSHOT.wheelRelZ0 + index],
+			));
+			wheel.steer.rotation.y = values[SNAPSHOT.wheelSteerAngle0 + index];
+			wheel.camber.rotation.x = values[SNAPSHOT.wheelRelRoll0 + index];
+			wheel.spin.rotation.z = values[SNAPSHOT.wheelSpinAngle0 + index];
+			const heat = clamp01(values[SNAPSHOT.wheelBrakeTemp0 + index]);
+			wheel.heat.material.color.copy(WHEEL_HEAT_COOL).lerp(WHEEL_HEAT_HOT, heat);
+			wheel.heat.material.opacity = 0.28 + heat * 0.42;
+		}
+	}
+
+	updateOpponentCar(values, carIndex, camera = null) {
+		const opponent = this.opponentCars[carIndex] || this.createOpponentCar(values, carIndex);
+		const nextDimensions = getCarDimensions(values);
+		if (nextDimensions.some((value, index) => Math.abs(value - opponent.dimensions[index]) > 0.001)) {
+			opponent.box.geometry.dispose();
+			opponent.box.geometry = new THREE.BoxGeometry(...nextDimensions);
+			opponent.dimensions = nextDimensions;
+		}
+		opponent.root.position.copy(torcsToThree(values[SNAPSHOT.x], values[SNAPSHOT.y], values[SNAPSHOT.z]));
+		setObjectQuaternionFromTorcsPosMat(opponent.root, values);
+		this.selectOpponentLod(opponent, camera);
+		this.updateOpponentWheels(opponent, values);
+	}
+
+	updateCars(snapshots, camera = null) {
+		if (!snapshots || !snapshots.length) {
+			return;
+		}
+		this.updateCar(snapshots[0], camera);
+		const activeIndexes = new Set([0]);
+		for (let i = 1; i < snapshots.length; i += 1) {
+			const carIndex = snapshots[i].carIndex ?? i;
+			activeIndexes.add(carIndex);
+			this.updateOpponentCar(snapshots[i], carIndex, camera);
+		}
+		for (let i = 1; i < this.opponentCars.length; i += 1) {
+			if (this.opponentCars[i]) {
+				this.opponentCars[i].root.visible = activeIndexes.has(i);
+			}
 		}
 	}
 

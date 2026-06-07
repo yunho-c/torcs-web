@@ -96,21 +96,23 @@ export class TorcsRuntime {
 		this.snapshotCount = this.snapshotSize / Float64Array.BYTES_PER_ELEMENT;
 		this.snapshotPtr = module._malloc(this.snapshotSize);
 		this.active = false;
+		this.carCount = 0;
 	}
 
 	call(name, returnType, argTypes = [], args = []) {
 		return this.module.ccall(name, returnType, argTypes, args);
 	}
 
-	start(trackPath, carPath) {
+	start(trackPath, carPath, carCount = 1) {
 		this.shutdown();
 		const rc = this.call(
-			"torcs_web_runtime_start_with_files",
+			"torcs_web_runtime_start_multi_with_files",
 			"number",
-			["string", "string"],
-			[trackPath, carPath],
+			["string", "string", "number"],
+			[trackPath, carPath, carCount],
 		);
 		this.active = rc === 0;
+		this.carCount = this.active ? this.call("torcs_web_runtime_get_car_count", "number") : 0;
 		return this.active;
 	}
 
@@ -118,6 +120,7 @@ export class TorcsRuntime {
 		if (this.active) {
 			this.call("torcs_web_runtime_shutdown", null);
 			this.active = false;
+			this.carCount = 0;
 		}
 	}
 
@@ -168,6 +171,46 @@ export class TorcsRuntime {
 			(this.snapshotPtr >> 3) + this.snapshotCount,
 		);
 		return values;
+	}
+
+	readCarSnapshot(carIndex) {
+		if (!this.active) {
+			return null;
+		}
+		const rc = this.call(
+			"torcs_web_runtime_write_car_snapshot",
+			"number",
+			["number", "number", "number"],
+			[carIndex, this.snapshotPtr, this.snapshotSize],
+		);
+		if (rc !== 0) {
+			return null;
+		}
+		const values = this.module.HEAPF64.subarray(
+			this.snapshotPtr >> 3,
+			(this.snapshotPtr >> 3) + this.snapshotCount,
+		);
+		return Float64Array.from(values);
+	}
+
+	readSnapshots() {
+		const snapshots = [];
+		for (let i = 0; i < this.carCount; i += 1) {
+			const values = this.readCarSnapshot(i);
+			if (values) {
+				values.carIndex = i;
+				values.driverName = this.getCarName(i);
+				snapshots.push(values);
+			}
+		}
+		return snapshots;
+	}
+
+	getCarName(carIndex) {
+		if (!this.active) {
+			return "";
+		}
+		return this.call("torcs_web_runtime_get_car_name_by_index", "string", ["number"], [carIndex]);
 	}
 
 	readPoint(sampleIndex, side) {

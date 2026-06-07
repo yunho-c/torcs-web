@@ -19,6 +19,8 @@ const elements = {
 	camera: document.getElementById("camera"),
 	track: document.getElementById("track"),
 	car: document.getElementById("car"),
+	carCount: document.getElementById("car-count"),
+	currentCar: document.getElementById("current-car"),
 	steer: document.getElementById("steer"),
 	accel: document.getElementById("accel"),
 	brake: document.getElementById("brake"),
@@ -39,6 +41,7 @@ const elements = {
 	segment: document.getElementById("segment"),
 	offset: document.getElementById("offset"),
 	map: document.getElementById("track-map"),
+	standings: document.getElementById("standings"),
 };
 
 const hud = new Hud(elements);
@@ -53,6 +56,8 @@ let runtime = null;
 let running = false;
 let lastTime = 0;
 let snapshot = null;
+let snapshots = [];
+let selectedCarIndex = 0;
 
 function setEnabled(enabled) {
 	elements.start.disabled = !runtime;
@@ -77,15 +82,32 @@ const input = new InputController({
 }, applyControls);
 
 function readAndRender(deltaTime = 0) {
-	snapshot = runtime ? runtime.readSnapshot() : null;
+	snapshots = runtime ? runtime.readSnapshots() : [];
+	snapshot = snapshots[selectedCarIndex] || snapshots[0] || null;
 	if (!snapshot) {
 		return;
 	}
-	hud.update(snapshot);
+	hud.update(snapshot, snapshots, selectedCarIndex);
 	cameras.update(snapshot);
-	scene.updateCar(snapshot, cameras.camera);
+	scene.updateCars(snapshots, cameras.camera);
 	audio.update(snapshot, cameras.camera, deltaTime);
 	scene.render(cameras.camera);
+}
+
+function syncCurrentCarOptions() {
+	const count = runtime ? runtime.carCount : 0;
+	const previous = String(selectedCarIndex);
+	elements.currentCar.textContent = "";
+	for (let i = 0; i < count; i += 1) {
+		const option = document.createElement("option");
+		option.value = String(i);
+		option.textContent = snapshots[i] && snapshots[i].driverName ? snapshots[i].driverName : `car ${i + 1}`;
+		elements.currentCar.append(option);
+	}
+	if (count > 0) {
+		selectedCarIndex = Math.min(Number(previous) || 0, count - 1);
+		elements.currentCar.value = String(selectedCarIndex);
+	}
 }
 
 function step(deltaTime = 1 / 60) {
@@ -143,20 +165,24 @@ async function startSession() {
 	}
 	running = false;
 	elements.run.textContent = "Run";
-	const ok = runtime.start(elements.track.value, elements.car.value);
+	const carCount = Math.max(1, Math.min(4, Number(elements.carCount.value) || 1));
+	const ok = runtime.start(elements.track.value, elements.car.value, carCount);
 	if (!ok) {
 		hud.setState("failed");
 		setEnabled(false);
 		return;
 	}
+	selectedCarIndex = 0;
 	applyControls();
 	const trackSamples = runtime.readTrackSamples();
 	scene.setTrack(trackSamples);
 	cameras.setTrack(trackSamples);
 	hud.setTrack(trackSamples);
-	snapshot = runtime.readSnapshot();
+	snapshots = runtime.readSnapshots();
+	snapshot = snapshots[selectedCarIndex] || snapshots[0] || null;
+	syncCurrentCarOptions();
 	cameras.update(snapshot);
-	scene.updateCar(snapshot, cameras.camera);
+	scene.updateCars(snapshots, cameras.camera);
 	hud.setState("ready");
 	setEnabled(true);
 	const hasAssets = await loadVisualAssets();
@@ -195,6 +221,12 @@ elements.volume.addEventListener("input", () => {
 });
 elements.camera.addEventListener("change", () => {
 	cameras.setMode(elements.camera.value);
+	if (snapshot) {
+		readAndRender();
+	}
+});
+elements.currentCar.addEventListener("change", () => {
+	selectedCarIndex = Number(elements.currentCar.value) || 0;
 	if (snapshot) {
 		readAndRender();
 	}

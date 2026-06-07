@@ -29,6 +29,13 @@ function makeBounds(points) {
 	return Number.isFinite(bounds.minX) ? bounds : null;
 }
 
+function carColor(index, selected) {
+	if (index === selected) {
+		return "#f1ede0";
+	}
+	return ["#78bdc4", "#d4ad5f", "#87b56f", "#b78bd9"][Math.max(0, index - 1) % 4];
+}
+
 export class Hud {
 	constructor(elements) {
 		this.elements = elements;
@@ -46,10 +53,10 @@ export class Hud {
 			...track,
 			bounds: track.bounds || makeBounds(points),
 		} : null;
-		this.drawMap(null);
+		this.drawMap(null, [], 0);
 	}
 
-	update(values) {
+	update(values, snapshots = [], selectedCarIndex = 0) {
 		if (!values) {
 			return;
 		}
@@ -67,7 +74,36 @@ export class Hud {
 		this.elements.progress.textContent = fmt(values[SNAPSHOT.lapProgress] * 100, 1);
 		this.elements.segment.textContent = String(values[SNAPSHOT.trackSegmentId]);
 		this.elements.offset.textContent = fmt(values[SNAPSHOT.trackToMiddle], 2);
-		this.drawMap(values);
+		this.drawMap(values, snapshots, selectedCarIndex);
+		this.updateStandings(snapshots, selectedCarIndex);
+	}
+
+	updateStandings(snapshots, selectedCarIndex) {
+		if (!this.elements.standings) {
+			return;
+		}
+		const sorted = snapshots.slice().sort((a, b) => {
+			const posA = a[SNAPSHOT.racePosition] || Number.POSITIVE_INFINITY;
+			const posB = b[SNAPSHOT.racePosition] || Number.POSITIVE_INFINITY;
+			if (posA !== posB) {
+				return posA - posB;
+			}
+			return (b[SNAPSHOT.distanceRaced] || 0) - (a[SNAPSHOT.distanceRaced] || 0);
+		});
+		this.elements.standings.textContent = "";
+		for (const car of sorted) {
+			const carIndex = car.carIndex || 0;
+			const row = document.createElement("div");
+			row.className = `standing${carIndex === selectedCarIndex ? " active" : ""}`;
+			const pos = document.createElement("span");
+			pos.textContent = String(Math.trunc(car[SNAPSHOT.racePosition] || 0));
+			const name = document.createElement("span");
+			name.textContent = car.driverName || `car ${carIndex + 1}`;
+			const speed = document.createElement("span");
+			speed.textContent = `${fmt(car[SNAPSHOT.speed] * 3.6, 0)} km/h`;
+			row.append(pos, name, speed);
+			this.elements.standings.append(row);
+		}
 	}
 
 	resizeMap() {
@@ -86,7 +122,7 @@ export class Hud {
 		return true;
 	}
 
-	drawMap(values) {
+	drawMap(values, snapshots = [], selectedCarIndex = 0) {
 		if (!this.mapContext || !this.elements.map) {
 			return;
 		}
@@ -156,15 +192,16 @@ export class Hud {
 		drawPolyline(this.track.right, "rgba(241, 237, 224, 0.7)", 2);
 		drawPolyline(this.track.center, "rgba(212, 173, 95, 0.55)", 1);
 
-		if (values) {
-			const car = project(values[SNAPSHOT.x], values[SNAPSHOT.y]);
-			const radius = Math.max(4, Math.min(width, height) * 0.035);
+		for (const carValues of snapshots) {
+			const carIndex = carValues.carIndex || 0;
+			const car = project(carValues[SNAPSHOT.x], carValues[SNAPSHOT.y]);
+			const radius = Math.max(3, Math.min(width, height) * (carIndex === selectedCarIndex ? 0.038 : 0.029));
 			ctx.beginPath();
 			ctx.arc(car.x, car.y, radius, 0, Math.PI * 2);
-			ctx.fillStyle = "#c9483d";
+			ctx.fillStyle = carColor(carIndex, selectedCarIndex);
 			ctx.fill();
 			ctx.lineWidth = 2;
-			ctx.strokeStyle = "#f1ede0";
+			ctx.strokeStyle = carIndex === selectedCarIndex ? "#c9483d" : "rgba(15, 18, 16, 0.9)";
 			ctx.stroke();
 		}
 	}
