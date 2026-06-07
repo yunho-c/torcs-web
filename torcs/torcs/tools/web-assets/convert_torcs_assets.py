@@ -33,6 +33,22 @@ EFFECT_TEXTURES = [
 	"breaklight2.rgb",
 	"grey-tracks.rgb",
 ]
+GLOBAL_SOUND_SAMPLES = {
+	"skidTyres": "skid_tyres.wav",
+	"roadRide": "road-ride.wav",
+	"grassRide": "out_of_road.wav",
+	"curbRide": "curb_ride.wav",
+	"grassSkid": "out_of_road-3.wav",
+	"metalSkid": "skid_metal.wav",
+	"axle": "axle.wav",
+	"turbo": "turbo1.wav",
+	"backfireLoop": "backfire_loop.wav",
+	"backfire": "backfire.wav",
+	"bang": "boom.wav",
+	"bottomCrash": "bottom_crash.wav",
+	"gearChange": "gear_change1.wav",
+}
+CRASH_SOUND_SAMPLES = [f"crash{i}.wav" for i in range(1, 7)]
 
 
 @dataclass
@@ -51,7 +67,7 @@ def parse_args():
 
 
 def clear_generated_output(output_dir):
-	for name in ("tracks", "cars", "effects", "manifest.json"):
+	for name in ("tracks", "cars", "effects", "audio", "manifest.json"):
 		path = output_dir / name
 		if path.is_dir():
 			shutil.rmtree(path)
@@ -140,6 +156,8 @@ def parse_car_metadata(source_root):
 	root = ElementTree.fromstring(clean_xml(source_root / CAR_XML))
 	objects = find_section(root, "Graphic Objects")
 	ranges = find_section(objects, "Ranges")
+	sound = find_section(root, "Sound")
+	engine = find_section(root, "Engine")
 	lods = []
 	for child in ranges:
 		if child.tag != "section":
@@ -151,10 +169,18 @@ def parse_car_metadata(source_root):
 		})
 	lods.sort(key=lambda lod: lod["threshold"], reverse=True)
 	return {
+		"id": CAR_XML.parent.name,
 		"xml": str(CAR_XML),
 		"name": root.attrib.get("name", "kc-2000gt"),
 		"wheelTexture": attstr(objects, "wheel texture"),
 		"shadowTexture": attstr(objects, "shadow texture"),
+		"sound": {
+			"engineSample": attstr(sound, "engine sample", "engine-1.wav") if sound is not None else "engine-1.wav",
+			"rpmScale": attnum(sound, "rpm scale", 1.0) if sound is not None else 1.0,
+			"turbo": attstr(engine, "turbo", "false") == "true" if engine is not None else False,
+			"turboRpm": attnum(engine, "turbo rpm", 100.0) if engine is not None else 100.0,
+			"turboLag": attnum(engine, "turbo lag", 1.0) if engine is not None else 1.0,
+		},
 		"lods": lods,
 	}
 
@@ -547,6 +573,24 @@ def convert_texture(source, output_dir):
 	return output
 
 
+def resolve_engine_sample(source_root, car_name, sample):
+	candidates = [
+		source_root / "data/cars/models" / car_name / sample,
+		source_root / "data/data/sound" / sample,
+	]
+	for candidate in candidates:
+		if candidate.exists():
+			return candidate
+	raise FileNotFoundError(f"could not resolve engine sample {sample} for {car_name}")
+
+
+def copy_audio_sample(source, output_dir):
+	output_dir.mkdir(parents=True, exist_ok=True)
+	output = output_dir / source.name
+	shutil.copy2(source, output)
+	return output
+
+
 def relative_to_output(path, output_dir):
 	return path.relative_to(output_dir).as_posix()
 
@@ -610,6 +654,24 @@ def main():
 		resolved = resolve_texture(source_root, source_root / "data/data/textures", name)
 		if resolved:
 			effect_texture_outputs[name] = relative_to_output(convert_texture(resolved, effects_dir), output_dir)
+	audio_dir = output_dir / "audio"
+	car_audio_dir = audio_dir / "cars/kc-2000gt"
+	engine_sample_source = resolve_engine_sample(source_root, car_meta["id"], car_meta["sound"]["engineSample"])
+	engine_sample_output = relative_to_output(copy_audio_sample(engine_sample_source, car_audio_dir), output_dir)
+	global_sound_outputs = {}
+	for key, name in GLOBAL_SOUND_SAMPLES.items():
+		source = source_root / "data/data/sound" / name
+		global_sound_outputs[key] = {
+			"sample": name,
+			"asset": relative_to_output(copy_audio_sample(source, audio_dir / "sound"), output_dir),
+		}
+	crash_sound_outputs = []
+	for name in CRASH_SOUND_SAMPLES:
+		source = source_root / "data/data/sound" / name
+		crash_sound_outputs.append({
+			"sample": name,
+			"asset": relative_to_output(copy_audio_sample(source, audio_dir / "sound"), output_dir),
+		})
 
 	manifest = {
 		"version": 1,
@@ -649,6 +711,14 @@ def main():
 					"radiusScale": 1.0,
 					"widthScale": 1.0,
 				},
+				"sound": {
+					"engineSample": car_meta["sound"]["engineSample"],
+					"engineAsset": engine_sample_output,
+					"rpmScale": car_meta["sound"]["rpmScale"],
+					"turbo": car_meta["sound"]["turbo"],
+					"turboRpm": car_meta["sound"]["turboRpm"],
+					"turboLag": car_meta["sound"]["turboLag"],
+				},
 				"lods": car_meta["lods"],
 				"textures": {
 					name: car_texture_outputs[name]
@@ -659,6 +729,8 @@ def main():
 		},
 		"effects": {
 			"textures": effect_texture_outputs,
+			"sounds": global_sound_outputs,
+			"crashes": crash_sound_outputs,
 		},
 	}
 	(output_dir / "manifest.json").write_text(json.dumps(manifest, indent="\t") + "\n", encoding="utf-8")
@@ -666,11 +738,15 @@ def main():
 	if track_background_output:
 		texture_outputs.add(track_background_output)
 	texture_outputs |= set(effect_texture_outputs.values())
+	sound_outputs = {engine_sample_output}
+	sound_outputs.update(entry["asset"] for entry in global_sound_outputs.values())
+	sound_outputs.update(entry["asset"] for entry in crash_sound_outputs)
 	print(json.dumps({
 		"manifest": relative_to_output(output_dir / "manifest.json", output_dir),
 		"track": manifest["tracks"][track_meta["xml"]]["asset"],
 		"carLods": len(car_meta["lods"]),
 		"textures": len(texture_outputs),
+		"sounds": len(sound_outputs),
 	}))
 
 

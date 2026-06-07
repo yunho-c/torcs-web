@@ -61,6 +61,15 @@ function checkPng(relativePath) {
 	}
 }
 
+function checkWav(relativePath) {
+	const filePath = path.join(root, "web-assets", relativePath);
+	const data = fs.readFileSync(filePath);
+	if (data.length < 44 || data.toString("ascii", 0, 4) !== "RIFF" ||
+		data.toString("ascii", 8, 12) !== "WAVE") {
+		fail("TORCS web renderer smoke test found invalid WAV", { file: relativePath });
+	}
+}
+
 function checkObjectNames(entry, label) {
 	if (!Array.isArray(entry.objectNames) || entry.objectNames.length === 0 ||
 		entry.objectNames.some((name) => typeof name !== "string" || name.length === 0)) {
@@ -363,6 +372,13 @@ if (!car.wheelFallback || car.wheelFallback.source !== "runtime-snapshot" ||
 	!car.wheelFallback.texture || !(car.wheelFallback.texture in car.textures)) {
 	fail("TORCS web renderer smoke test found missing wheel fallback metadata");
 }
+if (!car.sound || car.sound.engineSample !== "engine-1.wav" ||
+	!car.sound.engineAsset || typeof car.sound.rpmScale !== "number" ||
+	typeof car.sound.turbo !== "boolean" || typeof car.sound.turboRpm !== "number" ||
+	typeof car.sound.turboLag !== "number") {
+	fail("TORCS web renderer smoke test found malformed car sound metadata");
+}
+checkWav(car.sound.engineAsset);
 for (const texture of Object.values(track.textures).concat(Object.values(car.textures))) {
 	checkPng(texture);
 }
@@ -373,6 +389,24 @@ for (const name of ["smoke.rgb", "fire0.rgb", "fire1.rgb", "frontlight1.rgb", "r
 	}
 	checkPng(effectTextures[name]);
 }
+const effectSounds = manifest.effects && manifest.effects.sounds;
+for (const name of ["skidTyres", "roadRide", "grassRide", "curbRide", "grassSkid", "metalSkid", "axle", "turbo", "backfireLoop", "backfire", "bang", "bottomCrash", "gearChange"]) {
+	const entry = effectSounds && effectSounds[name];
+	if (!entry || typeof entry.sample !== "string" || !entry.asset) {
+		fail("TORCS web renderer smoke test found missing effect sound metadata", { name });
+	}
+	checkWav(entry.asset);
+}
+const crashSounds = manifest.effects && manifest.effects.crashes;
+if (!Array.isArray(crashSounds) || crashSounds.length !== 6) {
+	fail("TORCS web renderer smoke test found missing crash sound set");
+}
+crashSounds.forEach((entry, index) => {
+	if (!entry || entry.sample !== `crash${index + 1}.wav` || !entry.asset) {
+		fail("TORCS web renderer smoke test found malformed crash sound metadata", { index });
+	}
+	checkWav(entry.asset);
+});
 
 checkTrackAlignment(track.asset)
 	.then((alignment) => {

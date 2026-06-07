@@ -9,6 +9,8 @@ from pathlib import Path
 
 
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+WAV_RIFF_MAGIC = b"RIFF"
+WAV_WAVE_MAGIC = b"WAVE"
 
 
 def fail(message):
@@ -56,6 +58,14 @@ def check_texture(path):
 		raise ValueError(f"{path} is not a PNG texture")
 	if path.read_bytes()[:8] != PNG_MAGIC:
 		raise ValueError(f"{path} has invalid PNG signature")
+
+
+def check_wav(path):
+	data = path.read_bytes()
+	if len(data) < 44:
+		raise ValueError(f"{path} is too short for WAV")
+	if data[:4] != WAV_RIFF_MAGIC or data[8:12] != WAV_WAVE_MAGIC:
+		raise ValueError(f"{path} has invalid WAV signature")
 
 
 def require(root, relative_path):
@@ -121,6 +131,14 @@ def main():
 				raise ValueError("car missing runtime wheel fallback metadata")
 			if wheel_texture not in car.get("textures", {}):
 				raise ValueError(f"wheel fallback texture {wheel_texture} is not converted")
+			sound = car.get("sound") or {}
+			if not sound.get("engineSample") or not sound.get("engineAsset"):
+				raise ValueError("car missing engine sound metadata")
+			check_wav(require(root, sound["engineAsset"]))
+			for field in ["rpmScale", "turboRpm", "turboLag"]:
+				check_number(sound, field, f"{car.get('name', 'car')} sound")
+			if not isinstance(sound.get("turbo"), bool):
+				raise ValueError("car missing turbo sound metadata")
 			for lod in car.get("lods", []):
 				if "wheels" not in lod:
 					raise ValueError(f"{lod.get('model', 'car LOD')} missing wheel visibility metadata")
@@ -134,6 +152,19 @@ def main():
 			if name not in effect_textures:
 				raise ValueError(f"missing effect texture {name}")
 			check_texture(require(root, effect_textures[name]))
+		effect_sounds = effects.get("sounds", {})
+		for name in ["skidTyres", "roadRide", "grassRide", "curbRide", "grassSkid", "metalSkid", "axle", "turbo", "backfireLoop", "backfire", "bang", "bottomCrash", "gearChange"]:
+			entry = effect_sounds.get(name)
+			if not entry or not entry.get("sample") or not entry.get("asset"):
+				raise ValueError(f"missing effect sound {name}")
+			check_wav(require(root, entry["asset"]))
+		crashes = effects.get("crashes", [])
+		if len(crashes) != 6:
+			raise ValueError("missing crash sound set")
+		for index, entry in enumerate(crashes, start=1):
+			if entry.get("sample") != f"crash{index}.wav" or not entry.get("asset"):
+				raise ValueError(f"malformed crash sound {index}")
+			check_wav(require(root, entry["asset"]))
 	except Exception as exc:
 		return fail(f"TORCS web asset validation failed: {exc}")
 
