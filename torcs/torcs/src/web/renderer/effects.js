@@ -152,6 +152,21 @@ export class TorcsEffects {
 		this.shadow.material.needsUpdate = true;
 	}
 
+	setVisible(visible) {
+		this.shadow.visible = visible;
+		this.skidMarks.visible = visible;
+		this.collisionFlash.visible = visible;
+		for (const sprite of Object.values(this.lightSprites)) {
+			sprite.visible = visible;
+		}
+		for (const particle of this.smokeParticles) {
+			particle.sprite.visible = visible;
+		}
+		for (const particle of this.fireParticles) {
+			particle.sprite.visible = visible;
+		}
+	}
+
 	resetDynamics() {
 		for (const particle of this.smokeParticles) {
 			this.groups.smoke.remove(particle.sprite);
