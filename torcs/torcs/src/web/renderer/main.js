@@ -2,6 +2,7 @@ import { CameraRig } from "./cameras.js";
 import { Hud } from "./hud.js";
 import { InputController } from "./input.js";
 import { AssetManager } from "./assets.js";
+import { TorcsAudio } from "./audio.js";
 import { createTorcsRuntime } from "./runtime.js";
 import { TorcsScene } from "./scene.js";
 
@@ -12,6 +13,9 @@ const elements = {
 	run: document.getElementById("run"),
 	step: document.getElementById("step"),
 	reset: document.getElementById("reset"),
+	audio: document.getElementById("audio"),
+	volume: document.getElementById("volume"),
+	audioState: document.getElementById("audio-state"),
 	camera: document.getElementById("camera"),
 	track: document.getElementById("track"),
 	car: document.getElementById("car"),
@@ -34,6 +38,10 @@ const hud = new Hud(elements);
 const scene = new TorcsScene(elements.canvas);
 const cameras = new CameraRig(elements.canvas);
 const assets = new AssetManager("./web-assets/", scene.renderer);
+const audio = new TorcsAudio("./web-assets/", (status) => {
+	elements.audioState.textContent = status;
+	elements.audio.textContent = audio.enabled ? "Mute" : "Audio";
+});
 let runtime = null;
 let running = false;
 let lastTime = 0;
@@ -44,6 +52,7 @@ function setEnabled(enabled) {
 	elements.run.disabled = !enabled;
 	elements.step.disabled = !enabled;
 	elements.reset.disabled = !runtime;
+	elements.audio.disabled = !runtime;
 }
 
 function applyControls(controls = input.getControls()) {
@@ -60,7 +69,7 @@ const input = new InputController({
 	gear: elements.gearInput,
 }, applyControls);
 
-function readAndRender() {
+function readAndRender(deltaTime = 0) {
 	snapshot = runtime ? runtime.readSnapshot() : null;
 	if (!snapshot) {
 		return;
@@ -68,6 +77,7 @@ function readAndRender() {
 	hud.update(snapshot);
 	cameras.update(snapshot);
 	scene.updateCar(snapshot, cameras.camera);
+	audio.update(snapshot, cameras.camera, deltaTime);
 	scene.render(cameras.camera);
 }
 
@@ -77,7 +87,7 @@ function step(deltaTime = 1 / 60) {
 	}
 	applyControls();
 	runtime.step(deltaTime);
-	readAndRender();
+	readAndRender(deltaTime);
 }
 
 function animate(time) {
@@ -140,6 +150,7 @@ async function startSession() {
 	hud.setState("ready");
 	setEnabled(true);
 	const hasAssets = await loadVisualAssets();
+	await audio.reload(elements.car.value);
 	hud.setState(hasAssets ? "ready" : "debug");
 	readAndRender();
 }
@@ -155,6 +166,24 @@ elements.run.addEventListener("click", () => {
 	hud.setState(running ? "running" : "ready");
 });
 elements.reset.addEventListener("click", startSession);
+elements.audio.addEventListener("click", async () => {
+	if (audio.enabled) {
+		audio.disable();
+		return;
+	}
+	try {
+		await audio.enable(elements.car.value);
+		if (snapshot) {
+			audio.update(snapshot, cameras.camera, 0);
+		}
+	} catch (error) {
+		console.warn("TORCS web audio failed to start", error);
+		elements.audioState.textContent = "error";
+	}
+});
+elements.volume.addEventListener("input", () => {
+	audio.setVolume(Number(elements.volume.value));
+});
 elements.camera.addEventListener("change", () => {
 	cameras.setMode(elements.camera.value);
 	if (snapshot) {

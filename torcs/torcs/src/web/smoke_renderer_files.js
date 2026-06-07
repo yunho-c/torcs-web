@@ -213,6 +213,7 @@ const files = [
 	"renderer/runtime.js",
 	"renderer/scene.js",
 	"renderer/effects.js",
+	"renderer/audio.js",
 	"renderer/cameras.js",
 	"renderer/input.js",
 	"renderer/hud.js",
@@ -231,6 +232,9 @@ requireText(byPath["torcs_web_renderer.html"], "./renderer/main.js", "renderer m
 requireText(byPath["torcs_web_renderer.html"], "\"three\"", "Three.js import map");
 requireText(byPath["torcs_web_renderer.html"], "\"three/addons/\"", "Three.js addons import map");
 requireText(byPath["torcs_web_renderer.html"], "<option value=\"trackside\">Trackside</option>", "trackside camera UI option");
+requireText(byPath["torcs_web_renderer.html"], "id=\"audio\"", "audio unlock button");
+requireText(byPath["torcs_web_renderer.html"], "id=\"volume\"", "audio volume slider");
+requireText(byPath["torcs_web_renderer.html"], "id=\"audio-state\"", "audio status readout");
 
 requireText(byPath["renderer/assets.js"], "GLTFLoader", "GLTF loader import");
 requireText(byPath["renderer/assets.js"], "TextureLoader", "texture loader import");
@@ -261,17 +265,33 @@ requireText(byPath["renderer/runtime.js"], "gearChangeEvent: 141", "audio gear-c
 requireText(byPath["renderer/runtime.js"], "collisionEvent: 142", "audio collision event snapshot field");
 requireText(byPath["renderer/runtime.js"], "wheelRoughnessFrequency0: 143", "audio wheel roughness snapshot field");
 requireText(byPath["renderer/runtime.js"], "wheelOtherSurfaceContribution0: 151", "audio mixed-surface snapshot field");
+requireText(byPath["renderer/runtime.js"], "wheelSurfaceStyle0: 167", "audio wheel surface style snapshot field");
 requireText(byPath["renderer/runtime.js"], "lightCommand: 113", "Phase 4 light snapshot field");
 requireText(byPath["renderer/runtime.js"], "collision: 114", "Phase 4 collision snapshot field");
 
 requireText(byPath["renderer/main.js"], "createTorcsRuntime", "runtime factory import");
+requireText(byPath["renderer/main.js"], "import { TorcsAudio } from \"./audio.js\"", "audio runtime import");
 requireText(byPath["renderer/main.js"], "new AssetManager", "asset manager creation");
+requireText(byPath["renderer/main.js"], "new TorcsAudio(\"./web-assets/\"", "audio runtime creation");
 requireText(byPath["renderer/main.js"], "new AssetManager(\"./web-assets/\", scene.renderer)", "asset renderer capability handoff");
 requireText(byPath["renderer/main.js"], "new TorcsScene", "scene creation");
 requireText(byPath["renderer/main.js"], "runtime.readTrackSamples()", "track sample ingestion");
 requireText(byPath["renderer/main.js"], "scene.setTrackAtmosphere(track ? track.entry : null, track ? track.backgroundTexture : null)", "track atmosphere handoff");
 requireText(byPath["renderer/main.js"], "assets.loadEffects()", "effect texture asset loading");
 requireText(byPath["renderer/main.js"], "scene.setEffectTextures(effects ? effects.textures : null)", "effect texture scene handoff");
+requireText(byPath["renderer/main.js"], "audio.update(snapshot, cameras.camera, deltaTime)", "snapshot-driven audio update");
+requireText(byPath["renderer/main.js"], "audio.enable(elements.car.value)", "user-gesture audio unlock");
+
+requireText(byPath["renderer/audio.js"], "export class TorcsAudio", "audio runtime export");
+requireText(byPath["renderer/audio.js"], "export class AudioAssets", "audio asset loader export");
+requireText(byPath["renderer/audio.js"], "export class CarAudioModel", "native car sound model export");
+requireText(byPath["renderer/audio.js"], "context.createPanner()", "positional Web Audio source");
+requireText(byPath["renderer/audio.js"], "context.createBiquadFilter()", "engine low-pass filter");
+requireText(byPath["renderer/audio.js"], "decodeAudioData", "manifest sample decoding");
+requireText(byPath["renderer/audio.js"], "SNAPSHOT.gearChangeEvent", "latched gear-change event use");
+requireText(byPath["renderer/audio.js"], "SNAPSHOT.collisionEvent", "latched collision event use");
+requireText(byPath["renderer/audio.js"], "SNAPSHOT.wheelOtherSurfaceContribution0", "mixed-surface audio use");
+requireText(byPath["renderer/audio.js"], "SNAPSHOT.wheelSurfaceStyle0", "curb style audio use");
 
 requireText(byPath["renderer/scene.js"], "import * as THREE from \"three\"", "Three.js module import");
 requireText(byPath["renderer/scene.js"], "import { TorcsEffects } from \"./effects.js\"", "effects module import");

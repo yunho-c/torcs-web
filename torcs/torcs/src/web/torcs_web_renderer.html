@@ -104,6 +104,11 @@
 			grid-template-columns: 1fr 1fr;
 		}
 
+		.audio-row {
+			grid-template-columns: auto 1fr minmax(86px, auto);
+			align-items: end;
+		}
+
 		button,
 		select,
 		input[type="number"] {
@@ -146,6 +151,19 @@
 		select {
 			width: 100%;
 			padding: 0 8px;
+		}
+
+		.audio-state {
+			min-height: 38px;
+			display: grid;
+			align-items: center;
+			padding: 0 10px;
+			border: 1px solid var(--line);
+			border-radius: 4px;
+			background: var(--panel-strong);
+			color: var(--green);
+			text-transform: uppercase;
+			font-size: 0.72rem;
 		}
 
 		.hud {
@@ -257,6 +275,13 @@
 			<label>Gear
 				<input id="gear-input" type="number" min="-1" max="5" step="1" value="1">
 			</label>
+		</div>
+		<div class="row audio-row">
+			<button id="audio" type="button">Audio</button>
+			<label>Volume
+				<input id="volume" type="range" min="0" max="1" step="0.01" value="0.7">
+			</label>
+			<div class="audio-state" id="audio-state">locked</div>
 		</div>
 		<label>Steer
 			<input id="steer" type="range" min="-1" max="1" step="0.01" value="0">

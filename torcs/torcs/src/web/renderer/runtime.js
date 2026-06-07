@@ -79,6 +79,8 @@ export const SNAPSHOT = {
 	wheelOtherSurfaceKind0: 155,
 	wheelOtherRoughnessFrequency0: 159,
 	wheelOtherRoughness0: 163,
+	wheelSurfaceStyle0: 167,
+	wheelOtherSurfaceStyle0: 171,
 };
 
 const TRACK_SIDE = {

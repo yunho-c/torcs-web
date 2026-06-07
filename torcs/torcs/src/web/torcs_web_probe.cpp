@@ -45,8 +45,8 @@ extern "C" int simuv2(tModInfo *modInfo);
 
 #define TORCS_WEB_SIM_IDENT 0
 #define TORCS_WEB_TRACK_SAMPLES_PER_SEG 12
-#define TORCS_WEB_RUNTIME_SNAPSHOT_VERSION 5
-#define TORCS_WEB_RUNTIME_SNAPSHOT_DOUBLE_COUNT 167
+#define TORCS_WEB_RUNTIME_SNAPSHOT_VERSION 6
+#define TORCS_WEB_RUNTIME_SNAPSHOT_DOUBLE_COUNT 175
 
 enum TorcsWebRuntimeSnapshotField {
 	TORCS_WEB_SNAPSHOT_TIME = 0,
@@ -128,7 +128,9 @@ enum TorcsWebRuntimeSnapshotField {
 	TORCS_WEB_SNAPSHOT_WHEEL_OTHER_SURFACE_CONTRIBUTION_0 = 151,
 	TORCS_WEB_SNAPSHOT_WHEEL_OTHER_SURFACE_KIND_0 = 155,
 	TORCS_WEB_SNAPSHOT_WHEEL_OTHER_ROUGHNESS_FREQ_0 = 159,
-	TORCS_WEB_SNAPSHOT_WHEEL_OTHER_ROUGHNESS_0 = 163
+	TORCS_WEB_SNAPSHOT_WHEEL_OTHER_ROUGHNESS_0 = 163,
+	TORCS_WEB_SNAPSHOT_WHEEL_SURFACE_STYLE_0 = 167,
+	TORCS_WEB_SNAPSHOT_WHEEL_OTHER_SURFACE_STYLE_0 = 171
 };
 
 struct CarElt;
@@ -363,6 +365,12 @@ static tdble
 getSurfaceRoughness(const tTrackSeg *seg)
 {
 	return (seg && seg->surface) ? seg->surface->kRoughness : 0.0f;
+}
+
+static int
+getSurfaceStyle(const tTrackSeg *seg)
+{
+	return seg ? seg->style : 0;
 }
 
 static void
@@ -614,6 +622,8 @@ writeRuntimeSnapshotValues(double *values)
 		values[TORCS_WEB_SNAPSHOT_WHEEL_OTHER_SURFACE_KIND_0 + i] = getSurfaceEffectKind(Runtime.car.priv.otherSurfaceSeg[i]);
 		values[TORCS_WEB_SNAPSHOT_WHEEL_OTHER_ROUGHNESS_FREQ_0 + i] = getSurfaceRoughnessFrequency(Runtime.car.priv.otherSurfaceSeg[i]);
 		values[TORCS_WEB_SNAPSHOT_WHEEL_OTHER_ROUGHNESS_0 + i] = getSurfaceRoughness(Runtime.car.priv.otherSurfaceSeg[i]);
+		values[TORCS_WEB_SNAPSHOT_WHEEL_SURFACE_STYLE_0 + i] = getSurfaceStyle(Runtime.car.priv.wheel[i].seg);
+		values[TORCS_WEB_SNAPSHOT_WHEEL_OTHER_SURFACE_STYLE_0 + i] = getSurfaceStyle(Runtime.car.priv.otherSurfaceSeg[i]);
 	}
 	values[TORCS_WEB_SNAPSHOT_CAR_STEER_LOCK] = Runtime.car._steerLock;
 	values[TORCS_WEB_SNAPSHOT_LIGHT_COMMAND] = Runtime.car._lightCmd;
