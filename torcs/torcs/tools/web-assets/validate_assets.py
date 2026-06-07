@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Validate generated TORCS browser asset manifests."""
 
+import argparse
 import json
 import math
 import struct
@@ -11,11 +12,32 @@ from pathlib import Path
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 WAV_RIFF_MAGIC = b"RIFF"
 WAV_WAVE_MAGIC = b"WAVE"
+GOLDEN_TRACK_XML = "data/tracks/e-track-1/e-track-1.xml"
+GOLDEN_CAR_XML = "data/cars/models/kc-2000gt/kc-2000gt.xml"
+DEFAULT_TRACK_XMLS = [
+	GOLDEN_TRACK_XML,
+	"data/tracks/g-track-1/g-track-1.xml",
+]
+DEFAULT_CAR_XMLS = [
+	GOLDEN_CAR_XML,
+	"data/cars/models/kc-a110/kc-a110.xml",
+]
 
 
 def fail(message):
 	print(message, file=sys.stderr)
 	return 1
+
+
+def parse_args():
+	parser = argparse.ArgumentParser(description=__doc__)
+	parser.add_argument("manifest", type=Path)
+	parser.add_argument(
+		"--quick",
+		action="store_true",
+		help="validate a quick golden-pair-only manifest",
+	)
+	return parser.parse_args()
 
 
 def check_glb(path):
@@ -96,9 +118,8 @@ def check_number(entry, field, label):
 
 
 def main():
-	if len(sys.argv) != 2:
-		return fail("usage: validate_assets.py <manifest.json>")
-	manifest_path = Path(sys.argv[1]).resolve()
+	args = parse_args()
+	manifest_path = args.manifest.resolve()
 	root = manifest_path.parent
 	try:
 		manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -106,10 +127,14 @@ def main():
 			raise ValueError("unsupported manifest version")
 		tracks = manifest.get("tracks") or {}
 		cars = manifest.get("cars") or {}
-		if "data/tracks/e-track-1/e-track-1.xml" not in tracks:
-			raise ValueError("manifest missing E-Track 1")
-		if "data/cars/models/kc-2000gt/kc-2000gt.xml" not in cars:
-			raise ValueError("manifest missing kc-2000gt")
+		required_tracks = [GOLDEN_TRACK_XML] if args.quick else DEFAULT_TRACK_XMLS
+		required_cars = [GOLDEN_CAR_XML] if args.quick else DEFAULT_CAR_XMLS
+		for track_xml in required_tracks:
+			if track_xml not in tracks:
+				raise ValueError(f"manifest missing required track {track_xml}")
+		for car_xml in required_cars:
+			if car_xml not in cars:
+				raise ValueError(f"manifest missing required car {car_xml}")
 
 		for track in tracks.values():
 			check_glb(require(root, track["asset"]))

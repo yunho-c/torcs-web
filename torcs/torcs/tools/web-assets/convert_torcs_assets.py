@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Convert the first TORCS browser renderer asset set to web-native files."""
+"""Convert TORCS browser renderer assets to web-native files."""
 
 import argparse
 import json
@@ -12,8 +12,8 @@ from pathlib import Path
 from xml.etree import ElementTree
 
 
-TRACK_XML = Path("data/tracks/e-track-1/e-track-1.xml")
-CAR_XML = Path("data/cars/models/kc-2000gt/kc-2000gt.xml")
+GOLDEN_TRACK_XML = Path("data/tracks/e-track-1/e-track-1.xml")
+GOLDEN_CAR_XML = Path("data/cars/models/kc-2000gt/kc-2000gt.xml")
 EMPTY_TEXTURE = "empty_texture_no_mapping"
 AC_SURFACE_FAN = 0
 AC_SURFACE_LINE_LOOP = 1
@@ -63,6 +63,11 @@ def parse_args():
 	parser = argparse.ArgumentParser(description=__doc__)
 	parser.add_argument("--source-root", type=Path, required=True)
 	parser.add_argument("--output-dir", type=Path, required=True)
+	parser.add_argument(
+		"--quick",
+		action="store_true",
+		help="convert only the golden E-Track 1/kc-2000gt web asset pair",
+	)
 	return parser.parse_args()
 
 
@@ -83,6 +88,7 @@ def clean_xml(path):
 		end = subset_end + 2 if subset_end >= 0 else text.find(">", start) + 1
 		text = text[:start] + text[end:]
 	text = re.sub(r"^\s*&[A-Za-z0-9_.-]+;\s*$", "", text, flags=re.MULTILINE)
+	text = re.sub(r"&(?!(?:amp|lt|gt|apos|quot);)[A-Za-z0-9_.-]+;", "", text)
 	return text
 
 
@@ -112,12 +118,38 @@ def find_section(section, *names):
 	return current
 
 
-def parse_track_metadata(source_root):
-	root = ElementTree.fromstring(clean_xml(source_root / TRACK_XML))
+def runtime_path(path):
+	return path.as_posix()
+
+
+def discover_track_xmls(source_root):
+	return sorted(
+		path.relative_to(source_root)
+		for path in (source_root / "data/tracks").rglob("*.xml")
+		if ".prj" not in path.name
+	)
+
+
+def discover_car_xmls(source_root):
+	return sorted(
+		path.relative_to(source_root)
+		for path in (source_root / "data/cars/models").glob("*/*.xml")
+		if path.stem == path.parent.name
+	)
+
+
+def selected_asset_paths(source_root, quick):
+	if quick:
+		return [GOLDEN_TRACK_XML], [GOLDEN_CAR_XML]
+	return discover_track_xmls(source_root), discover_car_xmls(source_root)
+
+
+def parse_track_metadata(source_root, track_xml):
+	root = ElementTree.fromstring(clean_xml(source_root / track_xml))
 	header = find_section(root, "Header")
 	graphic = find_section(root, "Graphic")
 	return {
-		"xml": str(TRACK_XML),
+		"xml": runtime_path(track_xml),
 		"name": attstr(header, "name"),
 		"category": attstr(header, "category"),
 		"model": attstr(graphic, "3d description"),
@@ -152,8 +184,8 @@ def parse_track_metadata(source_root):
 	}
 
 
-def parse_car_metadata(source_root):
-	root = ElementTree.fromstring(clean_xml(source_root / CAR_XML))
+def parse_car_metadata(source_root, car_xml):
+	root = ElementTree.fromstring(clean_xml(source_root / car_xml))
 	objects = find_section(root, "Graphic Objects")
 	ranges = find_section(objects, "Ranges")
 	sound = find_section(root, "Sound")
@@ -169,9 +201,9 @@ def parse_car_metadata(source_root):
 		})
 	lods.sort(key=lambda lod: lod["threshold"], reverse=True)
 	return {
-		"id": CAR_XML.parent.name,
-		"xml": str(CAR_XML),
-		"name": root.attrib.get("name", "kc-2000gt"),
+		"id": car_xml.parent.name,
+		"xml": runtime_path(car_xml),
+		"name": root.attrib.get("name", car_xml.parent.name),
 		"wheelTexture": attstr(objects, "wheel texture"),
 		"shadowTexture": attstr(objects, "shadow texture"),
 		"sound": {
@@ -302,6 +334,9 @@ def add_accessor(gltf, buffer_views, buffer_parts, component_type, item_type, va
 	elif component_type == 5123:
 		payload = b"".join(struct.pack("<H", int(value)) for value in values)
 		byte_stride = None
+	elif component_type == 5125:
+		payload = b"".join(struct.pack("<I", int(value)) for value in values)
+		byte_stride = None
 	else:
 		raise ValueError("unsupported component type")
 	padding = (-len(payload)) % 4
@@ -429,7 +464,8 @@ def convert_ac_to_glb(source_root, source_path, output_path):
 		position_accessor = add_accessor(gltf, gltf["bufferViews"], buffer_parts, 5126, "VEC3", data["positions"], minimum, maximum)
 		normal_accessor = add_accessor(gltf, gltf["bufferViews"], buffer_parts, 5126, "VEC3", data["normals"])
 		uv_accessor = add_accessor(gltf, gltf["bufferViews"], buffer_parts, 5126, "VEC2", data["uvs"])
-		index_accessor = add_accessor(gltf, gltf["bufferViews"], buffer_parts, 5123, "SCALAR", data["indices"])
+		index_component_type = 5125 if max(data["indices"]) > 65535 else 5123
+		index_accessor = add_accessor(gltf, gltf["bufferViews"], buffer_parts, index_component_type, "SCALAR", data["indices"])
 
 		material = {
 			"name": make_material_name(texture),
@@ -595,21 +631,19 @@ def relative_to_output(path, output_dir):
 	return path.relative_to(output_dir).as_posix()
 
 
-def main():
-	args = parse_args()
-	source_root = args.source_root.resolve()
-	output_dir = args.output_dir.resolve()
-	output_dir.mkdir(parents=True, exist_ok=True)
-	clear_generated_output(output_dir)
+def track_output_dir(output_dir, track_xml):
+	track_relative = track_xml.relative_to("data/tracks").parent
+	return output_dir / "tracks" / track_relative
 
-	track_meta = parse_track_metadata(source_root)
-	car_meta = parse_car_metadata(source_root)
 
-	track_dir = output_dir / "tracks/e-track-1"
+def convert_track(source_root, output_dir, track_xml):
+	track_meta = parse_track_metadata(source_root, track_xml)
+	track_source_dir = source_root / track_xml.parent
+	track_dir = track_output_dir(output_dir, track_xml)
 	track_glb = track_dir / f"{Path(track_meta['model']).stem}.glb"
 	track_result = convert_ac_to_glb(
 		source_root,
-		source_root / "data/tracks/e-track-1" / track_meta["model"],
+		track_source_dir / track_meta["model"],
 		track_glb,
 	)
 	track_texture_outputs = {
@@ -619,19 +653,46 @@ def main():
 	track_background_output = ""
 	track_background_source = resolve_texture(
 		source_root,
-		source_root / "data/tracks/e-track-1",
+		track_source_dir,
 		track_meta["background"],
 	)
 	if track_background_source:
 		track_background_output = relative_to_output(convert_texture(track_background_source, track_dir), output_dir)
 
-	car_dir = output_dir / "cars/kc-2000gt"
+	entry = {
+		"name": track_meta["name"],
+		"category": track_meta["category"],
+		"source": track_result["source"],
+		"asset": relative_to_output(track_glb, output_dir),
+		"background": track_meta["background"],
+		"backgroundType": track_meta["backgroundType"],
+		"backgroundTexture": track_background_output,
+		"backgroundColor": track_meta["backgroundColor"],
+		"ambientColor": track_meta["ambientColor"],
+		"diffuseColor": track_meta["diffuseColor"],
+		"specularColor": track_meta["specularColor"],
+		"shininess": track_meta["shininess"],
+		"lightPosition": track_meta["lightPosition"],
+		"textures": {name: track_texture_outputs[name] for name in track_result["textures"] if name in track_texture_outputs},
+		"primitiveCount": track_result["primitives"],
+		"objectNames": track_result["objects"],
+	}
+	texture_outputs = set(track_texture_outputs.values())
+	if track_background_output:
+		texture_outputs.add(track_background_output)
+	return track_meta["xml"], entry, texture_outputs
+
+
+def convert_car(source_root, output_dir, car_xml):
+	car_meta = parse_car_metadata(source_root, car_xml)
+	car_source_dir = source_root / car_xml.parent
+	car_dir = output_dir / "cars" / car_meta["id"]
 	car_texture_sources = {}
 	for lod in car_meta["lods"]:
 		lod_glb = car_dir / f"{Path(lod['model']).stem}.glb"
 		result = convert_ac_to_glb(
 			source_root,
-			source_root / "data/cars/models/kc-2000gt" / lod["model"],
+			car_source_dir / lod["model"],
 			lod_glb,
 		)
 		car_texture_sources.update(result["textureSources"])
@@ -640,7 +701,7 @@ def main():
 		lod["objectNames"] = result["objects"]
 
 	for texture in [car_meta["wheelTexture"], car_meta["shadowTexture"]]:
-		resolved = resolve_texture(source_root, source_root / "data/cars/models/kc-2000gt", texture)
+		resolved = resolve_texture(source_root, car_source_dir, texture)
 		if resolved:
 			car_texture_sources[texture] = resolved
 
@@ -648,6 +709,38 @@ def main():
 		name: relative_to_output(convert_texture(source, car_dir), output_dir)
 		for name, source in sorted(car_texture_sources.items())
 	}
+	audio_dir = output_dir / "audio"
+	car_audio_dir = audio_dir / "cars" / car_meta["id"]
+	engine_sample_source = resolve_engine_sample(source_root, car_meta["id"], car_meta["sound"]["engineSample"])
+	engine_sample_output = relative_to_output(copy_audio_sample(engine_sample_source, car_audio_dir), output_dir)
+	entry = {
+		"name": car_meta["name"],
+		"wheelTexture": car_meta["wheelTexture"],
+		"shadowTexture": car_meta["shadowTexture"],
+		"wheelFallback": {
+			"source": "runtime-snapshot",
+			"texture": car_meta["wheelTexture"],
+			"radiusScale": 1.0,
+			"widthScale": 1.0,
+		},
+		"sound": {
+			"engineSample": car_meta["sound"]["engineSample"],
+			"engineAsset": engine_sample_output,
+			"rpmScale": car_meta["sound"]["rpmScale"],
+			"turbo": car_meta["sound"]["turbo"],
+			"turboRpm": car_meta["sound"]["turboRpm"],
+			"turboLag": car_meta["sound"]["turboLag"],
+		},
+		"lods": car_meta["lods"],
+		"textures": {
+			name: car_texture_outputs[name]
+			for name in sorted(car_texture_outputs)
+		},
+	}
+	return car_meta["xml"], entry, set(car_texture_outputs.values()), {engine_sample_output}
+
+
+def convert_effects(source_root, output_dir):
 	effects_dir = output_dir / "effects"
 	effect_texture_outputs = {}
 	for name in EFFECT_TEXTURES:
@@ -655,9 +748,6 @@ def main():
 		if resolved:
 			effect_texture_outputs[name] = relative_to_output(convert_texture(resolved, effects_dir), output_dir)
 	audio_dir = output_dir / "audio"
-	car_audio_dir = audio_dir / "cars/kc-2000gt"
-	engine_sample_source = resolve_engine_sample(source_root, car_meta["id"], car_meta["sound"]["engineSample"])
-	engine_sample_output = relative_to_output(copy_audio_sample(engine_sample_source, car_audio_dir), output_dir)
 	global_sound_outputs = {}
 	for key, name in GLOBAL_SOUND_SAMPLES.items():
 		source = source_root / "data/data/sound" / name
@@ -672,7 +762,39 @@ def main():
 			"sample": name,
 			"asset": relative_to_output(copy_audio_sample(source, audio_dir / "sound"), output_dir),
 		})
+	sound_outputs = {entry["asset"] for entry in global_sound_outputs.values()}
+	sound_outputs.update(entry["asset"] for entry in crash_sound_outputs)
+	return {
+		"textures": effect_texture_outputs,
+		"sounds": global_sound_outputs,
+		"crashes": crash_sound_outputs,
+	}, set(effect_texture_outputs.values()), sound_outputs
 
+
+def main():
+	args = parse_args()
+	source_root = args.source_root.resolve()
+	output_dir = args.output_dir.resolve()
+	output_dir.mkdir(parents=True, exist_ok=True)
+	clear_generated_output(output_dir)
+
+	track_xmls, car_xmls = selected_asset_paths(source_root, args.quick)
+	tracks = {}
+	cars = {}
+	texture_outputs = set()
+	sound_outputs = set()
+	for track_xml in track_xmls:
+		key, entry, outputs = convert_track(source_root, output_dir, track_xml)
+		tracks[key] = entry
+		texture_outputs.update(outputs)
+	for car_xml in car_xmls:
+		key, entry, textures, sounds = convert_car(source_root, output_dir, car_xml)
+		cars[key] = entry
+		texture_outputs.update(textures)
+		sound_outputs.update(sounds)
+	effects, effect_textures, effect_sounds = convert_effects(source_root, output_dir)
+	texture_outputs.update(effect_textures)
+	sound_outputs.update(effect_sounds)
 	manifest = {
 		"version": 1,
 		"generator": "tools/web-assets/convert_torcs_assets.py",
@@ -680,73 +802,18 @@ def main():
 			"source": "AC3D x, height-y, z",
 			"three": "x, height-y, z",
 		},
-		"tracks": {
-			track_meta["xml"]: {
-				"name": track_meta["name"],
-				"category": track_meta["category"],
-				"source": track_result["source"],
-				"asset": relative_to_output(track_glb, output_dir),
-				"background": track_meta["background"],
-				"backgroundType": track_meta["backgroundType"],
-				"backgroundTexture": track_background_output,
-				"backgroundColor": track_meta["backgroundColor"],
-				"ambientColor": track_meta["ambientColor"],
-				"diffuseColor": track_meta["diffuseColor"],
-				"specularColor": track_meta["specularColor"],
-				"shininess": track_meta["shininess"],
-				"lightPosition": track_meta["lightPosition"],
-				"textures": {name: track_texture_outputs[name] for name in track_result["textures"] if name in track_texture_outputs},
-				"primitiveCount": track_result["primitives"],
-				"objectNames": track_result["objects"],
-			},
-		},
-		"cars": {
-			car_meta["xml"]: {
-				"name": car_meta["name"],
-				"wheelTexture": car_meta["wheelTexture"],
-				"shadowTexture": car_meta["shadowTexture"],
-				"wheelFallback": {
-					"source": "runtime-snapshot",
-					"texture": car_meta["wheelTexture"],
-					"radiusScale": 1.0,
-					"widthScale": 1.0,
-				},
-				"sound": {
-					"engineSample": car_meta["sound"]["engineSample"],
-					"engineAsset": engine_sample_output,
-					"rpmScale": car_meta["sound"]["rpmScale"],
-					"turbo": car_meta["sound"]["turbo"],
-					"turboRpm": car_meta["sound"]["turboRpm"],
-					"turboLag": car_meta["sound"]["turboLag"],
-				},
-				"lods": car_meta["lods"],
-				"textures": {
-					name: car_texture_outputs[name]
-					for name in [car_meta["wheelTexture"], car_meta["shadowTexture"], "kc-2000gt.rgb"]
-					if name in car_texture_outputs
-				},
-			},
-		},
-		"effects": {
-			"textures": effect_texture_outputs,
-			"sounds": global_sound_outputs,
-			"crashes": crash_sound_outputs,
-		},
+		"tracks": tracks,
+		"cars": cars,
+		"effects": effects,
 	}
 	(output_dir / "manifest.json").write_text(json.dumps(manifest, indent="\t") + "\n", encoding="utf-8")
-	texture_outputs = set(track_texture_outputs.values()) | set(car_texture_outputs.values())
-	if track_background_output:
-		texture_outputs.add(track_background_output)
-	texture_outputs |= set(effect_texture_outputs.values())
-	sound_outputs = {engine_sample_output}
-	sound_outputs.update(entry["asset"] for entry in global_sound_outputs.values())
-	sound_outputs.update(entry["asset"] for entry in crash_sound_outputs)
 	print(json.dumps({
 		"manifest": relative_to_output(output_dir / "manifest.json", output_dir),
-		"track": manifest["tracks"][track_meta["xml"]]["asset"],
-		"carLods": len(car_meta["lods"]),
+		"tracks": len(tracks),
+		"cars": len(cars),
 		"textures": len(texture_outputs),
 		"sounds": len(sound_outputs),
+		"quick": args.quick,
 	}))
 
 

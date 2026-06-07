@@ -89,6 +89,16 @@ kids 0
 
 		self.assertNotIn("alphaMode", material)
 
+	def test_add_accessor_supports_32_bit_indices(self):
+		gltf = {"accessors": []}
+		buffer_views = []
+		buffer_parts = []
+
+		accessor = convert.add_accessor(gltf, buffer_views, buffer_parts, 5125, "SCALAR", [0, 70000])
+
+		self.assertEqual(accessor, 0)
+		self.assertEqual(gltf["accessors"][0]["componentType"], 5125)
+
 	def test_parse_track_metadata_includes_material_controls(self):
 		content = """<?xml version="1.0"?>
 <params name="Test Track">
@@ -108,14 +118,42 @@ kids 0
 """
 		with tempfile.TemporaryDirectory() as tmp_dir:
 			source_root = Path(tmp_dir)
-			track_path = source_root / convert.TRACK_XML
+			track_path = source_root / convert.GOLDEN_TRACK_XML
 			track_path.parent.mkdir(parents=True)
 			track_path.write_text(content, encoding="utf-8")
 
-			metadata = convert.parse_track_metadata(source_root)
+			metadata = convert.parse_track_metadata(source_root, convert.GOLDEN_TRACK_XML)
 
 		self.assertEqual(metadata["specularColor"], [0.11, 0.12, 0.13])
 		self.assertEqual(metadata["shininess"], 17.0)
+
+	def test_quick_mode_selects_golden_asset_pair(self):
+		with tempfile.TemporaryDirectory() as tmp_dir:
+			source_root = Path(tmp_dir)
+
+			tracks, cars = convert.selected_asset_paths(source_root, quick=True)
+
+		self.assertEqual(tracks, [convert.GOLDEN_TRACK_XML])
+		self.assertEqual(cars, [convert.GOLDEN_CAR_XML])
+
+	def test_discovery_ignores_project_and_texmapper_xmls(self):
+		with tempfile.TemporaryDirectory() as tmp_dir:
+			source_root = Path(tmp_dir)
+			track_root = source_root / "data/tracks/road/demo"
+			track_root.mkdir(parents=True)
+			(track_root / "demo.xml").write_text("<params/>", encoding="utf-8")
+			(track_root / "demo.prj.xml").write_text("<params/>", encoding="utf-8")
+			(track_root / "demo.prj-src.xml").write_text("<params/>", encoding="utf-8")
+			car_root = source_root / "data/cars/models/demo-car"
+			car_root.mkdir(parents=True)
+			(car_root / "demo-car.xml").write_text("<params/>", encoding="utf-8")
+			(car_root / "texmapper.xml").write_text("<params/>", encoding="utf-8")
+
+			tracks = convert.discover_track_xmls(source_root)
+			cars = convert.discover_car_xmls(source_root)
+
+		self.assertEqual(tracks, [Path("data/tracks/road/demo/demo.xml")])
+		self.assertEqual(cars, [Path("data/cars/models/demo-car/demo-car.xml")])
 
 
 if __name__ == "__main__":

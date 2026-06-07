@@ -611,6 +611,10 @@ const car = manifest.cars["data/cars/models/kc-2000gt/kc-2000gt.xml"];
 if (!track || !car) {
 	fail("TORCS web renderer smoke test missing Phase 1 manifest entries");
 }
+if (!manifest.tracks["data/tracks/g-track-1/g-track-1.xml"] ||
+	!manifest.cars["data/cars/models/kc-a110/kc-a110.xml"]) {
+	fail("TORCS web renderer smoke test missing selectable multi-asset manifest entries");
+}
 checkGlb(track.asset);
 checkObjectNames(track, track.source);
 if (!track.backgroundTexture) {
