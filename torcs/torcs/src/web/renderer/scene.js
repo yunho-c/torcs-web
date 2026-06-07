@@ -94,6 +94,15 @@ function getCarDimensions(values) {
 	];
 }
 
+function getSnapshotCarIndex(values, fallback = 0) {
+	return Number.isInteger(values && values.carIndex) ? values.carIndex : fallback;
+}
+
+function getOpponentColor(carIndex) {
+	const colorIndex = carIndex > 0 ? carIndex - 1 : OPPONENT_COLORS.length - 1;
+	return OPPONENT_COLORS[colorIndex % OPPONENT_COLORS.length];
+}
+
 function clamp01(value) {
 	return Math.max(0, Math.min(1, value));
 }
@@ -488,7 +497,7 @@ export class TorcsScene {
 		root.userData.carIndex = carIndex;
 		this.groups.cars.add(root);
 		const dimensions = getCarDimensions(values);
-		const color = OPPONENT_COLORS[(carIndex - 1) % OPPONENT_COLORS.length];
+		const color = getOpponentColor(carIndex);
 		const box = new THREE.Mesh(
 			new THREE.BoxGeometry(...dimensions),
 			new THREE.MeshLambertMaterial({ color }),
@@ -631,20 +640,26 @@ export class TorcsScene {
 		opponent.effects.update(values, opponent.root, camera);
 	}
 
-	updateCars(snapshots, camera = null) {
+	updateCars(snapshots, camera = null, selectedCarIndex = 0) {
 		if (!snapshots || !snapshots.length) {
 			return;
 		}
-		this.updateCar(snapshots[0], camera);
-		const activeIndexes = new Set([0]);
-		for (let i = 1; i < snapshots.length; i += 1) {
-			const carIndex = snapshots[i].carIndex ?? i;
-			activeIndexes.add(carIndex);
+		const selected = snapshots.find((values, index) =>
+			getSnapshotCarIndex(values, index) === selectedCarIndex) || snapshots[0];
+		const selectedIndex = getSnapshotCarIndex(selected, snapshots.indexOf(selected));
+		this.updateCar(selected, camera);
+		const activeOpponentIndexes = new Set();
+		for (let i = 0; i < snapshots.length; i += 1) {
+			const carIndex = getSnapshotCarIndex(snapshots[i], i);
+			if (carIndex === selectedIndex) {
+				continue;
+			}
+			activeOpponentIndexes.add(carIndex);
 			this.updateOpponentCar(snapshots[i], carIndex, camera);
 		}
-		for (let i = 1; i < this.opponentCars.length; i += 1) {
+		for (let i = 0; i < this.opponentCars.length; i += 1) {
 			if (this.opponentCars[i]) {
-				const visible = activeIndexes.has(i);
+				const visible = activeOpponentIndexes.has(i);
 				this.opponentCars[i].root.visible = visible;
 				this.opponentCars[i].effects.setVisible(visible);
 			}

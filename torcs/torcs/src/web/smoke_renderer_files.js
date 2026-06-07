@@ -472,7 +472,8 @@ requireText(byPath["renderer/main.js"], "audio.enabled ? \"Stop\" : \"Audio\"", 
 requireText(byPath["renderer/main.js"], "new TorcsScene", "scene creation");
 requireText(byPath["renderer/main.js"], "runtime.readTrackSamples()", "track sample ingestion");
 requireText(byPath["renderer/main.js"], "runtime.readSnapshots()", "Phase 6 snapshot array ingestion");
-requireText(byPath["renderer/main.js"], "scene.updateCars(snapshots, cameras.camera)", "Phase 6 multi-car scene update");
+requireText(byPath["renderer/main.js"], "scene.updateCars(snapshots, cameras.camera, selectedCarIndex)", "Phase 6 selected-car scene update");
+requireText(byPath["renderer/main.js"], "findSnapshotByCarIndex(selectedCarIndex)", "Phase 6 selected-car snapshot lookup");
 requireText(byPath["renderer/main.js"], "elements.currentCar.addEventListener", "Phase 6 current-car selector binding");
 requireText(byPath["renderer/main.js"], "elements.carCount.value", "Phase 6 car count startup control");
 requireText(byPath["renderer/main.js"], "scene.setTrackAtmosphere(track ? track.entry : null, track ? track.backgroundTexture : null)", "track atmosphere handoff");
@@ -532,8 +533,10 @@ requireText(byPath["renderer/scene.js"], "camera.position.y + BACKGROUND_HEIGHT 
 requireText(byPath["renderer/scene.js"], "color: 0xffffff", "unlit untinted background texture");
 requireText(byPath["renderer/scene.js"], "torcsToThree(entry.lightPosition[0], entry.lightPosition[1], entry.lightPosition[2])", "track light position conversion");
 requireText(byPath["renderer/scene.js"], "setCarVisual(asset)", "converted car LOD hook");
-requireText(byPath["renderer/scene.js"], "updateCars(snapshots, camera = null)", "Phase 6 multi-car scene update");
+requireText(byPath["renderer/scene.js"], "updateCars(snapshots, camera = null, selectedCarIndex = 0)", "Phase 6 multi-car scene update");
 requireText(byPath["renderer/scene.js"], "createOpponentCar(values, carIndex)", "Phase 6 opponent car creation");
+requireText(byPath["renderer/scene.js"], "getOpponentColor(carIndex)", "Phase 6 car-zero opponent color");
+requireText(byPath["renderer/scene.js"], "getSnapshotCarIndex(values, index) === selectedCarIndex", "Phase 6 selected car primary visual");
 requireText(byPath["renderer/scene.js"], "tintClone(item.scene, opponent.color)", "Phase 6 distinct opponent car visual tint");
 requireText(byPath["renderer/scene.js"], "setObjectQuaternionFromTorcsPosMat(opponent.root, values)", "Phase 6 opponent pose matrix conversion");
 requireText(byPath["renderer/scene.js"], "selectOpponentLod(opponent, camera)", "Phase 6 opponent LOD switching");

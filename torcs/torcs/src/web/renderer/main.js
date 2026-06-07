@@ -59,6 +59,10 @@ let snapshot = null;
 let snapshots = [];
 let selectedCarIndex = 0;
 
+function findSnapshotByCarIndex(carIndex) {
+	return snapshots.find((values, index) => (values.carIndex ?? index) === carIndex) || null;
+}
+
 function setEnabled(enabled) {
 	elements.start.disabled = !runtime;
 	elements.run.disabled = !enabled;
@@ -83,13 +87,13 @@ const input = new InputController({
 
 function readAndRender(deltaTime = 0) {
 	snapshots = runtime ? runtime.readSnapshots() : [];
-	snapshot = snapshots[selectedCarIndex] || snapshots[0] || null;
+	snapshot = findSnapshotByCarIndex(selectedCarIndex) || snapshots[0] || null;
 	if (!snapshot) {
 		return;
 	}
 	hud.update(snapshot, snapshots, selectedCarIndex);
 	cameras.update(snapshot);
-	scene.updateCars(snapshots, cameras.camera);
+	scene.updateCars(snapshots, cameras.camera, selectedCarIndex);
 	audio.update(snapshot, cameras.camera, deltaTime);
 	scene.render(cameras.camera);
 }
@@ -179,10 +183,10 @@ async function startSession() {
 	cameras.setTrack(trackSamples);
 	hud.setTrack(trackSamples);
 	snapshots = runtime.readSnapshots();
-	snapshot = snapshots[selectedCarIndex] || snapshots[0] || null;
+	snapshot = findSnapshotByCarIndex(selectedCarIndex) || snapshots[0] || null;
 	syncCurrentCarOptions();
 	cameras.update(snapshot);
-	scene.updateCars(snapshots, cameras.camera);
+	scene.updateCars(snapshots, cameras.camera, selectedCarIndex);
 	hud.setState("ready");
 	setEnabled(true);
 	const hasAssets = await loadVisualAssets();
