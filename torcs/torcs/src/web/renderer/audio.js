@@ -407,6 +407,7 @@ export class TorcsAudio {
 	async enable(carPath) {
 		this.setStatus("loading");
 		await this.ensureContext();
+		this.stopLoops();
 		this.raceAudio = await this.assetLoader.loadRaceAudio(carPath);
 		if (!this.raceAudio) {
 			this.enabled = false;
