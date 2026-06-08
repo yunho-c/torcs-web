@@ -176,7 +176,7 @@ typedef struct TorcsWebRuntime {
 	tTrackItf			trackItf;
 	tTorcsWebSimItf		simItf;
 	tTrack				*trackData;
-	void				*carHandle;
+	void				*carHandles[TORCS_WEB_RUNTIME_MAX_CARS];
 	tCarElt			carList[TORCS_WEB_RUNTIME_MAX_CARS];
 	tCarElt			*cars[TORCS_WEB_RUNTIME_MAX_CARS];
 	tTorcsWebDriverSlot	driverSlots[TORCS_WEB_RUNTIME_MAX_CARS];
@@ -277,6 +277,53 @@ copyModelNameFromPath(const char *path, char *name, size_t nameSize, const char 
 
 	memcpy(name, start, len);
 	name[len] = '\0';
+}
+
+static void *
+loadMergedCarSetup(const char *carFile)
+{
+	void *carHandle;
+	void *categoryHandle;
+	const char *category;
+	char categoryFile[512];
+
+	carHandle = GfParmReadFile(carFile, GFPARM_RMODE_STD | GFPARM_RMODE_REREAD);
+	if (!carHandle) {
+		return NULL;
+	}
+
+	category = GfParmGetStr(carHandle, SECT_CAR, PRM_CATEGORY, NULL);
+	if (!category || category[0] == '\0') {
+		return carHandle;
+	}
+
+	snprintf(categoryFile, sizeof(categoryFile), "/torcs/data/cars/categories/%s/%s.xml", category, category);
+	categoryHandle = GfParmReadFile(categoryFile, GFPARM_RMODE_STD | GFPARM_RMODE_REREAD);
+	if (!categoryHandle) {
+		return carHandle;
+	}
+
+	if (GfParmCheckHandle(categoryHandle, carHandle)) {
+		GfParmReleaseHandle(categoryHandle);
+		GfParmReleaseHandle(carHandle);
+		return NULL;
+	}
+
+	return GfParmMergeHandles(categoryHandle, carHandle,
+		GFPARM_MMODE_SRC | GFPARM_MMODE_DST | GFPARM_MMODE_RELSRC | GFPARM_MMODE_RELDST);
+}
+
+static void *
+loadMergedCarSetupByName(const char *carName)
+{
+	char carFile[512];
+
+	if (!carName || carName[0] == '\0') {
+		return NULL;
+	}
+
+	snprintf(carFile, sizeof(carFile), "/torcs/data/cars/models/%s/%s.xml", carName, carName);
+	return loadMergedCarSetup(carFile);
 }
 
 static tCarElt *
@@ -856,8 +903,10 @@ shutdownRuntime(void)
 	if (Runtime.simStarted && Runtime.simItf.shutdown) {
 		Runtime.simItf.shutdown();
 	}
-	if (Runtime.carHandle) {
-		GfParmReleaseHandle(Runtime.carHandle);
+	for (i = 0; i < Runtime.carCount; i++) {
+		if (Runtime.carHandles[i]) {
+			GfParmReleaseHandle(Runtime.carHandles[i]);
+		}
 	}
 	if (Runtime.trackData && Runtime.trackData->seg && Runtime.trackItf.trkShutdown) {
 		Runtime.trackItf.trkShutdown();
@@ -977,6 +1026,61 @@ torcs_web_check_inferno2_module(void)
 
 	GfModFreeInfoList(&infoList);
 	return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int
+torcs_web_check_inferno2_setup_data(void)
+{
+	void *robotHandle;
+	void *driverSetupHandle;
+	void *driverCarHandle;
+	void *carSetupHandle = NULL;
+	const char *carName;
+	const char *category;
+	const char *robotPath = "Robots/index/5";
+	int result = -1;
+
+	initWebProbe();
+
+	robotHandle = GfParmReadFile("drivers/inferno2/inferno2.xml", GFPARM_RMODE_STD | GFPARM_RMODE_REREAD);
+	driverSetupHandle = GfParmReadFile("drivers/inferno2/5/default.xml", GFPARM_RMODE_STD | GFPARM_RMODE_REREAD);
+	driverCarHandle = GfParmReadFile("drivers/inferno2/5/defaultcar.xml", GFPARM_RMODE_STD | GFPARM_RMODE_REREAD);
+	if (!robotHandle || !driverSetupHandle || !driverCarHandle) {
+		goto cleanup;
+	}
+
+	carName = GfParmGetStr(robotHandle, robotPath, ROB_ATTR_CAR, "");
+	if (strcmp(carName, "kc-a110") != 0 ||
+		GfParmGetNum(driverSetupHandle, "Simulation Parameters", "PGain", NULL, 0.0f) <= 0.0f ||
+		GfParmGetNum(driverCarHandle, "Brake System", "max pressure", NULL, 0.0f) <= 0.0f) {
+		goto cleanup;
+	}
+
+	carSetupHandle = loadMergedCarSetupByName(carName);
+	if (!carSetupHandle) {
+		goto cleanup;
+	}
+
+	category = GfParmGetStr(carSetupHandle, SECT_CAR, PRM_CATEGORY, "");
+	if (strcmp(category, "Historic") == 0 &&
+		GfParmGetNum(carSetupHandle, SECT_CAR, PRM_FUEL, NULL, 0.0f) > 0.0f &&
+		GfParmGetNum(carSetupHandle, SECT_FRNTRGTWHEEL, PRM_MU, NULL, 0.0f) > 0.0f) {
+		result = 0;
+	}
+	GfParmReleaseHandle(carSetupHandle);
+
+cleanup:
+	if (robotHandle) {
+		GfParmReleaseHandle(robotHandle);
+	}
+	if (driverSetupHandle) {
+		GfParmReleaseHandle(driverSetupHandle);
+	}
+	if (driverCarHandle) {
+		GfParmReleaseHandle(driverCarHandle);
+	}
+	return result;
 }
 
 EMSCRIPTEN_KEEPALIVE
@@ -1293,9 +1397,8 @@ torcs_web_runtime_start_multi_with_files(const char *trackFile, const char *carF
 	}
 
 	Runtime.trackData = Runtime.trackItf.trkBuild((char *)selectedTrackFile);
-	Runtime.carHandle = GfParmReadFile(selectedCarFile, GFPARM_RMODE_STD | GFPARM_RMODE_REREAD);
 	copyModelNameFromPath(selectedCarFile, carName, sizeof(carName), "kc-2000gt");
-	if (!Runtime.trackData || !Runtime.trackData->seg || !Runtime.carHandle) {
+	if (!Runtime.trackData || !Runtime.trackData->seg) {
 		shutdownRuntime();
 		return -1;
 	}
@@ -1306,8 +1409,13 @@ torcs_web_runtime_start_multi_with_files(const char *trackFile, const char *carF
 			shutdownRuntime();
 			return -1;
 		}
+		Runtime.carHandles[i] = loadMergedCarSetup(selectedCarFile);
+		if (!Runtime.carHandles[i]) {
+			shutdownRuntime();
+			return -1;
+		}
 		initRuntimeDriverSlot(i);
-		Runtime.carList[i]._carHandle = Runtime.carHandle;
+		Runtime.carList[i]._carHandle = Runtime.carHandles[i];
 		Runtime.cars[i] = &(Runtime.carList[i]);
 	}
 	Runtime.situation._ncars = Runtime.carCount;
@@ -1324,7 +1432,7 @@ torcs_web_runtime_start_multi_with_files(const char *trackFile, const char *carF
 	Runtime.simStarted = 1;
 	for (i = 0; i < Runtime.carCount; i++) {
 		Runtime.simItf.config(&(Runtime.carList[i]), &(Runtime.reInfo));
-		loadCarVisualAttributes(&(Runtime.carList[i]), Runtime.carHandle);
+		loadCarVisualAttributes(&(Runtime.carList[i]), Runtime.carHandles[i]);
 		Runtime.carList[i].ctrl.gear = i == 0 ? 0 : 1;
 		Runtime.carList[i].ctrl.accelCmd = 0.0f;
 		Runtime.carList[i].ctrl.brakeCmd = 0.0f;

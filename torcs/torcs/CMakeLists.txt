@@ -156,6 +156,7 @@ if(EMSCRIPTEN)
 		"'_torcs_web_check_headless_sim_init'"
 		"'_torcs_web_check_headless_sim_update'"
 		"'_torcs_web_check_inferno2_module'"
+		"'_torcs_web_check_inferno2_setup_data'"
 		"'_torcs_web_runtime_start'"
 		"'_torcs_web_runtime_start_multi_with_files'"
 		"'_torcs_web_runtime_start_with_files'"
@@ -290,6 +291,16 @@ if(EMSCRIPTEN)
 				file(RELATIVE_PATH TORCS_WEB_CAR_RELATIVE "${TORCS_ROOT}" "${TORCS_WEB_CAR_CONFIG}")
 				list(APPEND TORCS_WEB_PRELOAD_FILES "--preload-file=${TORCS_WEB_CAR_CONFIG}@/torcs/${TORCS_WEB_CAR_RELATIVE}")
 			endif()
+		endforeach()
+		file(GLOB_RECURSE TORCS_WEB_CAR_CATEGORY_CONFIGS CONFIGURE_DEPENDS "${TORCS_ROOT}/data/cars/categories/*.xml")
+		foreach(TORCS_WEB_CAR_CATEGORY_CONFIG IN LISTS TORCS_WEB_CAR_CATEGORY_CONFIGS)
+			file(RELATIVE_PATH TORCS_WEB_CAR_CATEGORY_RELATIVE "${TORCS_ROOT}" "${TORCS_WEB_CAR_CATEGORY_CONFIG}")
+			list(APPEND TORCS_WEB_PRELOAD_FILES "--preload-file=${TORCS_WEB_CAR_CATEGORY_CONFIG}@/torcs/${TORCS_WEB_CAR_CATEGORY_RELATIVE}")
+		endforeach()
+		file(GLOB_RECURSE TORCS_WEB_INFERNO2_CONFIGS CONFIGURE_DEPENDS "${TORCS_ROOT}/src/drivers/inferno2/*.xml")
+		foreach(TORCS_WEB_INFERNO2_CONFIG IN LISTS TORCS_WEB_INFERNO2_CONFIGS)
+			file(RELATIVE_PATH TORCS_WEB_INFERNO2_RELATIVE "${TORCS_ROOT}/src" "${TORCS_WEB_INFERNO2_CONFIG}")
+			list(APPEND TORCS_WEB_PRELOAD_FILES "--preload-file=${TORCS_WEB_INFERNO2_CONFIG}@${TORCS_WEB_INFERNO2_RELATIVE}")
 		endforeach()
 
 		target_link_options(torcs_web_probe

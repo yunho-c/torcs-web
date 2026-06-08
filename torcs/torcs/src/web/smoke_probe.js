@@ -383,6 +383,7 @@ createModule()
 			headlessSimInit: module.ccall("torcs_web_check_headless_sim_init", "number", [], []),
 			headlessSimUpdate: module.ccall("torcs_web_check_headless_sim_update", "number", [], []),
 			inferno2Module: module.ccall("torcs_web_check_inferno2_module", "number", [], []),
+			inferno2SetupData: module.ccall("torcs_web_check_inferno2_setup_data", "number", [], []),
 				runtime,
 				drive,
 				selected,
@@ -405,6 +406,7 @@ createModule()
 			result.headlessSimInit !== 0 ||
 			result.headlessSimUpdate !== 0 ||
 			result.inferno2Module !== 0 ||
+			result.inferno2SetupData !== 0 ||
 			runtime.start !== 0 ||
 			runtime.setControls !== 0 ||
 			runtime.step !== 0 ||
