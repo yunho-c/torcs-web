@@ -608,10 +608,18 @@ requireText(byPath["renderer/effects.js"], "SNAPSHOT.wheelSurfaceKind0", "surfac
 requireText(byPath["renderer/effects.js"], "SNAPSHOT.wheelReaction0", "reaction-aware smoke use");
 requireText(byPath["renderer/effects.js"], "SNAPSHOT.exhaustCount", "native exhaust metadata use");
 requireText(byPath["renderer/effects.js"], "this.previousEngineLevel - engineLevel", "native RPM-drop fire trigger");
+requireText(byPath["renderer/effects.js"], "makeSlipVelocity(car, accelSlip, sideSlip, horizontalScale, verticalSpeed)", "car-oriented smoke particle velocity");
+requireText(byPath["renderer/effects.js"], "velocity: new THREE.Vector3().copy(world).sub(car.position).normalize().multiplyScalar(0.035)", "independent exhaust fire velocity vector");
 requireText(byPath["renderer/effects.js"], "textures[\"grey-tracks.rgb\"]", "native skid texture use");
 requireText(byPath["renderer/effects.js"], "SNAPSHOT.lightCommand", "light snapshot field use");
 requireText(byPath["renderer/effects.js"], "SNAPSHOT.collision", "collision snapshot field use");
 requireText(byPath["renderer/effects.js"], "makeRadialTexture", "effect texture fallback");
+if (byPath["renderer/effects.js"].content.includes("velocity: tempVector.copy(world).sub(car.position)")) {
+	fail("TORCS web renderer smoke test found shared tempVector exhaust fire velocity");
+}
+if (byPath["renderer/effects.js"].content.includes("sideSlip * surface.initSpeed * 0.08,\n\t\t\t\t).multiplyScalar(deltaTime * 60)")) {
+	fail("TORCS web renderer smoke test found spawn-time-scaled smoke velocity");
+}
 
 requireText(byPath["renderer/cameras.js"], "getTorcsPoseQuaternion(values, this.carRotation)", "camera pose matrix conversion");
 requireText(byPath["renderer/cameras.js"], "fov: 40", "TORCS chase camera FOV");

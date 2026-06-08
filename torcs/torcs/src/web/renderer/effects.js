@@ -26,6 +26,7 @@ const SURFACE_EFFECTS = [
 
 const tempVector = new THREE.Vector3();
 const tempVector2 = new THREE.Vector3();
+const tempQuaternion = new THREE.Quaternion();
 
 function clamp01(value) {
 	return Math.max(0, Math.min(1, value));
@@ -96,6 +97,23 @@ function makeColor(rgb) {
 
 function worldFromCarLocal(car, local, target = new THREE.Vector3()) {
 	return target.copy(local).applyMatrix4(car.matrixWorld);
+}
+
+function normalizeGroundDirection(vector, fallbackX, fallbackZ) {
+	vector.y = 0;
+	if (vector.lengthSq() < 0.000001) {
+		vector.set(fallbackX, 0, fallbackZ);
+	}
+	return vector.normalize();
+}
+
+function makeSlipVelocity(car, accelSlip, sideSlip, horizontalScale, verticalSpeed) {
+	car.getWorldQuaternion(tempQuaternion);
+	const forward = normalizeGroundDirection(tempVector.set(1, 0, 0).applyQuaternion(tempQuaternion), 1, 0);
+	const side = normalizeGroundDirection(tempVector2.set(0, 0, -1).applyQuaternion(tempQuaternion), 0, -1);
+	return new THREE.Vector3(0, verticalSpeed, 0)
+		.addScaledVector(forward, accelSlip * horizontalScale)
+		.addScaledVector(side, sideSlip * horizontalScale);
 }
 
 export class TorcsEffects {
@@ -393,15 +411,13 @@ export class TorcsEffects {
 			const accelSlip = values[SNAPSHOT.wheelSlipAccel0 + index] || 0;
 			const lifeRand = 1 - Math.random() * Math.random();
 			const life = Math.max(0.08, SMOKE_LIFE * (rawSkid * speed + Math.random() * spdFx) / Math.max(1, surface.lifeCoefficient * lifeRand));
+			const horizontalScale = surface.initSpeed * 0.08;
+			const verticalSpeed = 0.1 + Math.random() * surface.initSpeed;
 			this.smokeParticles.push({
 				sprite,
 				age: 0,
 				life,
-				velocity: new THREE.Vector3(
-					-accelSlip * surface.initSpeed * 0.08,
-					0.1 + Math.random() * surface.initSpeed,
-					sideSlip * surface.initSpeed * 0.08,
-				).multiplyScalar(deltaTime * 60),
+				velocity: makeSlipVelocity(car, accelSlip, sideSlip, horizontalScale, verticalSpeed),
 			});
 			this.groups.smoke.add(sprite);
 			this.lastSmokeTime[index] = time;
@@ -443,7 +459,7 @@ export class TorcsEffects {
 				kind: 0,
 				age: 0,
 				life: FIRE_LIFE,
-				velocity: tempVector.copy(world).sub(car.position).normalize().multiplyScalar(0.035 * deltaTime * 60),
+				velocity: new THREE.Vector3().copy(world).sub(car.position).normalize().multiplyScalar(0.035),
 			});
 			this.groups.smoke.add(sprite);
 		}
