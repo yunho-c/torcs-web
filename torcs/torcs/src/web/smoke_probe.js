@@ -312,7 +312,7 @@ createModule()
 				[
 					"/torcs/data/tracks/e-track-1/e-track-1.xml",
 					"/torcs/data/cars/models/kc-2000gt/kc-2000gt.xml",
-					3,
+					4,
 				],
 			),
 		};
@@ -592,36 +592,43 @@ createModule()
 				expanded.dimensionY <= 0 ||
 				expanded.time <= 0 ||
 				multi.start !== 0 ||
-				multi.count !== 3 ||
-				multi.maxCars < 3 ||
+				multi.count !== 4 ||
+				multi.maxCars < 4 ||
 				multi.step !== 0 ||
 				multi.names[0] !== "webprobe" ||
 				multi.names[1] !== "InfHist 5" ||
 				multi.names[2] !== "InfHist 6" ||
+				multi.names[3] !== "InfHist 7" ||
 				multi.driverKinds[0] !== 0 ||
 				multi.driverKinds[1] !== 2 ||
 				multi.driverKinds[2] !== 2 ||
+				multi.driverKinds[3] !== 2 ||
 				multi.driverModules[0] !== "webprobe" ||
 				multi.driverModules[1] !== "inferno2" ||
 				multi.driverModules[2] !== "inferno2" ||
+				multi.driverModules[3] !== "inferno2" ||
 				multi.driverRobotIndexes[0] !== -1 ||
 				multi.driverRobotIndexes[1] !== 5 ||
 				multi.driverRobotIndexes[2] !== 6 ||
+				multi.driverRobotIndexes[3] !== 7 ||
 				multi.driverNewTrackCalls[1] !== 1 ||
 				multi.driverNewTrackCalls[2] !== 1 ||
+				multi.driverNewTrackCalls[3] !== 1 ||
 				multi.driverNewRaceCalls[1] !== 1 ||
 				multi.driverNewRaceCalls[2] !== 1 ||
+				multi.driverNewRaceCalls[3] !== 1 ||
 				multi.driverNewTrackCalls[0] !== 0 ||
 				multi.driverNewRaceCalls[0] !== 0 ||
 				multi.driverDriveCalls.some((count) => count !== 0) ||
 				multi.driverDriveCallsAfterStep[1] <= 0 ||
 				multi.driverDriveCallsAfterStep[2] <= 0 ||
+				multi.driverDriveCallsAfterStep[3] <= 0 ||
 				multi.driverDriveCallsAfterStep[0] !== 0 ||
 				new Set(multi.initialPositions).size !== multi.count ||
 				multi.initialPositions.some((position) => position < 1 || position > multi.count) ||
-				multi.snapshots.length !== 3 ||
+				multi.snapshots.length !== 4 ||
 				multi.snapshots.some((car) => car.write !== 0 || !Number.isFinite(car.x) || !Number.isFinite(car.y)) ||
-				new Set(multi.snapshots.map((car) => `${car.x.toFixed(3)},${car.y.toFixed(3)}`)).size !== 3 ||
+				new Set(multi.snapshots.map((car) => `${car.x.toFixed(3)},${car.y.toFixed(3)}`)).size !== multi.count ||
 				new Set(multi.snapshots.map((car) => car.position)).size !== multi.count ||
 				Math.abs(multi.snapshots[1].steer) > 0.25 ||
 				multi.snapshots[1].accel <= 0 ||
@@ -632,6 +639,7 @@ createModule()
 				multi.longRun.length !== multi.count - 1 ||
 				multi.driverDriveCallsAfterLong[1] <= multi.driverDriveCallsAfterStep[1] ||
 				multi.driverDriveCallsAfterLong[2] <= multi.driverDriveCallsAfterStep[2] ||
+				multi.driverDriveCallsAfterLong[3] <= multi.driverDriveCallsAfterStep[3] ||
 				multi.driverDriveCallsAfterLong[0] !== 0 ||
 				multi.longRun[0].speed <= 20 ||
 				Math.abs(multi.longRun[0].toMiddle) >= multi.longRun[0].trackWidth * 0.25 ||
