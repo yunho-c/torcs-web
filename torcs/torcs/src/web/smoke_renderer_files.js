@@ -462,6 +462,8 @@ requireText(byPath["../CMakeLists.txt"], "'_torcs_web_runtime_get_car_driver_kin
 requireText(byPath["../CMakeLists.txt"], "'_torcs_web_runtime_get_car_driver_module'", "robot driver-module Emscripten export");
 requireText(byPath["../CMakeLists.txt"], "'_torcs_web_runtime_get_car_driver_robot_index'", "robot driver-index Emscripten export");
 requireText(byPath["../CMakeLists.txt"], "'_torcs_web_runtime_write_car_snapshot'", "Phase 6 per-car snapshot Emscripten export");
+requireText(byPath["../CMakeLists.txt"], "torcs_inferno2", "inferno2 static driver target");
+requireText(byPath["../CMakeLists.txt"], "'_torcs_web_check_inferno2_module'", "inferno2 module-check Emscripten export");
 requireText(byPath["../CMakeLists.txt"], "TORCS_WEB_TRACK_CONFIGS", "dynamic track XML preload discovery");
 requireText(byPath["../CMakeLists.txt"], "TORCS_WEB_CAR_CONFIGS", "dynamic car XML preload discovery");
 

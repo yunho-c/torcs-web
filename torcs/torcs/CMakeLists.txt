@@ -63,9 +63,17 @@ target_link_libraries(torcs_tgf PUBLIC torcs_txml)
 
 add_library(torcs_robottools STATIC
 	src/libs/robottools/rttrack.cpp
+	src/web/torcs_web_robottools.cpp
 )
 torcs_common_includes(torcs_robottools)
 target_link_libraries(torcs_robottools PUBLIC torcs_tgf)
+
+add_library(torcs_inferno2 STATIC
+	src/drivers/inferno2/inferno2.cpp
+	src/drivers/inferno2/common.cpp
+)
+torcs_common_includes(torcs_inferno2)
+target_link_libraries(torcs_inferno2 PUBLIC torcs_tgf torcs_robottools)
 
 add_library(torcs_track STATIC
 	src/modules/track/track.cpp
@@ -131,7 +139,7 @@ add_executable(torcs_web_probe
 	src/web/torcs_web_platform.cpp
 	src/web/torcs_web_probe.cpp
 )
-target_link_libraries(torcs_web_probe PRIVATE torcs_tgf torcs_track torcs_simuv2)
+target_link_libraries(torcs_web_probe PRIVATE torcs_tgf torcs_track torcs_simuv2 torcs_inferno2)
 
 if(EMSCRIPTEN)
 	set(TORCS_WEB_EXPORTED_FUNCTIONS
@@ -147,6 +155,7 @@ if(EMSCRIPTEN)
 		"'_torcs_web_check_track_build'"
 		"'_torcs_web_check_headless_sim_init'"
 		"'_torcs_web_check_headless_sim_update'"
+		"'_torcs_web_check_inferno2_module'"
 		"'_torcs_web_runtime_start'"
 		"'_torcs_web_runtime_start_multi_with_files'"
 		"'_torcs_web_runtime_start_with_files'"

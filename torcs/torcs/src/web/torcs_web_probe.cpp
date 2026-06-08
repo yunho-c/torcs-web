@@ -43,6 +43,7 @@ static void *RaceEngineHandle = NULL;
 
 extern "C" int track(tModInfo *modInfo);
 extern "C" int simuv2(tModInfo *modInfo);
+extern "C" int inferno2(tModInfo *modInfo);
 
 #define TORCS_WEB_SIM_IDENT 0
 #define TORCS_WEB_TRACK_SAMPLES_PER_SEG 12
@@ -218,7 +219,8 @@ initWebProbe(void)
 	static const tTorcsWebModule WebModules[] = {
 		{ "web_probe_module", web_probe_module },
 		{ "track", track },
-		{ "simuv2", simuv2 }
+		{ "simuv2", simuv2 },
+		{ "inferno2", inferno2 }
 	};
 
 	if (!initialized) {
@@ -941,6 +943,39 @@ torcs_web_check_static_module_registry(void)
 	}
 
 	GfModUnloadList(&loadList);
+	return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int
+torcs_web_check_inferno2_module(void)
+{
+	tModList *infoList = NULL;
+	tRobotItf robot;
+	char moduleName[] = "inferno2.so";
+
+	initWebProbe();
+
+	if (GfModInfo(CAR_IDENT, moduleName, &infoList) < 0 || !infoList) {
+		return -1;
+	}
+
+	memset(&robot, 0, sizeof(robot));
+	if (!infoList->modInfo[4].name ||
+		strcmp(infoList->modInfo[4].name, "InfHist 5") != 0 ||
+		infoList->modInfo[4].gfId != ROB_IDENT ||
+		infoList->modInfo[4].index != 5 ||
+		!infoList->modInfo[4].fctInit ||
+		infoList->modInfo[4].fctInit(infoList->modInfo[4].index, &robot) != 0 ||
+		robot.index != 5 ||
+		!robot.rbNewTrack ||
+		!robot.rbNewRace ||
+		!robot.rbDrive) {
+		GfModFreeInfoList(&infoList);
+		return -1;
+	}
+
+	GfModFreeInfoList(&infoList);
 	return 0;
 }
 
