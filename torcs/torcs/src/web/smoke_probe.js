@@ -319,8 +319,16 @@ createModule()
 		multi.count = module.ccall("torcs_web_runtime_get_car_count", "number", [], []);
 		multi.maxCars = module.ccall("torcs_web_runtime_get_max_cars", "number", [], []);
 		multi.names = [];
+		multi.driverKinds = [];
+		multi.driverModules = [];
+		multi.driverRobotIndexes = [];
 		for (let i = 0; i < multi.count; i += 1) {
 			multi.names.push(module.ccall("torcs_web_runtime_get_car_name_by_index", "string", ["number"], [i]));
+			multi.driverKinds.push(module.ccall("torcs_web_runtime_get_car_driver_kind", "number", ["number"], [i]));
+			multi.driverModules.push(module.ccall("torcs_web_runtime_get_car_driver_module", "string", ["number"], [i]));
+			multi.driverRobotIndexes.push(
+				module.ccall("torcs_web_runtime_get_car_driver_robot_index", "number", ["number"], [i]),
+			);
 		}
 		multi.initialPositions = [];
 		for (let i = 0; i < multi.count; i += 1) {
@@ -560,6 +568,11 @@ createModule()
 				multi.step !== 0 ||
 				multi.names[0] !== "webprobe" ||
 				multi.names[1] !== "webai1" ||
+				multi.driverKinds[0] !== 0 ||
+				multi.driverKinds.slice(1).some((kind) => kind !== 1) ||
+				multi.driverModules[0] !== "webprobe" ||
+				multi.driverModules.slice(1).some((moduleName) => moduleName !== "webai") ||
+				multi.driverRobotIndexes.some((robotIndex) => robotIndex !== -1) ||
 				new Set(multi.initialPositions).size !== multi.count ||
 				multi.initialPositions.some((position) => position < 1 || position > multi.count) ||
 				multi.snapshots.length !== 3 ||

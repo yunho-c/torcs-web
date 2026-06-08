@@ -28,6 +28,7 @@
 
 #include <tgf.h>
 #include <raceman.h>
+#include <robot.h>
 #include <robottools.h>
 #include <track.h>
 
@@ -152,6 +153,20 @@ typedef struct TorcsWebSimItf {
 	tfTorcsWebSimShutdown	shutdown;
 } tTorcsWebSimItf;
 
+typedef enum TorcsWebDriverKind {
+	TORCS_WEB_DRIVER_NONE = 0,
+	TORCS_WEB_DRIVER_SCRIPTED = 1,
+	TORCS_WEB_DRIVER_ROBOT = 2
+} tTorcsWebDriverKind;
+
+typedef struct TorcsWebDriverSlot {
+	tTorcsWebDriverKind	kind;
+	const char			*moduleName;
+	int					robotIndex;
+	tRobotItf			robot;
+	int					initialized;
+} tTorcsWebDriverSlot;
+
 typedef struct TorcsWebRuntime {
 	int					active;
 	int					simStarted;
@@ -163,6 +178,7 @@ typedef struct TorcsWebRuntime {
 	void				*carHandle;
 	tCarElt			carList[TORCS_WEB_RUNTIME_MAX_CARS];
 	tCarElt			*cars[TORCS_WEB_RUNTIME_MAX_CARS];
+	tTorcsWebDriverSlot	driverSlots[TORCS_WEB_RUNTIME_MAX_CARS];
 	int					carCount;
 	tSituation			situation;
 	tRmInfo			reInfo;
@@ -780,8 +796,61 @@ updateScriptedDriver(tCarElt *car, int carIndex)
 }
 
 static void
+initRuntimeDriverSlot(int carIndex)
+{
+	tTorcsWebDriverSlot *slot;
+
+	if (carIndex < 0 || carIndex >= TORCS_WEB_RUNTIME_MAX_CARS) {
+		return;
+	}
+
+	slot = &(Runtime.driverSlots[carIndex]);
+	memset(slot, 0, sizeof(*slot));
+	if (carIndex == 0) {
+		slot->kind = TORCS_WEB_DRIVER_NONE;
+		slot->moduleName = "webprobe";
+		slot->robotIndex = -1;
+	} else {
+		slot->kind = TORCS_WEB_DRIVER_SCRIPTED;
+		slot->moduleName = "webai";
+		slot->robotIndex = -1;
+		slot->initialized = 1;
+	}
+}
+
+static void
+driveRuntimeDriver(int carIndex)
+{
+	tTorcsWebDriverSlot *slot;
+	tCarElt *car;
+
+	if (carIndex <= 0 || carIndex >= Runtime.carCount) {
+		return;
+	}
+
+	slot = &(Runtime.driverSlots[carIndex]);
+	car = &(Runtime.carList[carIndex]);
+
+	if (slot->kind == TORCS_WEB_DRIVER_ROBOT && slot->initialized && slot->robot.rbDrive &&
+		(car->_state & RM_CAR_STATE_NO_SIMU) == 0) {
+		slot->robot.rbDrive(slot->robot.index, car, &(Runtime.situation));
+		return;
+	}
+
+	updateScriptedDriver(car, carIndex);
+}
+
+static void
 shutdownRuntime(void)
 {
+	int i;
+
+	for (i = 0; i < Runtime.carCount; i++) {
+		tTorcsWebDriverSlot *slot = &(Runtime.driverSlots[i]);
+		if (slot->kind == TORCS_WEB_DRIVER_ROBOT && slot->initialized && slot->robot.rbShutdown) {
+			slot->robot.rbShutdown(slot->robot.index);
+		}
+	}
 	if (Runtime.simStarted && Runtime.simItf.shutdown) {
 		Runtime.simItf.shutdown();
 	}
@@ -1202,6 +1271,7 @@ torcs_web_runtime_start_multi_with_files(const char *trackFile, const char *carF
 			shutdownRuntime();
 			return -1;
 		}
+		initRuntimeDriverSlot(i);
 		Runtime.carList[i]._carHandle = Runtime.carHandle;
 		Runtime.cars[i] = &(Runtime.carList[i]);
 	}
@@ -1300,7 +1370,7 @@ torcs_web_runtime_step(double deltaTime)
 		step = remaining > RCM_MAX_DT_SIMU ? RCM_MAX_DT_SIMU : remaining;
 		Runtime.situation.deltaTime = step;
 		for (i = 1; i < Runtime.carCount; i++) {
-			updateScriptedDriver(&(Runtime.carList[i]), i);
+			driveRuntimeDriver(i);
 		}
 		Runtime.simItf.update(&(Runtime.situation), step, -1);
 		for (i = 0; i < Runtime.carCount; i++) {
@@ -1708,6 +1778,39 @@ torcs_web_runtime_get_car_name_by_index(int carIndex)
 {
 	tCarElt *car = getRuntimeCar(carIndex);
 	return car ? car->_name : "";
+}
+
+EMSCRIPTEN_KEEPALIVE
+int
+torcs_web_runtime_get_car_driver_kind(int carIndex)
+{
+	if (!Runtime.active || carIndex < 0 || carIndex >= Runtime.carCount) {
+		return -1;
+	}
+
+	return Runtime.driverSlots[carIndex].kind;
+}
+
+EMSCRIPTEN_KEEPALIVE
+const char *
+torcs_web_runtime_get_car_driver_module(int carIndex)
+{
+	if (!Runtime.active || carIndex < 0 || carIndex >= Runtime.carCount) {
+		return "";
+	}
+
+	return Runtime.driverSlots[carIndex].moduleName ? Runtime.driverSlots[carIndex].moduleName : "";
+}
+
+EMSCRIPTEN_KEEPALIVE
+int
+torcs_web_runtime_get_car_driver_robot_index(int carIndex)
+{
+	if (!Runtime.active || carIndex < 0 || carIndex >= Runtime.carCount) {
+		return -1;
+	}
+
+	return Runtime.driverSlots[carIndex].robotIndex;
 }
 
 EMSCRIPTEN_KEEPALIVE
