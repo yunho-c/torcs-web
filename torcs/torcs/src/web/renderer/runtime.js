@@ -83,6 +83,12 @@ export const SNAPSHOT = {
 	wheelOtherSurfaceStyle0: 171,
 };
 
+export const DRIVER_KIND = {
+	none: 0,
+	scripted: 1,
+	robot: 2,
+};
+
 const TRACK_SIDE = {
 	right: 0,
 	center: 1,
@@ -200,6 +206,10 @@ export class TorcsRuntime {
 			if (values) {
 				values.carIndex = i;
 				values.driverName = this.getCarName(i);
+				values.driverKind = this.getDriverKind(i);
+				values.driverModule = this.getDriverModule(i);
+				values.driverRobotIndex = this.getDriverRobotIndex(i);
+				values.driverLabel = this.formatDriverLabel(values);
 				snapshots.push(values);
 			}
 		}
@@ -211,6 +221,42 @@ export class TorcsRuntime {
 			return "";
 		}
 		return this.call("torcs_web_runtime_get_car_name_by_index", "string", ["number"], [carIndex]);
+	}
+
+	getDriverKind(carIndex) {
+		if (!this.active) {
+			return DRIVER_KIND.none;
+		}
+		return this.call("torcs_web_runtime_get_car_driver_kind", "number", ["number"], [carIndex]);
+	}
+
+	getDriverModule(carIndex) {
+		if (!this.active) {
+			return "";
+		}
+		return this.call("torcs_web_runtime_get_car_driver_module", "string", ["number"], [carIndex]);
+	}
+
+	getDriverRobotIndex(carIndex) {
+		if (!this.active) {
+			return -1;
+		}
+		return this.call("torcs_web_runtime_get_car_driver_robot_index", "number", ["number"], [carIndex]);
+	}
+
+	formatDriverLabel(values) {
+		const carIndex = values && Number.isFinite(values.carIndex) ? values.carIndex : -1;
+		const name = values && values.driverName ? values.driverName : `car ${carIndex + 1}`;
+		if (!values || values.driverKind === DRIVER_KIND.none) {
+			return name;
+		}
+		if (values.driverKind === DRIVER_KIND.robot && values.driverModule && values.driverRobotIndex > 0) {
+			return `${name} - ${values.driverModule} #${values.driverRobotIndex}`;
+		}
+		if (values.driverModule) {
+			return `${name} - ${values.driverModule}`;
+		}
+		return name;
 	}
 
 	readPoint(sampleIndex, side) {

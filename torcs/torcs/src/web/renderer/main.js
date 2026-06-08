@@ -173,7 +173,7 @@ function syncCurrentCarOptions() {
 	for (let i = 0; i < count; i += 1) {
 		const option = document.createElement("option");
 		option.value = String(i);
-		option.textContent = snapshots[i] && snapshots[i].driverName ? snapshots[i].driverName : `car ${i + 1}`;
+		option.textContent = snapshots[i] && snapshots[i].driverLabel ? snapshots[i].driverLabel : `car ${i + 1}`;
 		elements.currentCar.append(option);
 	}
 	if (count > 0) {

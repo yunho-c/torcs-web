@@ -98,7 +98,7 @@ export class Hud {
 			const pos = document.createElement("span");
 			pos.textContent = String(Math.trunc(car[SNAPSHOT.racePosition] || 0));
 			const name = document.createElement("span");
-			name.textContent = car.driverName || `car ${carIndex + 1}`;
+			name.textContent = car.driverLabel || car.driverName || `car ${carIndex + 1}`;
 			const speed = document.createElement("span");
 			speed.textContent = `${fmt(car[SNAPSHOT.speed] * 3.6, 0)} km/h`;
 			row.append(pos, name, speed);

@@ -450,6 +450,10 @@ requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_write_snapshot", "
 requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_start_multi_with_files", "Phase 6 multi-car runtime start export");
 requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_get_car_count", "Phase 6 car count export");
 requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_write_car_snapshot", "Phase 6 per-car snapshot export");
+requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_get_car_driver_kind", "robot driver-kind runtime call");
+requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_get_car_driver_module", "robot driver-module runtime call");
+requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_get_car_driver_robot_index", "robot driver-index runtime call");
+requireText(byPath["renderer/runtime.js"], "driverLabel", "browser driver metadata label");
 requireText(byPath["renderer/runtime.js"], "readSnapshots()", "Phase 6 multi-car snapshot reader");
 requireText(byPath["renderer/runtime.js"], "Float64Array.from(values)", "Phase 6 copied per-car snapshot buffer");
 requireText(byPath["renderer/runtime.js"], "export const SNAPSHOT", "snapshot layout export");
