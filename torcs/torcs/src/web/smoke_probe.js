@@ -28,6 +28,8 @@ const SNAPSHOT = {
 	engineRpm: 14,
 	trackSegmentId: 16,
 	trackSegmentType: 17,
+	trackToRight: 19,
+	trackToMiddle: 20,
 	trackDistanceFromStart: 21,
 	raceState: 22,
 	racePosition: 23,
@@ -340,6 +342,24 @@ createModule()
 				trackDistanceFromStart: carSnapshot.values[SNAPSHOT.trackDistanceFromStart],
 			});
 		}
+		for (let i = 0; i < 600; i += 1) {
+			multi.longStep = module.ccall("torcs_web_runtime_step", "number", ["number"], [1 / 60]);
+		}
+		multi.longRun = [];
+		for (let i = 1; i < multi.count; i += 1) {
+			const carSnapshot = readCarSnapshot(module, i);
+			multi.longRun.push({
+				write: carSnapshot.write,
+				x: carSnapshot.values[SNAPSHOT.x],
+				y: carSnapshot.values[SNAPSHOT.y],
+				speed: carSnapshot.values[SNAPSHOT.speed],
+				toRight: carSnapshot.values[SNAPSHOT.trackToRight],
+				toMiddle: carSnapshot.values[SNAPSHOT.trackToMiddle],
+				steer: carSnapshot.values[SNAPSHOT.controlSteer],
+				trackWidth: carSnapshot.values[SNAPSHOT.trackWidth],
+				trackDistanceFromStart: carSnapshot.values[SNAPSHOT.trackDistanceFromStart],
+			});
+		}
 		module.ccall("torcs_web_runtime_shutdown", null, [], []);
 
 		const result = {
@@ -535,21 +555,33 @@ createModule()
 				expanded.dimensionY <= 0 ||
 				expanded.time <= 0 ||
 				multi.start !== 0 ||
-			multi.count !== 3 ||
-			multi.maxCars < 3 ||
-			multi.step !== 0 ||
-			multi.names[0] !== "webprobe" ||
-			multi.names[1] !== "webai1" ||
-			new Set(multi.initialPositions).size !== multi.count ||
-			multi.initialPositions.some((position) => position < 1 || position > multi.count) ||
-			multi.snapshots.length !== 3 ||
-			multi.snapshots.some((car) => car.write !== 0 || !Number.isFinite(car.x) || !Number.isFinite(car.y)) ||
-			new Set(multi.snapshots.map((car) => `${car.x.toFixed(3)},${car.y.toFixed(3)}`)).size !== 3 ||
-			new Set(multi.snapshots.map((car) => car.position)).size !== multi.count ||
-			multi.snapshots.slice(1).some((car) => car.accel <= 0 || car.gear < 1) ||
-			multi.snapshots.some((car) => car.trackDistanceFromStart <= 0) ||
-			Math.hypot(drive.x - drive.startX, drive.y - drive.startY) <= 5
-		) {
+				multi.count !== 3 ||
+				multi.maxCars < 3 ||
+				multi.step !== 0 ||
+				multi.names[0] !== "webprobe" ||
+				multi.names[1] !== "webai1" ||
+				new Set(multi.initialPositions).size !== multi.count ||
+				multi.initialPositions.some((position) => position < 1 || position > multi.count) ||
+				multi.snapshots.length !== 3 ||
+				multi.snapshots.some((car) => car.write !== 0 || !Number.isFinite(car.x) || !Number.isFinite(car.y)) ||
+				new Set(multi.snapshots.map((car) => `${car.x.toFixed(3)},${car.y.toFixed(3)}`)).size !== 3 ||
+				new Set(multi.snapshots.map((car) => car.position)).size !== multi.count ||
+				multi.snapshots.slice(1).some((car) => car.accel <= 0 || car.gear < 1) ||
+				multi.snapshots.some((car) => car.trackDistanceFromStart <= 0) ||
+				multi.longStep !== 0 ||
+				multi.longRun.length !== multi.count - 1 ||
+				multi.longRun.some((car) =>
+					car.write !== 0 ||
+					!Number.isFinite(car.x) ||
+					!Number.isFinite(car.y) ||
+					car.speed <= 3 ||
+					car.toRight <= 0 ||
+					car.toRight >= car.trackWidth ||
+					Math.abs(car.toMiddle) >= car.trackWidth * 0.45 ||
+					Math.abs(car.steer) >= 0.74 ||
+					car.trackDistanceFromStart <= 0) ||
+				Math.hypot(drive.x - drive.startX, drive.y - drive.startY) <= 5
+			) {
 			fail("TORCS WASM probe smoke test failed", result);
 		}
 	})

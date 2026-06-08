@@ -744,7 +744,7 @@ updateScriptedDriver(tCarElt *car, int carIndex)
 	width = RtTrackGetWidth(car->_trkPos.seg, car->_trkPos.toStart);
 	laneOffset = ((carIndex % 2) ? -0.18f : 0.18f) * width;
 	targetToRight = width * 0.5f + laneOffset;
-	steer = (car->_trkPos.toRight - targetToRight) / MAX(width * 0.22f, 1.0f);
+	steer = (targetToRight - car->_trkPos.toRight) / MAX(width * 0.22f, 1.0f);
 	if (car->_trkPos.seg->type == TR_RGT) {
 		curveSteer = -0.18f;
 	} else if (car->_trkPos.seg->type == TR_LFT) {
