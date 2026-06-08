@@ -571,12 +571,17 @@ createModule()
 				multi.maxCars < 3 ||
 				multi.step !== 0 ||
 				multi.names[0] !== "webprobe" ||
-				multi.names[1] !== "webai1" ||
+				multi.names[1] !== "InfHist 5" ||
+				multi.names[2] !== "webai2" ||
 				multi.driverKinds[0] !== 0 ||
-				multi.driverKinds.slice(1).some((kind) => kind !== 1) ||
+				multi.driverKinds[1] !== 2 ||
+				multi.driverKinds[2] !== 1 ||
 				multi.driverModules[0] !== "webprobe" ||
-				multi.driverModules.slice(1).some((moduleName) => moduleName !== "webai") ||
-				multi.driverRobotIndexes.some((robotIndex) => robotIndex !== -1) ||
+				multi.driverModules[1] !== "inferno2" ||
+				multi.driverModules[2] !== "webai" ||
+				multi.driverRobotIndexes[0] !== -1 ||
+				multi.driverRobotIndexes[1] !== 5 ||
+				multi.driverRobotIndexes[2] !== -1 ||
 				new Set(multi.initialPositions).size !== multi.count ||
 				multi.initialPositions.some((position) => position < 1 || position > multi.count) ||
 				multi.snapshots.length !== 3 ||

@@ -37,6 +37,8 @@
 static const char *RaceEngineConfig = "/torcs/config/raceengine.xml";
 static const char *DefaultTrackConfig = "/torcs/data/tracks/e-track-1/e-track-1.xml";
 static const char *DefaultCarConfig = "/torcs/data/cars/models/kc-2000gt/kc-2000gt.xml";
+static const char *DefaultRobotModule = "inferno2";
+static const int DefaultRobotIndex = 5;
 static const char *ModulesSection = "Modules";
 static const char *MovieCaptureSection = "Movie Capture";
 static void *RaceEngineHandle = NULL;
@@ -165,6 +167,7 @@ typedef struct TorcsWebDriverSlot {
 	const char			*moduleName;
 	int					robotIndex;
 	tRobotItf			robot;
+	void				*paramsHandle;
 	int					initialized;
 } tTorcsWebDriverSlot;
 
@@ -867,6 +870,131 @@ initRuntimeDriverSlot(int carIndex)
 	}
 }
 
+static int
+getRobotSkillLevel(const char *skill)
+{
+	if (!skill) {
+		return 2;
+	}
+	if (strcmp(skill, ROB_VAL_ROOKIE) == 0) {
+		return 0;
+	}
+	if (strcmp(skill, ROB_VAL_AMATEUR) == 0) {
+		return 1;
+	}
+	if (strcmp(skill, ROB_VAL_SEMI_PRO) == 0) {
+		return 2;
+	}
+	if (strcmp(skill, ROB_VAL_PRO) == 0) {
+		return 3;
+	}
+	return 2;
+}
+
+static int
+configureInferno2DriverSlot(int carIndex, void **carHandle)
+{
+	tTorcsWebDriverSlot *slot;
+	tCarElt *car;
+	tModList *infoList = NULL;
+	tModInfo *modInfo;
+	void *driverHandle = NULL;
+	void *mergedHandle;
+	const char *driverType;
+	const char *skill;
+	char moduleName[] = "inferno2.so";
+	char robotPath[64];
+	int result = -1;
+
+	if (carIndex <= 0 || carIndex >= Runtime.carCount || !carHandle || !*carHandle) {
+		return -1;
+	}
+
+	slot = &(Runtime.driverSlots[carIndex]);
+	car = &(Runtime.carList[carIndex]);
+
+	if (GfModInfo(CAR_IDENT, moduleName, &infoList) < 0 || !infoList) {
+		return -1;
+	}
+	modInfo = &(infoList->modInfo[DefaultRobotIndex - 1]);
+	if (!modInfo->fctInit || modInfo->index != DefaultRobotIndex) {
+		goto cleanup;
+	}
+
+	memset(&(slot->robot), 0, sizeof(slot->robot));
+	if (modInfo->fctInit(DefaultRobotIndex, &(slot->robot)) != 0 ||
+		!slot->robot.rbNewTrack ||
+		!slot->robot.rbNewRace ||
+		!slot->robot.rbDrive) {
+		goto cleanup;
+	}
+
+	slot->paramsHandle = GfParmReadFile("drivers/inferno2/inferno2.xml", GFPARM_RMODE_STD | GFPARM_RMODE_REREAD);
+	if (!slot->paramsHandle) {
+		goto cleanup;
+	}
+
+	snprintf(robotPath, sizeof(robotPath), "%s/%s/%d", ROB_SECT_ROBOTS, ROB_LIST_INDEX, DefaultRobotIndex);
+	strncpy(car->_name, GfParmGetStr(slot->paramsHandle, robotPath, ROB_ATTR_NAME, modInfo->name), MAX_NAME_LEN - 1);
+	car->_name[MAX_NAME_LEN - 1] = '\0';
+	strncpy(car->_teamname, GfParmGetStr(slot->paramsHandle, robotPath, ROB_ATTR_TEAM, "<none>"), MAX_NAME_LEN - 1);
+	car->_teamname[MAX_NAME_LEN - 1] = '\0';
+	strncpy(car->_carName, GfParmGetStr(slot->paramsHandle, robotPath, ROB_ATTR_CAR, "kc-a110"), MAX_NAME_LEN - 1);
+	car->_carName[MAX_NAME_LEN - 1] = '\0';
+	car->_raceNumber = (int)GfParmGetNum(slot->paramsHandle, robotPath, ROB_ATTR_RACENUM, NULL, carIndex + 1);
+	driverType = GfParmGetStr(slot->paramsHandle, robotPath, ROB_ATTR_TYPE, ROB_VAL_ROBOT);
+	car->_driverType = strcmp(driverType, ROB_VAL_ROBOT) == 0 ? RM_DRV_ROBOT : RM_DRV_HUMAN;
+	skill = GfParmGetStr(slot->paramsHandle, robotPath, ROB_ATTR_LEVEL, ROB_VAL_SEMI_PRO);
+	car->_skillLevel = getRobotSkillLevel(skill);
+	car->_driverIndex = DefaultRobotIndex;
+	strncpy(car->_modName, DefaultRobotModule, MAX_NAME_LEN - 1);
+	car->_modName[MAX_NAME_LEN - 1] = '\0';
+	car->_paramsHandle = slot->paramsHandle;
+
+	slot->robot.rbNewTrack(DefaultRobotIndex, Runtime.trackData, *carHandle, &driverHandle, &(Runtime.situation));
+	if (driverHandle) {
+		if (GfParmCheckHandle(*carHandle, driverHandle)) {
+			GfParmReleaseHandle(driverHandle);
+			goto cleanup;
+		}
+		mergedHandle = GfParmMergeHandles(*carHandle, driverHandle,
+			GFPARM_MMODE_SRC | GFPARM_MMODE_DST | GFPARM_MMODE_RELSRC | GFPARM_MMODE_RELDST);
+		if (!mergedHandle) {
+			goto cleanup;
+		}
+		*carHandle = mergedHandle;
+	}
+
+	slot->kind = TORCS_WEB_DRIVER_ROBOT;
+	slot->moduleName = DefaultRobotModule;
+	slot->robotIndex = DefaultRobotIndex;
+	slot->initialized = 1;
+	result = 0;
+
+cleanup:
+	if (infoList) {
+		GfModFreeInfoList(&infoList);
+	}
+	if (result != 0 && slot->paramsHandle) {
+		GfParmReleaseHandle(slot->paramsHandle);
+		slot->paramsHandle = NULL;
+	}
+	return result;
+}
+
+static void
+startRuntimeRobotDrivers(void)
+{
+	int i;
+
+	for (i = 1; i < Runtime.carCount; i++) {
+		tTorcsWebDriverSlot *slot = &(Runtime.driverSlots[i]);
+		if (slot->kind == TORCS_WEB_DRIVER_ROBOT && slot->initialized && slot->robot.rbNewRace) {
+			slot->robot.rbNewRace(slot->robot.index, &(Runtime.carList[i]), &(Runtime.situation));
+		}
+	}
+}
+
 static void
 driveRuntimeDriver(int carIndex)
 {
@@ -898,6 +1026,9 @@ shutdownRuntime(void)
 		tTorcsWebDriverSlot *slot = &(Runtime.driverSlots[i]);
 		if (slot->kind == TORCS_WEB_DRIVER_ROBOT && slot->initialized && slot->robot.rbShutdown) {
 			slot->robot.rbShutdown(slot->robot.index);
+		}
+		if (slot->paramsHandle) {
+			GfParmReleaseHandle(slot->paramsHandle);
 		}
 	}
 	if (Runtime.simStarted && Runtime.simItf.shutdown) {
@@ -1404,25 +1535,37 @@ torcs_web_runtime_start_multi_with_files(const char *trackFile, const char *carF
 	}
 
 	Runtime.carCount = carCount;
-	for (i = 0; i < Runtime.carCount; i++) {
-		if (positionCarOnTrack(&(Runtime.carList[i]), Runtime.trackData, carName, i) != 0) {
-			shutdownRuntime();
-			return -1;
-		}
-		Runtime.carHandles[i] = loadMergedCarSetup(selectedCarFile);
-		if (!Runtime.carHandles[i]) {
-			shutdownRuntime();
-			return -1;
-		}
-		initRuntimeDriverSlot(i);
-		Runtime.carList[i]._carHandle = Runtime.carHandles[i];
-		Runtime.cars[i] = &(Runtime.carList[i]);
-	}
 	Runtime.situation._ncars = Runtime.carCount;
 	Runtime.situation.nbPlayers = 1;
 	Runtime.situation._totLaps = 3;
 	Runtime.situation._raceState = RM_RACE_RUNNING;
 	Runtime.situation._raceType = RM_TYPE_PRACTICE;
+	Runtime.situation._maxDammage = 10000;
+	for (i = 0; i < Runtime.carCount; i++) {
+		const int useDefaultRobot = i == 1;
+		const char *slotCarName = useDefaultRobot ? "kc-a110" : carName;
+
+		if (positionCarOnTrack(&(Runtime.carList[i]), Runtime.trackData, slotCarName, i) != 0) {
+			shutdownRuntime();
+			return -1;
+		}
+		if (useDefaultRobot) {
+			Runtime.carHandles[i] = loadMergedCarSetupByName(slotCarName);
+		} else {
+			Runtime.carHandles[i] = loadMergedCarSetup(selectedCarFile);
+		}
+		if (!Runtime.carHandles[i]) {
+			shutdownRuntime();
+			return -1;
+		}
+		initRuntimeDriverSlot(i);
+		if (useDefaultRobot && configureInferno2DriverSlot(i, &(Runtime.carHandles[i])) != 0) {
+			shutdownRuntime();
+			return -1;
+		}
+		Runtime.carList[i]._carHandle = Runtime.carHandles[i];
+		Runtime.cars[i] = &(Runtime.carList[i]);
+	}
 	Runtime.situation.cars = Runtime.cars;
 	Runtime.reInfo.carList = Runtime.carList;
 	Runtime.reInfo.s = &(Runtime.situation);
@@ -1442,6 +1585,7 @@ torcs_web_runtime_start_multi_with_files(const char *trackFile, const char *carF
 		Runtime.gearChangeEvents[i] = 0;
 		Runtime.collisionEvents[i] = 0;
 	}
+	startRuntimeRobotDrivers();
 	Runtime.active = 1;
 	for (i = 0; i < Runtime.carCount; i++) {
 		initRuntimeRaceProgress(i);
