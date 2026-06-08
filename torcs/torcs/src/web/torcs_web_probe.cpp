@@ -169,6 +169,9 @@ typedef struct TorcsWebDriverSlot {
 	tRobotItf			robot;
 	void				*paramsHandle;
 	int					initialized;
+	int					newTrackCalls;
+	int					newRaceCalls;
+	int					driveCalls;
 } tTorcsWebDriverSlot;
 
 typedef struct TorcsWebRuntime {
@@ -952,6 +955,7 @@ configureInferno2DriverSlot(int carIndex, void **carHandle)
 	car->_paramsHandle = slot->paramsHandle;
 
 	slot->robot.rbNewTrack(DefaultRobotIndex, Runtime.trackData, *carHandle, &driverHandle, &(Runtime.situation));
+	slot->newTrackCalls++;
 	if (driverHandle) {
 		if (GfParmCheckHandle(*carHandle, driverHandle)) {
 			GfParmReleaseHandle(driverHandle);
@@ -991,6 +995,7 @@ startRuntimeRobotDrivers(void)
 		tTorcsWebDriverSlot *slot = &(Runtime.driverSlots[i]);
 		if (slot->kind == TORCS_WEB_DRIVER_ROBOT && slot->initialized && slot->robot.rbNewRace) {
 			slot->robot.rbNewRace(slot->robot.index, &(Runtime.carList[i]), &(Runtime.situation));
+			slot->newRaceCalls++;
 		}
 	}
 }
@@ -1011,6 +1016,7 @@ driveRuntimeDriver(int carIndex)
 	if (slot->kind == TORCS_WEB_DRIVER_ROBOT && slot->initialized && slot->robot.rbDrive &&
 		(car->_state & RM_CAR_STATE_NO_SIMU) == 0) {
 		slot->robot.rbDrive(slot->robot.index, car, &(Runtime.situation));
+		slot->driveCalls++;
 		return;
 	}
 
@@ -2098,6 +2104,39 @@ torcs_web_runtime_get_car_driver_robot_index(int carIndex)
 	}
 
 	return Runtime.driverSlots[carIndex].robotIndex;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int
+torcs_web_runtime_get_car_driver_new_track_count(int carIndex)
+{
+	if (!Runtime.active || carIndex < 0 || carIndex >= Runtime.carCount) {
+		return -1;
+	}
+
+	return Runtime.driverSlots[carIndex].newTrackCalls;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int
+torcs_web_runtime_get_car_driver_new_race_count(int carIndex)
+{
+	if (!Runtime.active || carIndex < 0 || carIndex >= Runtime.carCount) {
+		return -1;
+	}
+
+	return Runtime.driverSlots[carIndex].newRaceCalls;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int
+torcs_web_runtime_get_car_driver_drive_count(int carIndex)
+{
+	if (!Runtime.active || carIndex < 0 || carIndex >= Runtime.carCount) {
+		return -1;
+	}
+
+	return Runtime.driverSlots[carIndex].driveCalls;
 }
 
 EMSCRIPTEN_KEEPALIVE

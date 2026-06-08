@@ -322,12 +322,24 @@ createModule()
 		multi.driverKinds = [];
 		multi.driverModules = [];
 		multi.driverRobotIndexes = [];
+		multi.driverNewTrackCalls = [];
+		multi.driverNewRaceCalls = [];
+		multi.driverDriveCalls = [];
 		for (let i = 0; i < multi.count; i += 1) {
 			multi.names.push(module.ccall("torcs_web_runtime_get_car_name_by_index", "string", ["number"], [i]));
 			multi.driverKinds.push(module.ccall("torcs_web_runtime_get_car_driver_kind", "number", ["number"], [i]));
 			multi.driverModules.push(module.ccall("torcs_web_runtime_get_car_driver_module", "string", ["number"], [i]));
 			multi.driverRobotIndexes.push(
 				module.ccall("torcs_web_runtime_get_car_driver_robot_index", "number", ["number"], [i]),
+			);
+			multi.driverNewTrackCalls.push(
+				module.ccall("torcs_web_runtime_get_car_driver_new_track_count", "number", ["number"], [i]),
+			);
+			multi.driverNewRaceCalls.push(
+				module.ccall("torcs_web_runtime_get_car_driver_new_race_count", "number", ["number"], [i]),
+			);
+			multi.driverDriveCalls.push(
+				module.ccall("torcs_web_runtime_get_car_driver_drive_count", "number", ["number"], [i]),
 			);
 		}
 		multi.initialPositions = [];
@@ -345,10 +357,17 @@ createModule()
 				y: carSnapshot.values[SNAPSHOT.y],
 				speed: carSnapshot.values[SNAPSHOT.speed],
 				position: carSnapshot.values[SNAPSHOT.racePosition],
+				steer: carSnapshot.values[SNAPSHOT.controlSteer],
 				accel: carSnapshot.values[SNAPSHOT.controlAccel],
 				gear: carSnapshot.values[SNAPSHOT.gear],
 				trackDistanceFromStart: carSnapshot.values[SNAPSHOT.trackDistanceFromStart],
 			});
+		}
+		multi.driverDriveCallsAfterStep = [];
+		for (let i = 0; i < multi.count; i += 1) {
+			multi.driverDriveCallsAfterStep.push(
+				module.ccall("torcs_web_runtime_get_car_driver_drive_count", "number", ["number"], [i]),
+			);
 		}
 		for (let i = 0; i < 600; i += 1) {
 			multi.longStep = module.ccall("torcs_web_runtime_step", "number", ["number"], [1 / 60]);
@@ -367,6 +386,12 @@ createModule()
 				trackWidth: carSnapshot.values[SNAPSHOT.trackWidth],
 				trackDistanceFromStart: carSnapshot.values[SNAPSHOT.trackDistanceFromStart],
 			});
+		}
+		multi.driverDriveCallsAfterLong = [];
+		for (let i = 0; i < multi.count; i += 1) {
+			multi.driverDriveCallsAfterLong.push(
+				module.ccall("torcs_web_runtime_get_car_driver_drive_count", "number", ["number"], [i]),
+			);
 		}
 		module.ccall("torcs_web_runtime_shutdown", null, [], []);
 
@@ -582,16 +607,35 @@ createModule()
 				multi.driverRobotIndexes[0] !== -1 ||
 				multi.driverRobotIndexes[1] !== 5 ||
 				multi.driverRobotIndexes[2] !== -1 ||
+				multi.driverNewTrackCalls[1] !== 1 ||
+				multi.driverNewRaceCalls[1] !== 1 ||
+				multi.driverNewTrackCalls[0] !== 0 ||
+				multi.driverNewTrackCalls[2] !== 0 ||
+				multi.driverNewRaceCalls[0] !== 0 ||
+				multi.driverNewRaceCalls[2] !== 0 ||
+				multi.driverDriveCalls.some((count) => count !== 0) ||
+				multi.driverDriveCallsAfterStep[1] <= 0 ||
+				multi.driverDriveCallsAfterStep[0] !== 0 ||
+				multi.driverDriveCallsAfterStep[2] !== 0 ||
 				new Set(multi.initialPositions).size !== multi.count ||
 				multi.initialPositions.some((position) => position < 1 || position > multi.count) ||
 				multi.snapshots.length !== 3 ||
 				multi.snapshots.some((car) => car.write !== 0 || !Number.isFinite(car.x) || !Number.isFinite(car.y)) ||
 				new Set(multi.snapshots.map((car) => `${car.x.toFixed(3)},${car.y.toFixed(3)}`)).size !== 3 ||
 				new Set(multi.snapshots.map((car) => car.position)).size !== multi.count ||
+				Math.abs(multi.snapshots[1].steer) > 0.25 ||
+				multi.snapshots[1].accel <= 0 ||
+				multi.snapshots[1].gear < 1 ||
 				multi.snapshots.slice(1).some((car) => car.accel <= 0 || car.gear < 1) ||
 				multi.snapshots.some((car) => car.trackDistanceFromStart <= 0) ||
 				multi.longStep !== 0 ||
 				multi.longRun.length !== multi.count - 1 ||
+				multi.driverDriveCallsAfterLong[1] <= multi.driverDriveCallsAfterStep[1] ||
+				multi.driverDriveCallsAfterLong[0] !== 0 ||
+				multi.driverDriveCallsAfterLong[2] !== 0 ||
+				multi.longRun[0].speed <= 20 ||
+				Math.abs(multi.longRun[0].toMiddle) >= multi.longRun[0].trackWidth * 0.2 ||
+				Math.abs(multi.longRun[0].steer) >= 0.3 ||
 				multi.longRun.some((car) =>
 					car.write !== 0 ||
 					!Number.isFinite(car.x) ||

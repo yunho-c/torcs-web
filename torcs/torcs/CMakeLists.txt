@@ -213,6 +213,9 @@ if(EMSCRIPTEN)
 		"'_torcs_web_runtime_get_car_driver_kind'"
 		"'_torcs_web_runtime_get_car_driver_module'"
 		"'_torcs_web_runtime_get_car_driver_robot_index'"
+		"'_torcs_web_runtime_get_car_driver_new_track_count'"
+		"'_torcs_web_runtime_get_car_driver_new_race_count'"
+		"'_torcs_web_runtime_get_car_driver_drive_count'"
 		"'_torcs_web_runtime_write_car_snapshot'"
 		"'_torcs_web_runtime_write_snapshot'"
 	)
