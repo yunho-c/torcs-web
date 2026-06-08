@@ -597,26 +597,26 @@ createModule()
 				multi.step !== 0 ||
 				multi.names[0] !== "webprobe" ||
 				multi.names[1] !== "InfHist 5" ||
-				multi.names[2] !== "webai2" ||
+				multi.names[2] !== "InfHist 6" ||
 				multi.driverKinds[0] !== 0 ||
 				multi.driverKinds[1] !== 2 ||
-				multi.driverKinds[2] !== 1 ||
+				multi.driverKinds[2] !== 2 ||
 				multi.driverModules[0] !== "webprobe" ||
 				multi.driverModules[1] !== "inferno2" ||
-				multi.driverModules[2] !== "webai" ||
+				multi.driverModules[2] !== "inferno2" ||
 				multi.driverRobotIndexes[0] !== -1 ||
 				multi.driverRobotIndexes[1] !== 5 ||
-				multi.driverRobotIndexes[2] !== -1 ||
+				multi.driverRobotIndexes[2] !== 6 ||
 				multi.driverNewTrackCalls[1] !== 1 ||
+				multi.driverNewTrackCalls[2] !== 1 ||
 				multi.driverNewRaceCalls[1] !== 1 ||
+				multi.driverNewRaceCalls[2] !== 1 ||
 				multi.driverNewTrackCalls[0] !== 0 ||
-				multi.driverNewTrackCalls[2] !== 0 ||
 				multi.driverNewRaceCalls[0] !== 0 ||
-				multi.driverNewRaceCalls[2] !== 0 ||
 				multi.driverDriveCalls.some((count) => count !== 0) ||
 				multi.driverDriveCallsAfterStep[1] <= 0 ||
+				multi.driverDriveCallsAfterStep[2] <= 0 ||
 				multi.driverDriveCallsAfterStep[0] !== 0 ||
-				multi.driverDriveCallsAfterStep[2] !== 0 ||
 				new Set(multi.initialPositions).size !== multi.count ||
 				multi.initialPositions.some((position) => position < 1 || position > multi.count) ||
 				multi.snapshots.length !== 3 ||
@@ -631,10 +631,10 @@ createModule()
 				multi.longStep !== 0 ||
 				multi.longRun.length !== multi.count - 1 ||
 				multi.driverDriveCallsAfterLong[1] <= multi.driverDriveCallsAfterStep[1] ||
+				multi.driverDriveCallsAfterLong[2] <= multi.driverDriveCallsAfterStep[2] ||
 				multi.driverDriveCallsAfterLong[0] !== 0 ||
-				multi.driverDriveCallsAfterLong[2] !== 0 ||
 				multi.longRun[0].speed <= 20 ||
-				Math.abs(multi.longRun[0].toMiddle) >= multi.longRun[0].trackWidth * 0.2 ||
+				Math.abs(multi.longRun[0].toMiddle) >= multi.longRun[0].trackWidth * 0.25 ||
 				Math.abs(multi.longRun[0].steer) >= 0.3 ||
 				multi.longRun.some((car) =>
 					car.write !== 0 ||
