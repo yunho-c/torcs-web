@@ -278,12 +278,33 @@ createModule()
 		selected.dimensionX = module.ccall("torcs_web_runtime_get_car_dimension_x", "number", [], []);
 		selected.dimensionY = module.ccall("torcs_web_runtime_get_car_dimension_y", "number", [], []);
 		selected.lapProgress = module.ccall("torcs_web_runtime_get_lap_progress", "number", [], []);
-		selected.time = module.ccall("torcs_web_runtime_get_time", "number", [], []);
-		module.ccall("torcs_web_runtime_shutdown", null, [], []);
+			selected.time = module.ccall("torcs_web_runtime_get_time", "number", [], []);
+			module.ccall("torcs_web_runtime_shutdown", null, [], []);
 
-		const multi = {
-			start: module.ccall(
-				"torcs_web_runtime_start_multi_with_files",
+			const expanded = {
+				start: module.ccall(
+					"torcs_web_runtime_start_with_files",
+					"number",
+					["string", "string"],
+					[
+						"/torcs/data/tracks/a-speedway/a-speedway.xml",
+						"/torcs/data/cars/models/155-DTM/155-DTM.xml",
+					],
+				),
+			};
+			expanded.step = module.ccall("torcs_web_runtime_step", "number", ["number"], [1 / 60]);
+			expanded.trackName = module.ccall("torcs_web_runtime_get_track_name", "string", [], []);
+			expanded.carName = module.ccall("torcs_web_runtime_get_car_name", "string", [], []);
+			expanded.trackLength = module.ccall("torcs_web_runtime_get_track_length", "number", [], []);
+			expanded.trackSamples = module.ccall("torcs_web_runtime_get_track_sample_count", "number", [], []);
+			expanded.dimensionX = module.ccall("torcs_web_runtime_get_car_dimension_x", "number", [], []);
+			expanded.dimensionY = module.ccall("torcs_web_runtime_get_car_dimension_y", "number", [], []);
+			expanded.time = module.ccall("torcs_web_runtime_get_time", "number", [], []);
+			module.ccall("torcs_web_runtime_shutdown", null, [], []);
+
+			const multi = {
+				start: module.ccall(
+					"torcs_web_runtime_start_multi_with_files",
 				"number",
 				["string", "string", "number"],
 				[
@@ -333,11 +354,12 @@ createModule()
 			simuv2Module: module.ccall("torcs_web_check_simuv2_module", "number", [], []),
 			headlessSimInit: module.ccall("torcs_web_check_headless_sim_init", "number", [], []),
 			headlessSimUpdate: module.ccall("torcs_web_check_headless_sim_update", "number", [], []),
-			runtime,
-			drive,
-			selected,
-			multi,
-		};
+				runtime,
+				drive,
+				selected,
+				expanded,
+				multi,
+			};
 
 		console.log(JSON.stringify(result));
 
@@ -500,10 +522,19 @@ createModule()
 			selected.trackSamples <= 0 ||
 			selected.dimensionX <= 0 ||
 			selected.dimensionY <= 0 ||
-			selected.lapProgress <= 0 ||
-			selected.lapProgress >= 1 ||
-			selected.time <= 0 ||
-			multi.start !== 0 ||
+				selected.lapProgress <= 0 ||
+				selected.lapProgress >= 1 ||
+				selected.time <= 0 ||
+				expanded.start !== 0 ||
+				expanded.step !== 0 ||
+				expanded.trackName !== "A-Speedway" ||
+				expanded.carName !== "155-DTM" ||
+				expanded.trackLength <= 0 ||
+				expanded.trackSamples <= 0 ||
+				expanded.dimensionX <= 0 ||
+				expanded.dimensionY <= 0 ||
+				expanded.time <= 0 ||
+				multi.start !== 0 ||
 			multi.count !== 3 ||
 			multi.maxCars < 3 ||
 			multi.step !== 0 ||

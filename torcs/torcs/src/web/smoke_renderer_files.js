@@ -440,6 +440,10 @@ requireText(byPath["renderer/assets.js"], "texture.anisotropy = Math.max(1, this
 requireText(byPath["renderer/assets.js"], "texture.minFilter = THREE.LinearMipmapLinearFilter", "mipmapped distant texture filtering");
 requireText(byPath["renderer/assets.js"], "new THREE.MeshLambertMaterial", "legacy matte material conversion");
 requireText(byPath["renderer/assets.js"], "TORCS web renderer failed to load track background texture", "background texture load warning");
+requireText(byPath["renderer/main.js"], "populateAssetSelects()", "manifest-driven asset select discovery");
+requireText(byPath["renderer/main.js"], "Object.entries(entries || {})", "manifest asset option enumeration");
+requireText(byPath["renderer/main.js"], "DEFAULT_TRACK_PATH", "default track selection preservation");
+requireText(byPath["renderer/main.js"], "DEFAULT_CAR_PATH", "default car selection preservation");
 
 requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_get_snapshot_size", "snapshot size export");
 requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_write_snapshot", "snapshot write export");
@@ -455,6 +459,8 @@ requireText(byPath["../CMakeLists.txt"], "'_torcs_web_runtime_start_multi_with_f
 requireText(byPath["../CMakeLists.txt"], "'_torcs_web_runtime_get_car_count'", "Phase 6 car-count Emscripten export");
 requireText(byPath["../CMakeLists.txt"], "'_torcs_web_runtime_get_car_name_by_index'", "Phase 6 car-name Emscripten export");
 requireText(byPath["../CMakeLists.txt"], "'_torcs_web_runtime_write_car_snapshot'", "Phase 6 per-car snapshot Emscripten export");
+requireText(byPath["../CMakeLists.txt"], "TORCS_WEB_TRACK_CONFIGS", "dynamic track XML preload discovery");
+requireText(byPath["../CMakeLists.txt"], "TORCS_WEB_CAR_CONFIGS", "dynamic car XML preload discovery");
 
 requireText(byPath["renderer/runtime.js"], "wheelSkidIntensity0: 116", "Phase 4 skid snapshot field");
 requireText(byPath["renderer/runtime.js"], "wheelSurfaceKind0: 120", "Phase 5 wheel surface snapshot field");

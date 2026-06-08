@@ -52,6 +52,8 @@ const audio = new TorcsAudio("./web-assets/", (status) => {
 	elements.audioState.textContent = status;
 	elements.audio.textContent = audio.enabled ? "Stop" : "Audio";
 });
+const DEFAULT_TRACK_PATH = "/torcs/data/tracks/e-track-1/e-track-1.xml";
+const DEFAULT_CAR_PATH = "/torcs/data/cars/models/kc-2000gt/kc-2000gt.xml";
 let runtime = null;
 let running = false;
 let lastTime = 0;
@@ -74,6 +76,72 @@ function setEnabled(enabled) {
 function applyControls(controls = input.getControls()) {
 	if (runtime) {
 		runtime.setControls(controls);
+	}
+}
+
+function runtimeAssetPath(manifestPath) {
+	return manifestPath.startsWith("/torcs/") ? manifestPath : `/torcs/${manifestPath}`;
+}
+
+function assetIdFromPath(manifestPath) {
+	const parts = manifestPath.split("/");
+	const file = parts[parts.length - 1] || "";
+	return file.replace(/\.xml$/, "") || manifestPath;
+}
+
+function makeAssetLabel(entry, manifestPath) {
+	const id = assetIdFromPath(manifestPath);
+	const name = entry && entry.name ? entry.name : id;
+	return name === id ? name : `${name} (${id})`;
+}
+
+function makeAssetOptions(entries, type) {
+	return Object.entries(entries || {})
+		.map(([manifestPath, entry]) => ({
+			value: runtimeAssetPath(manifestPath),
+			label: makeAssetLabel(entry, manifestPath),
+			category: entry && entry.category ? entry.category : "",
+			id: assetIdFromPath(manifestPath),
+			type,
+		}))
+		.sort((a, b) =>
+			a.category.localeCompare(b.category) ||
+			a.label.localeCompare(b.label) ||
+			a.id.localeCompare(b.id));
+}
+
+function populateSelect(select, options, preferredValue) {
+	const fallbackValue = select.value;
+	select.textContent = "";
+	for (const item of options) {
+		const option = document.createElement("option");
+		option.value = item.value;
+		option.textContent = item.label;
+		if (item.category) {
+			option.dataset.category = item.category;
+		}
+		select.append(option);
+	}
+	if (options.some((item) => item.value === preferredValue)) {
+		select.value = preferredValue;
+	} else if (options.some((item) => item.value === fallbackValue)) {
+		select.value = fallbackValue;
+	}
+}
+
+async function populateAssetSelects() {
+	try {
+		const manifest = await assets.loadManifest();
+		const trackOptions = makeAssetOptions(manifest.tracks, "track");
+		const carOptions = makeAssetOptions(manifest.cars, "car");
+		if (trackOptions.length) {
+			populateSelect(elements.track, trackOptions, DEFAULT_TRACK_PATH);
+		}
+		if (carOptions.length) {
+			populateSelect(elements.car, carOptions, DEFAULT_CAR_PATH);
+		}
+	} catch (error) {
+		console.warn("TORCS web renderer asset manifest discovery failed", error);
 	}
 }
 
@@ -247,8 +315,8 @@ window.addEventListener("resize", () => {
 setEnabled(false);
 hud.setState("loading");
 
-createTorcsRuntime()
-	.then((loadedRuntime) => {
+Promise.all([createTorcsRuntime(), populateAssetSelects()])
+	.then(([loadedRuntime]) => {
 		runtime = loadedRuntime;
 		hud.setState("loaded");
 		setEnabled(false);

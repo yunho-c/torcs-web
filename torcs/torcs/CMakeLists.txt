@@ -250,24 +250,42 @@ if(EMSCRIPTEN)
 		DEPENDS torcs_web_probe
 		COMMENT "Copying TORCS WASM browser renderer"
 	)
-	if(TARGET torcs_web_assets)
-		add_dependencies(torcs_web_renderer_browser torcs_web_assets)
-	endif()
+		if(TARGET torcs_web_assets)
+			add_dependencies(torcs_web_renderer_browser torcs_web_assets)
+		endif()
 
-	target_link_options(torcs_web_probe
-		PRIVATE
+		set(TORCS_WEB_PRELOAD_FILES
 			"--preload-file=${TORCS_ROOT}/src/libs/raceengineclient/raceengine.xml@/torcs/config/raceengine.xml"
 			"--preload-file=${TORCS_ROOT}/src/libs/tgf/params.dtd@/torcs/tgf/params.dtd"
 			"--preload-file=${TORCS_ROOT}/src/libs/tgf/params.dtd@/torcs/src/libs/tgf/params.dtd"
-			"--preload-file=${TORCS_ROOT}/data/tracks/e-track-1/e-track-1.xml@/torcs/data/tracks/e-track-1/e-track-1.xml"
-			"--preload-file=${TORCS_ROOT}/data/tracks/g-track-1/g-track-1.xml@/torcs/data/tracks/g-track-1/g-track-1.xml"
 			"--preload-file=${TORCS_ROOT}/data/data/tracks/objects.xml@/torcs/data/tracks/objects.xml"
 			"--preload-file=${TORCS_ROOT}/data/data/tracks/surfaces.xml@/torcs/data/tracks/surfaces.xml"
-			"--preload-file=${TORCS_ROOT}/data/cars/models/kc-2000gt/kc-2000gt.xml@/torcs/data/cars/models/kc-2000gt/kc-2000gt.xml"
-			"--preload-file=${TORCS_ROOT}/data/cars/models/kc-a110/kc-a110.xml@/torcs/data/cars/models/kc-a110/kc-a110.xml"
-			"-sMODULARIZE=1"
-			"-sEXPORT_NAME=TorcsWebProbe"
-			"-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap','HEAPF64']"
+		)
+		file(GLOB_RECURSE TORCS_WEB_TRACK_CONFIGS CONFIGURE_DEPENDS "${TORCS_ROOT}/data/tracks/*.xml")
+		foreach(TORCS_WEB_TRACK_CONFIG IN LISTS TORCS_WEB_TRACK_CONFIGS)
+			get_filename_component(TORCS_WEB_TRACK_NAME "${TORCS_WEB_TRACK_CONFIG}" NAME)
+			if(NOT TORCS_WEB_TRACK_NAME MATCHES "\\.prj")
+				file(RELATIVE_PATH TORCS_WEB_TRACK_RELATIVE "${TORCS_ROOT}" "${TORCS_WEB_TRACK_CONFIG}")
+				list(APPEND TORCS_WEB_PRELOAD_FILES "--preload-file=${TORCS_WEB_TRACK_CONFIG}@/torcs/${TORCS_WEB_TRACK_RELATIVE}")
+			endif()
+		endforeach()
+		file(GLOB TORCS_WEB_CAR_CONFIGS CONFIGURE_DEPENDS "${TORCS_ROOT}/data/cars/models/*/*.xml")
+		foreach(TORCS_WEB_CAR_CONFIG IN LISTS TORCS_WEB_CAR_CONFIGS)
+			get_filename_component(TORCS_WEB_CAR_STEM "${TORCS_WEB_CAR_CONFIG}" NAME_WE)
+			get_filename_component(TORCS_WEB_CAR_DIR "${TORCS_WEB_CAR_CONFIG}" DIRECTORY)
+			get_filename_component(TORCS_WEB_CAR_ID "${TORCS_WEB_CAR_DIR}" NAME)
+			if(TORCS_WEB_CAR_STEM STREQUAL TORCS_WEB_CAR_ID)
+				file(RELATIVE_PATH TORCS_WEB_CAR_RELATIVE "${TORCS_ROOT}" "${TORCS_WEB_CAR_CONFIG}")
+				list(APPEND TORCS_WEB_PRELOAD_FILES "--preload-file=${TORCS_WEB_CAR_CONFIG}@/torcs/${TORCS_WEB_CAR_RELATIVE}")
+			endif()
+		endforeach()
+
+		target_link_options(torcs_web_probe
+			PRIVATE
+				${TORCS_WEB_PRELOAD_FILES}
+				"-sMODULARIZE=1"
+				"-sEXPORT_NAME=TorcsWebProbe"
+				"-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap','HEAPF64']"
 			"-sEXPORTED_FUNCTIONS=[${TORCS_WEB_EXPORTED_FUNCTIONS_ARG}]"
 	)
 	set_target_properties(torcs_web_probe PROPERTIES SUFFIX ".js")
