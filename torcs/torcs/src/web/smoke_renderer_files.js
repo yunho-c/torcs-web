@@ -530,6 +530,8 @@ requireText(byPath["renderer/audio.js"], "export class TorcsAudio", "audio runti
 requireText(byPath["renderer/audio.js"], "export class AudioAssets", "audio asset loader export");
 requireText(byPath["renderer/audio.js"], "export class CarAudioModel", "native car sound model export");
 requireText(byPath["renderer/audio.js"], "context.createPanner()", "positional Web Audio source");
+requireText(byPath["renderer/audio.js"], "const AUDIO_ROLLOFF_FACTOR = 0.05", "reduced distance audio attenuation");
+requireText(byPath["renderer/audio.js"], "panner.rolloffFactor = AUDIO_ROLLOFF_FACTOR", "shared positional audio rolloff");
 requireText(byPath["renderer/audio.js"], "context.createBiquadFilter()", "engine low-pass filter");
 requireText(byPath["renderer/audio.js"], "decodeAudioData", "manifest sample decoding");
 requireText(byPath["renderer/audio.js"], "this.enabled = false;\n\t\t\tthis.raceAudio = null;\n\t\t\tconst raceAudio", "stale audio state cleared before asset load");
@@ -549,7 +551,9 @@ requireText(byPath["renderer/scene.js"], "makeRoadMesh(track)", "sampled track r
 requireText(byPath["renderer/scene.js"], "setTrackVisual(model)", "converted track mesh hook");
 requireText(byPath["renderer/scene.js"], "setTrackAtmosphere(entry, backgroundTexture = null)", "track atmosphere hook");
 requireText(byPath["renderer/scene.js"], "backgroundColor.clone().multiplyScalar(0.8)", "native fog color scaling");
-requireText(byPath["renderer/scene.js"], "new THREE.Fog(fogColor, 300, 600)", "linear TORCS fog range");
+requireText(byPath["renderer/scene.js"], "const FOG_NEAR = 300", "linear TORCS fog start");
+requireText(byPath["renderer/scene.js"], "const FOG_FAR = 1200", "reduced linear TORCS fog range");
+requireText(byPath["renderer/scene.js"], "new THREE.Fog(fogColor, FOG_NEAR, FOG_FAR)", "linear TORCS fog range");
 requireText(byPath["renderer/scene.js"], "const BACKGROUND_RADIUS = 500", "clipping-safe panoramic backdrop radius");
 requireText(byPath["renderer/scene.js"], "const BACKGROUND_HEIGHT = BACKGROUND_RADIUS * 2", "native type-4 panoramic backdrop proportions");
 requireText(byPath["renderer/scene.js"], "const BACKGROUND_VERTICAL_BIAS = 0", "camera-centered panoramic backdrop");

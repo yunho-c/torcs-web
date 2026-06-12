@@ -10,6 +10,8 @@ const DEFAULT_BACKGROUND = new THREE.Color(0x0b0d0c);
 const DEFAULT_AMBIENT = new THREE.Color(0xd8e0db);
 const DEFAULT_SUN = new THREE.Color(0xfff0d2);
 const OPPONENT_COLORS = [0x78bdc4, 0xd4ad5f, 0x87b56f, 0xb78bd9];
+const FOG_NEAR = 300;
+const FOG_FAR = 1200;
 // Keep the panorama inside the chase/onboard camera far plane so it is not clipped.
 const BACKGROUND_RADIUS = 500;
 const BACKGROUND_HEIGHT = BACKGROUND_RADIUS * 2;
@@ -178,7 +180,7 @@ export class TorcsScene {
 
 		this.scene = new THREE.Scene();
 		this.scene.background = DEFAULT_BACKGROUND.clone();
-		this.scene.fog = new THREE.Fog(DEFAULT_BACKGROUND, 300, 600);
+		this.scene.fog = new THREE.Fog(DEFAULT_BACKGROUND, FOG_NEAR, FOG_FAR);
 
 		this.groups = {
 			background: new THREE.Group(),
@@ -276,7 +278,7 @@ export class TorcsScene {
 		const diffuseColor = colorFromRgb(entry && entry.diffuseColor, DEFAULT_SUN);
 		this.renderer.setClearColor(backgroundColor, 1);
 		this.scene.background = backgroundColor.clone();
-		this.scene.fog = new THREE.Fog(fogColor, 300, 600);
+		this.scene.fog = new THREE.Fog(fogColor, FOG_NEAR, FOG_FAR);
 		this.ambientLight.color.copy(ambientColor);
 		this.ambientLight.intensity = 2.4;
 		this.sunLight.color.copy(diffuseColor);

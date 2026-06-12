@@ -5,6 +5,7 @@ const WHEEL_COUNT = 4;
 const TR_CURB = 1;
 const RM_CAR_STATE_NO_SIMU = 0x000000FF;
 const VOLUME_CUTOFF = 0.001;
+const AUDIO_ROLLOFF_FACTOR = 0.05;
 
 function clamp(value, min, max) {
 	return Math.min(max, Math.max(min, value));
@@ -123,7 +124,7 @@ class LoopSound {
 		this.panner.distanceModel = "inverse";
 		this.panner.refDistance = 1;
 		this.panner.maxDistance = 10000;
-		this.panner.rolloffFactor = 1;
+		this.panner.rolloffFactor = AUDIO_ROLLOFF_FACTOR;
 		if (this.filter) {
 			this.filter.type = "lowpass";
 			this.filter.frequency.value = 12000;
@@ -537,6 +538,8 @@ export class TorcsAudio {
 		panner.panningModel = "HRTF";
 		panner.distanceModel = "inverse";
 		panner.refDistance = 1;
+		panner.maxDistance = 10000;
+		panner.rolloffFactor = AUDIO_ROLLOFF_FACTOR;
 		setPannerPosition(panner, position);
 		source.connect(gain);
 		gain.connect(panner);
