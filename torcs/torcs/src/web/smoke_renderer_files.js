@@ -145,7 +145,7 @@ async function importAudioModuleForSmoke() {
 	fs.mkdirSync(rendererDir, { recursive: true });
 	try {
 		const audioSource = byPath["renderer/audio.js"].content.replace(
-			"import * as THREE from \"three\";",
+			"import * as THREE from \"three/webgpu\";",
 			`const THREE = {
 \tVector3: class {
 \t\tconstructor(x = 0, y = 0, z = 0) {
@@ -413,6 +413,9 @@ files
 requireText(byPath["torcs_web_renderer.html"], "./torcs_web_probe.js", "WASM probe script");
 requireText(byPath["torcs_web_renderer.html"], "./renderer/main.js", "renderer module entrypoint");
 requireText(byPath["torcs_web_renderer.html"], "\"three\"", "Three.js import map");
+requireText(byPath["torcs_web_renderer.html"], "three@0.183.0/build/three.webgpu.js", "WebGPU three.js import map");
+requireText(byPath["torcs_web_renderer.html"], "\"three/webgpu\"", "Three.js WebGPU import map");
+requireText(byPath["torcs_web_renderer.html"], "\"three/tsl\"", "Three.js TSL import map");
 requireText(byPath["torcs_web_renderer.html"], "\"three/addons/\"", "Three.js addons import map");
 requireText(byPath["torcs_web_renderer.html"], "<option value=\"trackside\">Trackside</option>", "trackside camera UI option");
 requireText(byPath["torcs_web_renderer.html"], "id=\"audio\"", "audio unlock button");
@@ -435,7 +438,7 @@ requireText(byPath["renderer/assets.js"], "entry.backgroundTexture", "track back
 requireText(byPath["renderer/assets.js"], "async loadEffects()", "effect texture loading");
 requireText(byPath["renderer/assets.js"], "manifest.effects && manifest.effects.textures", "effect texture manifest lookup");
 requireText(byPath["renderer/assets.js"], "shadowTexture", "car shadow texture loading");
-requireText(byPath["renderer/assets.js"], "renderer.capabilities.getMaxAnisotropy()", "renderer anisotropy capability");
+requireText(byPath["renderer/assets.js"], "typeof caps.getMaxAnisotropy === \"function\"", "guarded renderer anisotropy capability");
 requireText(byPath["renderer/assets.js"], "texture.anisotropy = Math.max(1, this.getMaxAnisotropy())", "anisotropic texture sampling");
 requireText(byPath["renderer/assets.js"], "texture.minFilter = THREE.LinearMipmapLinearFilter", "mipmapped distant texture filtering");
 requireText(byPath["renderer/assets.js"], "new THREE.MeshLambertMaterial", "legacy matte material conversion");
@@ -497,7 +500,7 @@ requireText(byPath["renderer/main.js"], "new AssetManager", "asset manager creat
 requireText(byPath["renderer/main.js"], "new TorcsAudio(\"./web-assets/\"", "audio runtime creation");
 requireText(byPath["renderer/main.js"], "new AssetManager(\"./web-assets/\", scene.renderer)", "asset renderer capability handoff");
 requireText(byPath["renderer/main.js"], "audio.enabled ? \"Stop\" : \"Audio\"", "audio button start/stop label");
-requireText(byPath["renderer/main.js"], "new TorcsScene", "scene creation");
+requireText(byPath["renderer/main.js"], "scene = await TorcsScene.create(elements.canvas)", "async WebGPU scene creation");
 requireText(byPath["renderer/main.js"], "runtime.readTrackSamples()", "track sample ingestion");
 requireText(byPath["renderer/main.js"], "runtime.readSnapshots()", "Phase 6 snapshot array ingestion");
 requireText(byPath["renderer/main.js"], "scene.updateCars(snapshots, cameras.camera, selectedCarIndex)", "Phase 6 selected-car scene update");
@@ -544,8 +547,11 @@ requireText(byPath["renderer/audio.js"], "SNAPSHOT.collisionEvent", "latched col
 requireText(byPath["renderer/audio.js"], "SNAPSHOT.wheelOtherSurfaceContribution0", "mixed-surface audio use");
 requireText(byPath["renderer/audio.js"], "SNAPSHOT.wheelSurfaceStyle0", "curb style audio use");
 
-requireText(byPath["renderer/scene.js"], "import * as THREE from \"three\"", "Three.js module import");
+requireText(byPath["renderer/scene.js"], "import * as THREE from \"three/webgpu\"", "Three.js WebGPU module import");
 requireText(byPath["renderer/scene.js"], "import { TorcsEffects } from \"./effects.js\"", "effects module import");
+requireText(byPath["renderer/scene.js"], "new THREE.WebGPURenderer", "WebGPU renderer creation");
+requireText(byPath["renderer/scene.js"], "await renderer.init()", "async WebGPU renderer initialization");
+requireText(byPath["renderer/scene.js"], "forceWebGL: params.get(\"renderer\") === \"webgl\"", "forced WebGL fallback option");
 requireText(byPath["renderer/scene.js"], "new THREE.BoxGeometry", "simulated car box");
 requireText(byPath["renderer/scene.js"], "makeRoadMesh(track)", "sampled track road mesh");
 requireText(byPath["renderer/scene.js"], "setTrackVisual(model)", "converted track mesh hook");
@@ -597,6 +603,9 @@ requireText(byPath["renderer/scene.js"], "effects.resetDynamics()", "effects res
 requireText(byPath["renderer/scene.js"], "this.effects.update(values, this.car, camera)", "snapshot-driven effects update");
 if (byPath["renderer/scene.js"].content.includes("this.car.rotation.set(values[SNAPSHOT.pitch]")) {
 	fail("TORCS web renderer smoke test found scalar Euler car body orientation");
+}
+if (byPath["renderer/scene.js"].content.includes("WebGLRenderer")) {
+	fail("TORCS web renderer smoke test found legacy WebGLRenderer creation");
 }
 
 requireText(byPath["renderer/effects.js"], "export class TorcsEffects", "effects layer export");

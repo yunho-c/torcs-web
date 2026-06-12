@@ -1,4 +1,4 @@
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import { SNAPSHOT } from "./runtime.js";
 
 const WHEEL_COUNT = 4;

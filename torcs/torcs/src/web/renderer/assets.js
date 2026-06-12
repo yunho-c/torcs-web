@@ -1,4 +1,4 @@
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 const TEXTURE_MAP_KEYS = [
@@ -42,7 +42,8 @@ export class AssetManager {
 	}
 
 	getMaxAnisotropy() {
-		return this.renderer ? this.renderer.capabilities.getMaxAnisotropy() : 1;
+		const caps = this.renderer && this.renderer.capabilities;
+		return caps && typeof caps.getMaxAnisotropy === "function" ? caps.getMaxAnisotropy() : 1;
 	}
 
 	configureTexture(texture) {

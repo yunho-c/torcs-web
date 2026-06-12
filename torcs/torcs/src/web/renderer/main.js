@@ -45,15 +45,13 @@ const elements = {
 };
 
 const hud = new Hud(elements);
-const scene = new TorcsScene(elements.canvas);
-const cameras = new CameraRig(elements.canvas);
-const assets = new AssetManager("./web-assets/", scene.renderer);
-const audio = new TorcsAudio("./web-assets/", (status) => {
-	elements.audioState.textContent = status;
-	elements.audio.textContent = audio.enabled ? "Stop" : "Audio";
-});
 const DEFAULT_TRACK_PATH = "/torcs/data/tracks/e-track-1/e-track-1.xml";
 const DEFAULT_CAR_PATH = "/torcs/data/cars/models/kc-2000gt/kc-2000gt.xml";
+let scene = null;
+let cameras = null;
+let assets = null;
+let audio = null;
+let input = null;
 let runtime = null;
 let running = false;
 let lastTime = 0;
@@ -144,14 +142,6 @@ async function populateAssetSelects() {
 		console.warn("TORCS web renderer asset manifest discovery failed", error);
 	}
 }
-
-const input = new InputController({
-	steer: elements.steer,
-	accel: elements.accel,
-	brake: elements.brake,
-	clutch: elements.clutch,
-	gear: elements.gearInput,
-}, applyControls);
 
 function readAndRender(deltaTime = 0) {
 	snapshots = runtime ? runtime.readSnapshots() : [];
@@ -263,68 +253,89 @@ async function startSession() {
 	readAndRender();
 }
 
-elements.start.addEventListener("click", startSession);
-elements.step.addEventListener("click", () => step());
-elements.run.addEventListener("click", () => {
-	if (!runtime || !runtime.active) {
-		return;
-	}
-	running = !running;
-	elements.run.textContent = running ? "Pause" : "Run";
-	hud.setState(running ? "running" : "ready");
-});
-elements.reset.addEventListener("click", startSession);
-elements.audio.addEventListener("click", async () => {
-	if (audio.enabled) {
-		audio.disable();
-		return;
-	}
-	try {
-		await audio.enable(elements.car.value);
-		if (snapshot) {
-			audio.update(snapshot, cameras.camera, 0);
+function bindUi() {
+	elements.start.addEventListener("click", startSession);
+	elements.step.addEventListener("click", () => step());
+	elements.run.addEventListener("click", () => {
+		if (!runtime || !runtime.active) {
+			return;
 		}
-	} catch (error) {
-		console.warn("TORCS web audio failed to start", error);
-	}
-});
-elements.volume.addEventListener("input", () => {
-	audio.setVolume(Number(elements.volume.value));
-});
-elements.camera.addEventListener("change", () => {
-	cameras.setMode(elements.camera.value);
-	if (snapshot) {
-		readAndRender();
-	}
-});
-elements.currentCar.addEventListener("change", () => {
-	selectedCarIndex = Number(elements.currentCar.value) || 0;
-	if (snapshot) {
-		readAndRender();
-	}
-});
-window.addEventListener("resize", () => {
-	scene.resize();
-	cameras.updateProjection();
-	hud.resizeMap();
-	if (snapshot) {
-		readAndRender();
-	}
-});
+		running = !running;
+		elements.run.textContent = running ? "Pause" : "Run";
+		hud.setState(running ? "running" : "ready");
+	});
+	elements.reset.addEventListener("click", startSession);
+	elements.audio.addEventListener("click", async () => {
+		if (audio.enabled) {
+			audio.disable();
+			return;
+		}
+		try {
+			await audio.enable(elements.car.value);
+			if (snapshot) {
+				audio.update(snapshot, cameras.camera, 0);
+			}
+		} catch (error) {
+			console.warn("TORCS web audio failed to start", error);
+		}
+	});
+	elements.volume.addEventListener("input", () => {
+		audio.setVolume(Number(elements.volume.value));
+	});
+	elements.camera.addEventListener("change", () => {
+		cameras.setMode(elements.camera.value);
+		if (snapshot) {
+			readAndRender();
+		}
+	});
+	elements.currentCar.addEventListener("change", () => {
+		selectedCarIndex = Number(elements.currentCar.value) || 0;
+		if (snapshot) {
+			readAndRender();
+		}
+	});
+	window.addEventListener("resize", () => {
+		scene.resize();
+		cameras.updateProjection();
+		hud.resizeMap();
+		if (snapshot) {
+			readAndRender();
+		}
+	});
+}
 
-setEnabled(false);
-hud.setState("loading");
+async function main() {
+	setEnabled(false);
+	hud.setState("loading");
 
-Promise.all([createTorcsRuntime(), populateAssetSelects()])
-	.then(([loadedRuntime]) => {
+	try {
+		scene = await TorcsScene.create(elements.canvas);
+		cameras = new CameraRig(elements.canvas);
+		assets = new AssetManager("./web-assets/", scene.renderer);
+		audio = new TorcsAudio("./web-assets/", (status) => {
+			elements.audioState.textContent = status;
+			elements.audio.textContent = audio.enabled ? "Stop" : "Audio";
+		});
+		input = new InputController({
+			steer: elements.steer,
+			accel: elements.accel,
+			brake: elements.brake,
+			clutch: elements.clutch,
+			gear: elements.gearInput,
+		}, applyControls);
+		bindUi();
+
+		const [loadedRuntime] = await Promise.all([createTorcsRuntime(), populateAssetSelects()]);
 		runtime = loadedRuntime;
 		hud.setState("loaded");
 		setEnabled(false);
 		elements.start.disabled = false;
 		cameras.updateProjection();
 		requestAnimationFrame(animate);
-	})
-	.catch((error) => {
+	} catch (error) {
 		console.error(error);
 		hud.setState("failed");
-	});
+	}
+}
+
+main();

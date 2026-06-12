@@ -1,4 +1,4 @@
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import { TorcsEffects } from "./effects.js";
 import { SNAPSHOT } from "./runtime.js";
 
@@ -172,8 +172,19 @@ function tintClone(root, color) {
 }
 
 export class TorcsScene {
-	constructor(canvas) {
-		this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+	static async create(canvas) {
+		const params = new URLSearchParams(window.location.search);
+		const renderer = new THREE.WebGPURenderer({
+			canvas,
+			antialias: true,
+			forceWebGL: params.get("renderer") === "webgl",
+		});
+		await renderer.init();
+		return new TorcsScene(renderer);
+	}
+
+	constructor(renderer) {
+		this.renderer = renderer;
 		this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 		this.renderer.setClearColor(DEFAULT_BACKGROUND, 1);
 		this.renderer.outputColorSpace = THREE.SRGBColorSpace;
