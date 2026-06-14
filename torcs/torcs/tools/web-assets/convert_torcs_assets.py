@@ -49,6 +49,16 @@ GLOBAL_SOUND_SAMPLES = {
 	"gearChange": "gear_change1.wav",
 }
 CRASH_SOUND_SAMPLES = [f"crash{i}.wav" for i in range(1, 7)]
+CAR_MATERIAL_CLASS_PATTERNS = [
+	("mirrorGlass", ["MIRRORGLASS"]),
+	("glass", ["WINDOW", "WIND"]),
+	("headlamp", ["FRONTLIGHT", "WIFRONTLIGH"]),
+	("taillamp", ["REARLIGHT", "WIREARLIGHT", "BRAKE"]),
+	("exhaust", ["EXHAUST"]),
+	("blackTrim", ["WIPER", "ANTENNA"]),
+	("interior", ["COCKPIT", "CONSOLE", "STEERING", "SEAT", "ROLLBAR"]),
+	("driver", ["DRIVER", "GIRTHS"]),
+]
 
 
 @dataclass
@@ -309,8 +319,9 @@ def resolve_texture(source_root, asset_source_dir, texture):
 	return None
 
 
-def make_material_name(texture):
-	return Path(texture).stem if texture else "flat"
+def make_material_name(texture, material_class=""):
+	texture_name = Path(texture).stem if texture else "flat"
+	return f"{texture_name}-{material_class}" if material_class else texture_name
 
 
 def uses_alpha_test(texture):
@@ -324,6 +335,18 @@ def apply_texture_alpha(material, texture):
 	if uses_alpha_test(texture):
 		material["alphaMode"] = "MASK"
 		material["alphaCutoff"] = TREE_ALPHA_CUTOFF
+
+
+def classify_car_object(name):
+	upper = name.upper()
+	for material_class, patterns in CAR_MATERIAL_CLASS_PATTERNS:
+		if any(pattern in upper for pattern in patterns):
+			return material_class
+	return "body"
+
+
+def make_primitive_key(texture, material_class):
+	return texture or "", material_class or ""
 
 
 def add_accessor(gltf, buffer_views, buffer_parts, component_type, item_type, values, minimum=None, maximum=None):
@@ -407,7 +430,7 @@ def triangulate_surface(refs, flags):
 	return []
 
 
-def convert_ac_to_glb(source_root, source_path, output_path):
+def convert_ac_to_glb(source_root, source_path, output_path, object_classifier=None):
 	objects = parse_ac3d(source_path)
 	primitives = {}
 	asset_source_dir = source_path.parent
@@ -415,14 +438,17 @@ def convert_ac_to_glb(source_root, source_path, output_path):
 
 	for obj in objects:
 		texture = obj.texture
+		material_class = object_classifier(obj.name) if object_classifier else ""
 		if texture:
 			resolved = resolve_texture(source_root, asset_source_dir, texture)
 			if resolved:
 				texture_sources[texture] = resolved
 			else:
 				texture = ""
-		key = texture or ""
+		key = make_primitive_key(texture, material_class)
 		target = primitives.setdefault(key, {
+			"texture": texture or "",
+			"materialClass": material_class,
 			"positions": [],
 			"normals": [],
 			"uvs": [],
@@ -455,10 +481,13 @@ def convert_ac_to_glb(source_root, source_path, output_path):
 		"accessors": [],
 	}
 	buffer_parts = []
+	texture_indices = {}
 
-	for texture, data in sorted(primitives.items(), key=lambda item: item[0]):
+	for _, data in sorted(primitives.items(), key=lambda item: item[0]):
 		if not data["positions"]:
 			continue
+		texture = data["texture"]
+		material_class = data["materialClass"]
 		minimum = [min(row[i] for row in data["positions"]) for i in range(3)]
 		maximum = [max(row[i] for row in data["positions"]) for i in range(3)]
 		position_accessor = add_accessor(gltf, gltf["bufferViews"], buffer_parts, 5126, "VEC3", data["positions"], minimum, maximum)
@@ -468,7 +497,7 @@ def convert_ac_to_glb(source_root, source_path, output_path):
 		index_accessor = add_accessor(gltf, gltf["bufferViews"], buffer_parts, index_component_type, "SCALAR", data["indices"])
 
 		material = {
-			"name": make_material_name(texture),
+			"name": make_material_name(texture, material_class),
 			"pbrMetallicRoughness": {
 				"baseColorFactor": [0.72, 0.72, 0.72, 1.0],
 				"metallicFactor": 0.0,
@@ -476,12 +505,20 @@ def convert_ac_to_glb(source_root, source_path, output_path):
 			},
 			"doubleSided": True,
 		}
+		material["extras"] = {
+			"torcsSourceTexture": texture,
+			"torcsObjectNames": sorted(data["objects"]),
+		}
+		if material_class:
+			material["extras"]["torcsMaterialClass"] = material_class
 		if texture:
 			png_name = f"{Path(texture).stem}.png"
-			material["pbrMetallicRoughness"]["baseColorTexture"] = {"index": len(gltf["textures"])}
+			if texture not in texture_indices:
+				texture_indices[texture] = len(gltf["textures"])
+				gltf["textures"].append({"sampler": 0, "source": len(gltf["images"])})
+				gltf["images"].append({"uri": png_name})
+			material["pbrMetallicRoughness"]["baseColorTexture"] = {"index": texture_indices[texture]}
 			apply_texture_alpha(material, texture)
-			gltf["textures"].append({"sampler": 0, "source": len(gltf["images"])})
-			gltf["images"].append({"uri": png_name})
 		gltf["materials"].append(material)
 		gltf["meshes"][0]["primitives"].append({
 			"attributes": {
@@ -500,9 +537,18 @@ def convert_ac_to_glb(source_root, source_path, output_path):
 		"source": str(source_path.relative_to(source_root)),
 		"asset": str(output_path),
 		"primitives": len(gltf["meshes"][0]["primitives"]),
-		"textures": sorted(texture for texture in primitives.keys() if texture),
+		"textures": sorted({data["texture"] for data in primitives.values() if data["texture"]}),
 		"textureSources": texture_sources,
 		"objects": sorted({name for data in primitives.values() for name in data["objects"]}),
+		"materials": [
+			{
+				"class": data["materialClass"],
+				"texture": data["texture"],
+				"objectNames": sorted(data["objects"]),
+			}
+			for _, data in sorted(primitives.items(), key=lambda item: item[0])
+			if data["positions"] and data["materialClass"]
+		],
 	}
 
 
@@ -694,11 +740,14 @@ def convert_car(source_root, output_dir, car_xml):
 			source_root,
 			car_source_dir / lod["model"],
 			lod_glb,
+			classify_car_object,
 		)
 		car_texture_sources.update(result["textureSources"])
 		lod["asset"] = relative_to_output(lod_glb, output_dir)
 		lod["primitiveCount"] = result["primitives"]
 		lod["objectNames"] = result["objects"]
+		lod["materialClasses"] = sorted({material["class"] for material in result["materials"]})
+		lod["materials"] = result["materials"]
 
 	for texture in [car_meta["wheelTexture"], car_meta["shadowTexture"]]:
 		resolved = resolve_texture(source_root, car_source_dir, texture)

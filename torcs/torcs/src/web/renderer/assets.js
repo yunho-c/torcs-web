@@ -16,6 +16,8 @@ const TEXTURE_MAP_KEYS = [
 	"specularMap",
 ];
 const RENDER_PROFILES = new Set(["legacy", "modern"]);
+const HEADLAMP_EMISSIVE = new THREE.Color(0xfff0c8);
+const TAILLAMP_EMISSIVE = new THREE.Color(0xff2424);
 
 function normalizeRuntimePath(path) {
 	return path.replace(/^\/torcs\//, "");
@@ -93,10 +95,129 @@ export class AssetManager {
 		return legacy;
 	}
 
+	makeModernBaseParameters(material) {
+		this.configureMaterialTextureSampling(material);
+		return {
+			name: material.name,
+			color: material.color ? material.color.clone() : new THREE.Color(0xffffff),
+			map: material.map || null,
+			alphaMap: material.alphaMap || null,
+			alphaTest: material.alphaTest || 0,
+			transparent: material.transparent,
+			opacity: material.opacity,
+			side: material.side,
+			depthWrite: material.depthWrite,
+			fog: material.fog,
+		};
+	}
+
+	makeStandardMaterial(parameters) {
+		return new THREE.MeshStandardMaterial(parameters);
+	}
+
+	makePaintMaterial(parameters) {
+		if (typeof THREE.MeshPhysicalMaterial === "function") {
+			return new THREE.MeshPhysicalMaterial({
+				...parameters,
+				metalness: 0.0,
+				roughness: 0.34,
+				clearcoat: 0.85,
+				clearcoatRoughness: 0.22,
+			});
+		}
+		return this.makeStandardMaterial({
+			...parameters,
+			metalness: 0.0,
+			roughness: 0.34,
+		});
+	}
+
+	makeGlassMaterial(parameters, opacity) {
+		const glassParameters = {
+			...parameters,
+			color: new THREE.Color(0xc8d7df),
+			transparent: true,
+			opacity,
+			roughness: 0.04,
+			metalness: 0.0,
+			side: THREE.DoubleSide,
+			depthWrite: false,
+		};
+		if (typeof THREE.MeshPhysicalMaterial === "function") {
+			return new THREE.MeshPhysicalMaterial({
+				...glassParameters,
+				transmission: 0.28,
+				clearcoat: 1.0,
+				clearcoatRoughness: 0.04,
+			});
+		}
+		return this.makeStandardMaterial(glassParameters);
+	}
+
+	makeEmissiveMaterial(parameters, color, intensity) {
+		return this.makeStandardMaterial({
+			...parameters,
+			emissive: color,
+			emissiveIntensity: intensity,
+			emissiveMap: parameters.map || null,
+			roughness: 0.25,
+			metalness: 0.0,
+		});
+	}
+
+	makeModernClassMaterial(material, materialClass) {
+		const parameters = this.makeModernBaseParameters(material);
+		switch (materialClass) {
+			case "body":
+				return this.makePaintMaterial(parameters);
+			case "glass":
+				return this.makeGlassMaterial(parameters, 0.42);
+			case "mirrorGlass":
+				return this.makeGlassMaterial(parameters, 0.58);
+			case "headlamp":
+				return this.makeEmissiveMaterial(parameters, HEADLAMP_EMISSIVE, 1.35);
+			case "taillamp":
+				return this.makeEmissiveMaterial(parameters, TAILLAMP_EMISSIVE, 1.55);
+			case "exhaust":
+				return this.makeStandardMaterial({
+					...parameters,
+					color: new THREE.Color(0x5c5750),
+					metalness: 0.82,
+					roughness: 0.42,
+				});
+			case "blackTrim":
+				return this.makeStandardMaterial({
+					...parameters,
+					color: new THREE.Color(0x202020),
+					metalness: 0.08,
+					roughness: 0.68,
+				});
+			case "interior":
+				return this.makeStandardMaterial({
+					...parameters,
+					metalness: 0.05,
+					roughness: 0.76,
+				});
+			case "driver":
+				return this.makeStandardMaterial({
+					...parameters,
+					metalness: 0.0,
+					roughness: 0.82,
+				});
+			default:
+				return null;
+		}
+	}
+
 	makeModernMaterial(material) {
-		// Modern mode deliberately mirrors legacy materials until remaster-specific
-		// material metadata exists. Keep the entrypoint separate for future work.
-		return this.makeLegacyMaterial(material);
+		const materialClass = material.userData && material.userData.torcsMaterialClass;
+		const modern = materialClass ? this.makeModernClassMaterial(material, materialClass) : null;
+		if (!modern) {
+			return this.makeLegacyMaterial(material);
+		}
+		modern.userData = { ...material.userData };
+		material.dispose();
+		return modern;
 	}
 
 	convertMaterial(material) {

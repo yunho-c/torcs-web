@@ -79,6 +79,38 @@ function checkObjectNames(entry, label) {
 	}
 }
 
+function checkCarMaterialMetadata(lod, expectedClasses) {
+	if (!Array.isArray(lod.materialClasses) ||
+		lod.materialClasses.some((name) => typeof name !== "string" || name.length === 0)) {
+		fail("TORCS web renderer smoke test found malformed car material classes", {
+			model: lod.model,
+		});
+	}
+	for (const expectedClass of expectedClasses) {
+		if (!lod.materialClasses.includes(expectedClass)) {
+			fail("TORCS web renderer smoke test missing expected car material class", {
+				model: lod.model,
+				expectedClass,
+				classes: lod.materialClasses,
+			});
+		}
+	}
+	if (!Array.isArray(lod.materials) || lod.materials.length < expectedClasses.length) {
+		fail("TORCS web renderer smoke test found missing car material records", {
+			model: lod.model,
+		});
+	}
+	for (const material of lod.materials) {
+		if (!material || typeof material.class !== "string" ||
+			!Array.isArray(material.objectNames) || material.objectNames.length === 0) {
+			fail("TORCS web renderer smoke test found malformed car material record", {
+				model: lod.model,
+				material,
+			});
+		}
+	}
+}
+
 function checkNumberTriplet(entry, field, label) {
 	if (!Array.isArray(entry[field]) || entry[field].length !== 3 ||
 		entry[field].some((value) => typeof value !== "number" || !Number.isFinite(value))) {
@@ -447,6 +479,9 @@ requireText(byPath["renderer/assets.js"], "texture.minFilter = THREE.LinearMipma
 requireText(byPath["renderer/assets.js"], "new THREE.MeshLambertMaterial", "legacy matte material conversion");
 requireText(byPath["renderer/assets.js"], "setRenderProfile(profile)", "asset render profile setter");
 requireText(byPath["renderer/assets.js"], "makeModernMaterial(material)", "modern material adapter entrypoint");
+requireText(byPath["renderer/assets.js"], "torcsMaterialClass", "remaster material metadata lookup");
+requireText(byPath["renderer/assets.js"], "makeModernClassMaterial(material, materialClass)", "modern material class adapter");
+requireText(byPath["renderer/assets.js"], "MeshPhysicalMaterial", "modern physical material support");
 requireText(byPath["renderer/assets.js"], "return this.makeLegacyMaterial(material)", "modern profile preserves legacy visual baseline");
 requireText(byPath["renderer/assets.js"], "TORCS web renderer failed to load track background texture", "background texture load warning");
 requireText(byPath["renderer/main.js"], "populateAssetSelects()", "manifest-driven asset select discovery");
@@ -663,8 +698,12 @@ if (byPath["renderer/cameras.js"].content.includes("Math.cos(yaw)")) {
 const manifest = JSON.parse(read("web-assets/manifest.json"));
 const track = manifest.tracks["data/tracks/e-track-1/e-track-1.xml"];
 const car = manifest.cars["data/cars/models/kc-2000gt/kc-2000gt.xml"];
+const car7Trb1 = manifest.cars["data/cars/models/car7-trb1/car7-trb1.xml"];
 if (!track || !car) {
 	fail("TORCS web renderer smoke test missing Phase 1 manifest entries");
+}
+if (!car7Trb1 || !Array.isArray(car7Trb1.lods) || car7Trb1.lods.length === 0) {
+	fail("TORCS web renderer smoke test missing car7-trb1 remaster reference asset");
 }
 if (!manifest.tracks["data/tracks/g-track-1/g-track-1.xml"] ||
 	!manifest.cars["data/cars/models/kc-a110/kc-a110.xml"]) {
@@ -694,6 +733,7 @@ for (const lod of car.lods) {
 		});
 	}
 }
+checkCarMaterialMetadata(car7Trb1.lods[0], ["body", "glass", "headlamp", "taillamp", "exhaust"]);
 if (!car.wheelFallback || car.wheelFallback.source !== "runtime-snapshot" ||
 	!car.wheelFallback.texture || !(car.wheelFallback.texture in car.textures)) {
 	fail("TORCS web renderer smoke test found missing wheel fallback metadata");

@@ -117,6 +117,29 @@ def check_number(entry, field, label):
 		raise ValueError(f"{label} missing numeric {field}")
 
 
+def check_material_metadata(lod):
+	classes = lod.get("materialClasses")
+	if classes is not None:
+		if not isinstance(classes, list) or not all(isinstance(name, str) and name for name in classes):
+			raise ValueError(f"{lod.get('model', 'car LOD')} has malformed material classes")
+	materials = lod.get("materials")
+	if materials is None:
+		return
+	if not isinstance(materials, list):
+		raise ValueError(f"{lod.get('model', 'car LOD')} has malformed material records")
+	for material in materials:
+		if not isinstance(material, dict):
+			raise ValueError(f"{lod.get('model', 'car LOD')} has malformed material record")
+		material_class = material.get("class")
+		object_names = material.get("objectNames")
+		if not isinstance(material_class, str) or not material_class:
+			raise ValueError(f"{lod.get('model', 'car LOD')} has material without a class")
+		if classes is not None and material_class not in classes:
+			raise ValueError(f"{lod.get('model', 'car LOD')} has material class outside materialClasses")
+		if not isinstance(object_names, list) or not all(isinstance(name, str) and name for name in object_names):
+			raise ValueError(f"{lod.get('model', 'car LOD')} has material without object names")
+
+
 def main():
 	args = parse_args()
 	manifest_path = args.manifest.resolve()
@@ -169,6 +192,7 @@ def main():
 					raise ValueError(f"{lod.get('model', 'car LOD')} missing wheel visibility metadata")
 				check_glb(require(root, lod["asset"]))
 				check_object_names(lod, lod.get("model", "car LOD"))
+				check_material_metadata(lod)
 			for texture in car.get("textures", {}).values():
 				check_texture(require(root, texture))
 		effects = manifest.get("effects", {})

@@ -2,12 +2,15 @@
 """Tests for convert_torcs_assets.py."""
 
 import importlib.util
+import json
+import struct
 import tempfile
 import unittest
 from pathlib import Path
 
 
 MODULE_PATH = Path(__file__).with_name("convert_torcs_assets.py")
+SOURCE_ROOT = MODULE_PATH.parents[2]
 SPEC = importlib.util.spec_from_file_location("convert_torcs_assets", MODULE_PATH)
 convert = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(convert)
@@ -15,6 +18,18 @@ SPEC.loader.exec_module(convert)
 
 def make_refs(count):
 	return [(i, float(i), float(i)) for i in range(count)]
+
+
+def read_glb_json(path):
+	data = path.read_bytes()
+	offset = 12
+	while offset < len(data):
+		length, kind = struct.unpack("<I4s", data[offset:offset + 8])
+		offset += 8
+		if kind == b"JSON":
+			return json.loads(data[offset:offset + length].decode("utf-8"))
+		offset += length
+	raise AssertionError("GLB JSON chunk not found")
 
 
 class ConvertTorcsAssetsTest(unittest.TestCase):
@@ -98,6 +113,85 @@ kids 0
 
 		self.assertEqual(accessor, 0)
 		self.assertEqual(gltf["accessors"][0]["componentType"], 5125)
+
+	def test_classifies_car_object_names(self):
+		self.assertEqual(convert.classify_car_object("WIFRONTWIND_s_0"), "glass")
+		self.assertEqual(convert.classify_car_object("MIRRORGLASS_s_1"), "mirrorGlass")
+		self.assertEqual(convert.classify_car_object("FRONTLIGHTB_s_1"), "headlamp")
+		self.assertEqual(convert.classify_car_object("REARLIGHTFR_s_1"), "taillamp")
+		self.assertEqual(convert.classify_car_object("EXHAUSTPIPE_s_3"), "exhaust")
+		self.assertEqual(convert.classify_car_object("WIPER_s_5"), "blackTrim")
+		self.assertEqual(convert.classify_car_object("COCKPITREAR_s_0"), "interior")
+		self.assertEqual(convert.classify_car_object("DRIVERPART1_s_5"), "driver")
+		self.assertEqual(convert.classify_car_object("ROOF_s_4"), "body")
+
+	def test_car_material_classes_split_primitives_and_glb_metadata(self):
+		content = """AC3Db
+OBJECT world
+kids 2
+OBJECT poly
+name "WIFRONTWIND_s_0"
+texture "car.rgb" base
+numvert 3
+0 0 0
+1 0 0
+0 1 0
+numsurf 1
+SURF 0x14
+mat 0
+refs 3
+0 0 0
+1 1 0
+2 0 1
+kids 0
+OBJECT poly
+name "EXHAUSTPIPE_s_3"
+texture "car.rgb" base
+numvert 3
+0 0 1
+1 0 1
+0 1 1
+numsurf 1
+SURF 0x14
+mat 0
+refs 3
+0 0 0
+1 1 0
+2 0 1
+kids 0
+"""
+		with tempfile.TemporaryDirectory() as tmp_dir:
+			source_root = Path(tmp_dir)
+			car_dir = source_root / "data/cars/models/demo-car"
+			car_dir.mkdir(parents=True)
+			(car_dir / "car.rgb").write_bytes(b"placeholder")
+			source_path = car_dir / "demo-car.acc"
+			source_path.write_text(content, encoding="latin-1")
+			output_path = source_root / "out.glb"
+
+			result = convert.convert_ac_to_glb(source_root, source_path, output_path, convert.classify_car_object)
+			gltf = read_glb_json(output_path)
+
+		self.assertEqual(result["primitives"], 2)
+		self.assertEqual({material["class"] for material in result["materials"]}, {"glass", "exhaust"})
+		extras_by_class = {
+			material["extras"]["torcsMaterialClass"]: material["extras"]
+			for material in gltf["materials"]
+		}
+		self.assertEqual(extras_by_class["glass"]["torcsSourceTexture"], "car.rgb")
+		self.assertEqual(extras_by_class["glass"]["torcsObjectNames"], ["WIFRONTWIND_s_0"])
+		self.assertEqual(extras_by_class["exhaust"]["torcsObjectNames"], ["EXHAUSTPIPE_s_3"])
+
+	def test_car7_trb1_preserves_reference_material_classes(self):
+		source_path = SOURCE_ROOT / "data/cars/models/car7-trb1/car7-trb1.acc"
+		with tempfile.TemporaryDirectory() as tmp_dir:
+			output_path = Path(tmp_dir) / "car7-trb1.glb"
+
+			result = convert.convert_ac_to_glb(SOURCE_ROOT, source_path, output_path, convert.classify_car_object)
+
+		classes = {material["class"] for material in result["materials"]}
+		self.assertGreater(result["primitives"], 2)
+		self.assertTrue({"body", "glass", "headlamp", "taillamp", "exhaust"}.issubset(classes))
 
 	def test_parse_track_metadata_includes_material_controls(self):
 		content = """<?xml version="1.0"?>
