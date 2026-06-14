@@ -425,6 +425,9 @@ requireText(byPath["torcs_web_renderer.html"], "id=\"track-map\"", "Phase 5 trac
 requireText(byPath["torcs_web_renderer.html"], "id=\"car-count\"", "Phase 6 car count control");
 requireText(byPath["torcs_web_renderer.html"], "id=\"current-car\"", "Phase 6 current car selector");
 requireText(byPath["torcs_web_renderer.html"], "id=\"standings\"", "Phase 6 standings panel");
+requireText(byPath["torcs_web_renderer.html"], "id=\"render-profile\"", "render profile selector");
+requireText(byPath["torcs_web_renderer.html"], "<option value=\"legacy\" selected>Legacy</option>", "legacy render profile default");
+requireText(byPath["torcs_web_renderer.html"], "<option value=\"modern\">Modern</option>", "modern render profile option");
 for (const id of ["position", "fuel", "current-lap", "last-lap", "best-lap", "top-speed"]) {
 	requireText(byPath["torcs_web_renderer.html"], `id="${id}"`, `Phase 5 HUD field ${id}`);
 }
@@ -442,11 +445,16 @@ requireText(byPath["renderer/assets.js"], "typeof caps.getMaxAnisotropy === \"fu
 requireText(byPath["renderer/assets.js"], "texture.anisotropy = Math.max(1, this.getMaxAnisotropy())", "anisotropic texture sampling");
 requireText(byPath["renderer/assets.js"], "texture.minFilter = THREE.LinearMipmapLinearFilter", "mipmapped distant texture filtering");
 requireText(byPath["renderer/assets.js"], "new THREE.MeshLambertMaterial", "legacy matte material conversion");
+requireText(byPath["renderer/assets.js"], "setRenderProfile(profile)", "asset render profile setter");
+requireText(byPath["renderer/assets.js"], "makeModernMaterial(material)", "modern material adapter entrypoint");
+requireText(byPath["renderer/assets.js"], "return this.makeLegacyMaterial(material)", "modern profile preserves legacy visual baseline");
 requireText(byPath["renderer/assets.js"], "TORCS web renderer failed to load track background texture", "background texture load warning");
 requireText(byPath["renderer/main.js"], "populateAssetSelects()", "manifest-driven asset select discovery");
 requireText(byPath["renderer/main.js"], "Object.entries(entries || {})", "manifest asset option enumeration");
 requireText(byPath["renderer/main.js"], "DEFAULT_TRACK_PATH", "default track selection preservation");
 requireText(byPath["renderer/main.js"], "DEFAULT_CAR_PATH", "default car selection preservation");
+requireText(byPath["renderer/main.js"], "getInitialRenderProfile()", "query-string render profile initialization");
+requireText(byPath["renderer/main.js"], "params.get(\"profile\")", "render profile query parameter");
 
 requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_get_snapshot_size", "snapshot size export");
 requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_write_snapshot", "snapshot write export");
@@ -498,9 +506,12 @@ requireText(byPath["renderer/main.js"], "createTorcsRuntime", "runtime factory i
 requireText(byPath["renderer/main.js"], "import { TorcsAudio } from \"./audio.js\"", "audio runtime import");
 requireText(byPath["renderer/main.js"], "new AssetManager", "asset manager creation");
 requireText(byPath["renderer/main.js"], "new TorcsAudio(\"./web-assets/\"", "audio runtime creation");
-requireText(byPath["renderer/main.js"], "new AssetManager(\"./web-assets/\", scene.renderer)", "asset renderer capability handoff");
+requireText(byPath["renderer/main.js"], "new AssetManager(\"./web-assets/\", scene.renderer, activeRenderProfile)", "asset render profile handoff");
 requireText(byPath["renderer/main.js"], "audio.enabled ? \"Stop\" : \"Audio\"", "audio button start/stop label");
 requireText(byPath["renderer/main.js"], "scene = await TorcsScene.create(elements.canvas)", "async WebGPU scene creation");
+requireText(byPath["renderer/main.js"], "scene.setRenderProfile(activeRenderProfile)", "scene render profile handoff");
+requireText(byPath["renderer/main.js"], "elements.renderProfile.addEventListener", "render profile selector binding");
+requireText(byPath["renderer/main.js"], "applyRenderProfile(elements.renderProfile.value, true)", "render profile visual asset reload");
 requireText(byPath["renderer/main.js"], "runtime.readTrackSamples()", "track sample ingestion");
 requireText(byPath["renderer/main.js"], "runtime.readSnapshots()", "Phase 6 snapshot array ingestion");
 requireText(byPath["renderer/main.js"], "scene.updateCars(snapshots, cameras.camera, selectedCarIndex)", "Phase 6 selected-car scene update");
@@ -556,6 +567,8 @@ requireText(byPath["renderer/scene.js"], "new THREE.BoxGeometry", "simulated car
 requireText(byPath["renderer/scene.js"], "makeRoadMesh(track)", "sampled track road mesh");
 requireText(byPath["renderer/scene.js"], "setTrackVisual(model)", "converted track mesh hook");
 requireText(byPath["renderer/scene.js"], "setTrackAtmosphere(entry, backgroundTexture = null)", "track atmosphere hook");
+requireText(byPath["renderer/scene.js"], "setRenderProfile(profile)", "scene render profile setter");
+requireText(byPath["renderer/scene.js"], "this.renderProfile = \"legacy\"", "legacy scene render profile default");
 requireText(byPath["renderer/scene.js"], "backgroundColor.clone().multiplyScalar(0.8)", "native fog color scaling");
 requireText(byPath["renderer/scene.js"], "const FOG_NEAR = 300", "linear TORCS fog start");
 requireText(byPath["renderer/scene.js"], "const FOG_FAR = 1200", "reduced linear TORCS fog range");

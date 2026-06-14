@@ -10,6 +10,7 @@ const DEFAULT_BACKGROUND = new THREE.Color(0x0b0d0c);
 const DEFAULT_AMBIENT = new THREE.Color(0xd8e0db);
 const DEFAULT_SUN = new THREE.Color(0xfff0d2);
 const OPPONENT_COLORS = [0x78bdc4, 0xd4ad5f, 0x87b56f, 0xb78bd9];
+const RENDER_PROFILES = new Set(["legacy", "modern"]);
 const FOG_NEAR = 300;
 const FOG_FAR = 1200;
 // Keep the panorama inside the chase/onboard camera far plane so it is not clipped.
@@ -28,6 +29,10 @@ const CAR_ROTATION_MATRIX = new THREE.Matrix4();
 
 function torcsToThree(x, y, z = 0) {
 	return new THREE.Vector3(x, z, -y);
+}
+
+function normalizeRenderProfile(profile) {
+	return RENDER_PROFILES.has(profile) ? profile : "legacy";
 }
 
 function getTorcsPoseQuaternion(values, target) {
@@ -222,8 +227,13 @@ export class TorcsScene {
 		this.track = null;
 		this.trackVisual = null;
 		this.backgroundDome = null;
+		this.renderProfile = "legacy";
 		this.carEffects = [];
 		this.effects = this.createCarEffects(0);
+	}
+
+	setRenderProfile(profile) {
+		this.renderProfile = normalizeRenderProfile(profile);
 	}
 
 	addLighting() {

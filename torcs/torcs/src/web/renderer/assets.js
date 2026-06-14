@@ -15,18 +15,28 @@ const TEXTURE_MAP_KEYS = [
 	"roughnessMap",
 	"specularMap",
 ];
+const RENDER_PROFILES = new Set(["legacy", "modern"]);
 
 function normalizeRuntimePath(path) {
 	return path.replace(/^\/torcs\//, "");
 }
 
+function normalizeRenderProfile(profile) {
+	return RENDER_PROFILES.has(profile) ? profile : "legacy";
+}
+
 export class AssetManager {
-	constructor(baseUrl = "./web-assets/", renderer = null) {
+	constructor(baseUrl = "./web-assets/", renderer = null, renderProfile = "legacy") {
 		this.baseUrl = baseUrl;
 		this.renderer = renderer;
+		this.renderProfile = normalizeRenderProfile(renderProfile);
 		this.loader = new GLTFLoader();
 		this.textureLoader = new THREE.TextureLoader();
 		this.manifest = null;
+	}
+
+	setRenderProfile(profile) {
+		this.renderProfile = normalizeRenderProfile(profile);
 	}
 
 	async loadManifest() {
@@ -83,15 +93,28 @@ export class AssetManager {
 		return legacy;
 	}
 
+	makeModernMaterial(material) {
+		// Modern mode deliberately mirrors legacy materials until remaster-specific
+		// material metadata exists. Keep the entrypoint separate for future work.
+		return this.makeLegacyMaterial(material);
+	}
+
+	convertMaterial(material) {
+		if (this.renderProfile === "modern") {
+			return this.makeModernMaterial(material);
+		}
+		return this.makeLegacyMaterial(material);
+	}
+
 	configureSceneMaterials(scene) {
 		scene.traverse((object) => {
 			if (!object.isMesh || !object.material) {
 				return;
 			}
 			if (Array.isArray(object.material)) {
-				object.material = object.material.map((material) => this.makeLegacyMaterial(material));
+				object.material = object.material.map((material) => this.convertMaterial(material));
 			} else {
-				object.material = this.makeLegacyMaterial(object.material);
+				object.material = this.convertMaterial(object.material);
 			}
 		});
 	}

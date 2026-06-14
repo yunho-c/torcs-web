@@ -17,6 +17,7 @@ const elements = {
 	volume: document.getElementById("volume"),
 	audioState: document.getElementById("audio-state"),
 	camera: document.getElementById("camera"),
+	renderProfile: document.getElementById("render-profile"),
 	track: document.getElementById("track"),
 	car: document.getElementById("car"),
 	carCount: document.getElementById("car-count"),
@@ -47,12 +48,14 @@ const elements = {
 const hud = new Hud(elements);
 const DEFAULT_TRACK_PATH = "/torcs/data/tracks/e-track-1/e-track-1.xml";
 const DEFAULT_CAR_PATH = "/torcs/data/cars/models/kc-2000gt/kc-2000gt.xml";
+const RENDER_PROFILES = new Set(["legacy", "modern"]);
 let scene = null;
 let cameras = null;
 let assets = null;
 let audio = null;
 let input = null;
 let runtime = null;
+let activeRenderProfile = getInitialRenderProfile();
 let running = false;
 let lastTime = 0;
 let snapshot = null;
@@ -61,6 +64,15 @@ let selectedCarIndex = 0;
 
 function findSnapshotByCarIndex(carIndex) {
 	return snapshots.find((values, index) => (values.carIndex ?? index) === carIndex) || null;
+}
+
+function normalizeRenderProfile(profile) {
+	return RENDER_PROFILES.has(profile) ? profile : "legacy";
+}
+
+function getInitialRenderProfile() {
+	const params = new URLSearchParams(window.location.search);
+	return normalizeRenderProfile(params.get("profile"));
 }
 
 function setEnabled(enabled) {
@@ -221,6 +233,25 @@ async function loadVisualAssets() {
 	}
 }
 
+async function applyRenderProfile(profile, reloadVisuals = false) {
+	activeRenderProfile = normalizeRenderProfile(profile);
+	elements.renderProfile.value = activeRenderProfile;
+	if (scene) {
+		scene.setRenderProfile(activeRenderProfile);
+	}
+	if (assets) {
+		assets.setRenderProfile(activeRenderProfile);
+	}
+	if (reloadVisuals && runtime && runtime.active) {
+		hud.setState("loading");
+		const hasAssets = await loadVisualAssets();
+		hud.setState(hasAssets ? (running ? "running" : "ready") : "debug");
+	}
+	if (snapshot) {
+		readAndRender();
+	}
+}
+
 async function startSession() {
 	if (!runtime) {
 		return;
@@ -288,6 +319,12 @@ function bindUi() {
 			readAndRender();
 		}
 	});
+	elements.renderProfile.addEventListener("change", () => {
+		applyRenderProfile(elements.renderProfile.value, true).catch((error) => {
+			console.warn("TORCS web renderer render profile switch failed", error);
+			hud.setState("debug");
+		});
+	});
 	elements.currentCar.addEventListener("change", () => {
 		selectedCarIndex = Number(elements.currentCar.value) || 0;
 		if (snapshot) {
@@ -310,8 +347,10 @@ async function main() {
 
 	try {
 		scene = await TorcsScene.create(elements.canvas);
+		scene.setRenderProfile(activeRenderProfile);
 		cameras = new CameraRig(elements.canvas);
-		assets = new AssetManager("./web-assets/", scene.renderer);
+		assets = new AssetManager("./web-assets/", scene.renderer, activeRenderProfile);
+		elements.renderProfile.value = activeRenderProfile;
 		audio = new TorcsAudio("./web-assets/", (status) => {
 			elements.audioState.textContent = status;
 			elements.audio.textContent = audio.enabled ? "Stop" : "Audio";
