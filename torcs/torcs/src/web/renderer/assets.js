@@ -14,6 +14,8 @@ const TEXTURE_MAP_KEYS = [
 	"normalMap",
 	"roughnessMap",
 	"specularMap",
+	"clearcoatMap",
+	"clearcoatRoughnessMap",
 ];
 const RENDER_PROFILES = new Set(["legacy", "modern"]);
 const HEADLAMP_EMISSIVE = new THREE.Color(0xfff0c8);
@@ -58,11 +60,11 @@ export class AssetManager {
 		return caps && typeof caps.getMaxAnisotropy === "function" ? caps.getMaxAnisotropy() : 1;
 	}
 
-	configureTexture(texture) {
+	configureTexture(texture, colorSpace = THREE.SRGBColorSpace) {
 		if (!texture) {
 			return;
 		}
-		texture.colorSpace = THREE.SRGBColorSpace;
+		texture.colorSpace = colorSpace;
 		texture.anisotropy = Math.max(1, this.getMaxAnisotropy());
 		texture.generateMipmaps = true;
 		texture.minFilter = THREE.LinearMipmapLinearFilter;
@@ -116,17 +118,24 @@ export class AssetManager {
 	}
 
 	makePaintMaterial(parameters) {
+		const { remasterMaterialMask, ...materialParameters } = parameters;
+		const maskedParameters = remasterMaterialMask ? {
+			...materialParameters,
+			clearcoatMap: remasterMaterialMask,
+			roughnessMap: remasterMaterialMask,
+		} : materialParameters;
 		if (typeof THREE.MeshPhysicalMaterial === "function") {
 			return new THREE.MeshPhysicalMaterial({
-				...parameters,
+				...maskedParameters,
 				metalness: 0.0,
 				roughness: 0.34,
 				clearcoat: 0.85,
 				clearcoatRoughness: 0.22,
 			});
 		}
+		const { clearcoatMap, ...standardParameters } = maskedParameters;
 		return this.makeStandardMaterial({
-			...parameters,
+			...standardParameters,
 			metalness: 0.0,
 			roughness: 0.34,
 		});
@@ -165,8 +174,11 @@ export class AssetManager {
 		});
 	}
 
-	makeModernClassMaterial(material, materialClass) {
+	makeModernClassMaterial(material, materialClass, context = {}) {
 		const parameters = this.makeModernBaseParameters(material);
+		if (materialClass === "body" && context.materialMask) {
+			parameters.remasterMaterialMask = context.materialMask;
+		}
 		switch (materialClass) {
 			case "body":
 				return this.makePaintMaterial(parameters);
@@ -209,9 +221,9 @@ export class AssetManager {
 		}
 	}
 
-	makeModernMaterial(material) {
+	makeModernMaterial(material, context = {}) {
 		const materialClass = material.userData && material.userData.torcsMaterialClass;
-		const modern = materialClass ? this.makeModernClassMaterial(material, materialClass) : null;
+		const modern = materialClass ? this.makeModernClassMaterial(material, materialClass, context) : null;
 		if (!modern) {
 			return this.makeLegacyMaterial(material);
 		}
@@ -220,36 +232,40 @@ export class AssetManager {
 		return modern;
 	}
 
-	convertMaterial(material) {
+	convertMaterial(material, context = {}) {
 		if (this.renderProfile === "modern") {
-			return this.makeModernMaterial(material);
+			return this.makeModernMaterial(material, context);
 		}
 		return this.makeLegacyMaterial(material);
 	}
 
-	configureSceneMaterials(scene) {
+	configureSceneMaterials(scene, context = {}) {
 		scene.traverse((object) => {
 			if (!object.isMesh || !object.material) {
 				return;
 			}
 			if (Array.isArray(object.material)) {
-				object.material = object.material.map((material) => this.convertMaterial(material));
+				object.material = object.material.map((material) => this.convertMaterial(material, context));
 			} else {
-				object.material = this.convertMaterial(object.material);
+				object.material = this.convertMaterial(object.material, context);
 			}
 		});
 	}
 
-	async loadGltf(relativePath) {
+	async loadGltf(relativePath, context = {}) {
 		const gltf = await this.loader.loadAsync(`${this.baseUrl}${relativePath}`);
-		this.configureSceneMaterials(gltf.scene);
+		this.configureSceneMaterials(gltf.scene, context);
 		return gltf.scene;
 	}
 
-	async loadTexture(relativePath) {
+	async loadTexture(relativePath, colorSpace = THREE.SRGBColorSpace) {
 		const texture = await this.textureLoader.loadAsync(`${this.baseUrl}${relativePath}`);
-		this.configureTexture(texture);
+		this.configureTexture(texture, colorSpace);
 		return texture;
+	}
+
+	async loadDataTexture(relativePath) {
+		return this.loadTexture(relativePath, THREE.NoColorSpace);
 	}
 
 	async loadEffects() {
@@ -289,8 +305,9 @@ export class AssetManager {
 		if (!entry || !entry.lods.length) {
 			return null;
 		}
+		const materialMask = entry.materialMask ? await this.loadDataTexture(entry.materialMask) : null;
 		const lods = await Promise.all(entry.lods.map(async (lod) => {
-			const scene = await this.loadGltf(lod.asset);
+			const scene = await this.loadGltf(lod.asset, { materialMask });
 			scene.name = lod.model || entry.name || "car";
 			scene.visible = false;
 			return { lod, scene };
@@ -300,6 +317,6 @@ export class AssetManager {
 		if (shadowPath) {
 			shadowTexture = await this.loadTexture(shadowPath);
 		}
-		return { entry, lods, shadowTexture };
+		return { entry, lods, shadowTexture, materialMask };
 	}
 }

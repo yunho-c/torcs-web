@@ -478,10 +478,14 @@ requireText(byPath["renderer/assets.js"], "texture.anisotropy = Math.max(1, this
 requireText(byPath["renderer/assets.js"], "texture.minFilter = THREE.LinearMipmapLinearFilter", "mipmapped distant texture filtering");
 requireText(byPath["renderer/assets.js"], "new THREE.MeshLambertMaterial", "legacy matte material conversion");
 requireText(byPath["renderer/assets.js"], "setRenderProfile(profile)", "asset render profile setter");
-requireText(byPath["renderer/assets.js"], "makeModernMaterial(material)", "modern material adapter entrypoint");
+requireText(byPath["renderer/assets.js"], "makeModernMaterial(material, context = {})", "modern material adapter entrypoint");
 requireText(byPath["renderer/assets.js"], "torcsMaterialClass", "remaster material metadata lookup");
-requireText(byPath["renderer/assets.js"], "makeModernClassMaterial(material, materialClass)", "modern material class adapter");
+requireText(byPath["renderer/assets.js"], "makeModernClassMaterial(material, materialClass, context = {})", "modern material class adapter");
 requireText(byPath["renderer/assets.js"], "MeshPhysicalMaterial", "modern physical material support");
+requireText(byPath["renderer/assets.js"], "materialMask", "car material mask loading");
+requireText(byPath["renderer/assets.js"], "loadDataTexture(relativePath)", "material mask data texture loading");
+requireText(byPath["renderer/assets.js"], "clearcoatMap: remasterMaterialMask", "paint clearcoat mask binding");
+requireText(byPath["renderer/assets.js"], "roughnessMap: remasterMaterialMask", "paint roughness mask binding");
 requireText(byPath["renderer/assets.js"], "return this.makeLegacyMaterial(material)", "modern profile preserves legacy visual baseline");
 requireText(byPath["renderer/assets.js"], "TORCS web renderer failed to load track background texture", "background texture load warning");
 requireText(byPath["renderer/main.js"], "populateAssetSelects()", "manifest-driven asset select discovery");
@@ -705,6 +709,11 @@ if (!track || !car) {
 if (!car7Trb1 || !Array.isArray(car7Trb1.lods) || car7Trb1.lods.length === 0) {
 	fail("TORCS web renderer smoke test missing car7-trb1 remaster reference asset");
 }
+if (car7Trb1.materialMask !== "cars/car7-trb1/car7-trb1-material-mask.png") {
+	fail("TORCS web renderer smoke test found missing car7-trb1 material mask metadata", {
+		materialMask: car7Trb1.materialMask,
+	});
+}
 if (!manifest.tracks["data/tracks/g-track-1/g-track-1.xml"] ||
 	!manifest.cars["data/cars/models/kc-a110/kc-a110.xml"]) {
 	fail("TORCS web renderer smoke test missing selectable multi-asset manifest entries");
@@ -718,6 +727,7 @@ if (typeof track.backgroundType !== "number") {
 	fail("TORCS web renderer smoke test found missing background type metadata");
 }
 checkPng(track.backgroundTexture);
+checkPng(car7Trb1.materialMask);
 for (const field of ["backgroundColor", "ambientColor", "diffuseColor", "specularColor", "lightPosition"]) {
 	checkNumberTriplet(track, field, track.source);
 }

@@ -187,6 +187,8 @@ def main():
 				check_number(sound, field, f"{car.get('name', 'car')} sound")
 			if not isinstance(sound.get("turbo"), bool):
 				raise ValueError("car missing turbo sound metadata")
+			if car.get("materialMask"):
+				check_texture(require(root, car["materialMask"]))
 			for lod in car.get("lods", []):
 				if "wheels" not in lod:
 					raise ValueError(f"{lod.get('model', 'car LOD')} missing wheel visibility metadata")

@@ -673,6 +673,11 @@ def copy_audio_sample(source, output_dir):
 	return output
 
 
+def resolve_material_mask(source_root, car_name):
+	path = source_root / "data/cars/models" / car_name / f"{car_name}-material-mask.png"
+	return path if path.exists() else None
+
+
 def relative_to_output(path, output_dir):
 	return path.relative_to(output_dir).as_posix()
 
@@ -758,6 +763,10 @@ def convert_car(source_root, output_dir, car_xml):
 		name: relative_to_output(convert_texture(source, car_dir), output_dir)
 		for name, source in sorted(car_texture_sources.items())
 	}
+	material_mask_output = ""
+	material_mask_source = resolve_material_mask(source_root, car_meta["id"])
+	if material_mask_source:
+		material_mask_output = relative_to_output(convert_texture(material_mask_source, car_dir), output_dir)
 	audio_dir = output_dir / "audio"
 	car_audio_dir = audio_dir / "cars" / car_meta["id"]
 	engine_sample_source = resolve_engine_sample(source_root, car_meta["id"], car_meta["sound"]["engineSample"])
@@ -781,12 +790,16 @@ def convert_car(source_root, output_dir, car_xml):
 			"turboLag": car_meta["sound"]["turboLag"],
 		},
 		"lods": car_meta["lods"],
+		"materialMask": material_mask_output,
 		"textures": {
 			name: car_texture_outputs[name]
 			for name in sorted(car_texture_outputs)
 		},
 	}
-	return car_meta["xml"], entry, set(car_texture_outputs.values()), {engine_sample_output}
+	texture_outputs = set(car_texture_outputs.values())
+	if material_mask_output:
+		texture_outputs.add(material_mask_output)
+	return car_meta["xml"], entry, texture_outputs, {engine_sample_output}
 
 
 def convert_effects(source_root, output_dir):
