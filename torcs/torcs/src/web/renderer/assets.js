@@ -20,6 +20,13 @@ const TEXTURE_MAP_KEYS = [
 const RENDER_PROFILES = new Set(["legacy", "modern"]);
 const HEADLAMP_EMISSIVE = new THREE.Color(0xfff0c8);
 const TAILLAMP_EMISSIVE = new THREE.Color(0xff2424);
+const CAR_PBR_DEFAULTS = Object.freeze({
+	body: Object.freeze({ metalness: 0.75, roughness: 0.1, ior: 1.5, opacity: 1.0 }),
+	glass: Object.freeze({ metalness: 0.75, roughness: 0.025, ior: 1.5, opacity: 0.5 }),
+	headlamp: Object.freeze({ metalness: 0.0, roughness: 0.025, ior: 1.5, opacity: 0.05 }),
+	taillamp: Object.freeze({ metalness: 0.0, roughness: 0.1, ior: 1.5, opacity: 1.0 }),
+	exhaust: Object.freeze({ metalness: 0.9, roughness: 0.1, ior: 1.5, opacity: 1.0 }),
+});
 
 function normalizeRuntimePath(path) {
 	return path.replace(/^\/torcs\//, "");
@@ -117,6 +124,28 @@ export class AssetManager {
 		return new THREE.MeshStandardMaterial(parameters);
 	}
 
+	withPbrDefaults(parameters, defaults) {
+		return {
+			...parameters,
+			metalness: defaults.metalness,
+			roughness: defaults.roughness,
+			transparent: defaults.opacity < 1.0 ? true : parameters.transparent,
+			opacity: defaults.opacity,
+			depthWrite: defaults.opacity < 1.0 ? false : parameters.depthWrite,
+		};
+	}
+
+	makePbrMaterial(parameters, defaults) {
+		const pbrParameters = this.withPbrDefaults(parameters, defaults);
+		if (typeof THREE.MeshPhysicalMaterial === "function") {
+			return new THREE.MeshPhysicalMaterial({
+				...pbrParameters,
+				ior: defaults.ior,
+			});
+		}
+		return this.makeStandardMaterial(pbrParameters);
+	}
+
 	makePaintMaterial(parameters) {
 		const { remasterMaterialMask, ...materialParameters } = parameters;
 		const maskedParameters = remasterMaterialMask ? {
@@ -124,37 +153,31 @@ export class AssetManager {
 			clearcoatMap: remasterMaterialMask,
 			roughnessMap: remasterMaterialMask,
 		} : materialParameters;
+		const pbrParameters = this.withPbrDefaults(maskedParameters, CAR_PBR_DEFAULTS.body);
 		if (typeof THREE.MeshPhysicalMaterial === "function") {
 			return new THREE.MeshPhysicalMaterial({
-				...maskedParameters,
-				metalness: 0.0,
-				roughness: 0.34,
+				...pbrParameters,
+				ior: CAR_PBR_DEFAULTS.body.ior,
 				clearcoat: 0.85,
 				clearcoatRoughness: 0.22,
 			});
 		}
-		const { clearcoatMap, ...standardParameters } = maskedParameters;
-		return this.makeStandardMaterial({
-			...standardParameters,
-			metalness: 0.0,
-			roughness: 0.34,
-		});
+		const { clearcoatMap, ...standardParameters } = pbrParameters;
+		return this.makeStandardMaterial(standardParameters);
 	}
 
-	makeGlassMaterial(parameters, opacity) {
+	makeGlassMaterial(parameters, defaults = CAR_PBR_DEFAULTS.glass) {
 		const glassParameters = {
-			...parameters,
+			...this.withPbrDefaults(parameters, defaults),
 			color: new THREE.Color(0xc8d7df),
 			transparent: true,
-			opacity,
-			roughness: 0.04,
-			metalness: 0.0,
 			side: THREE.DoubleSide,
 			depthWrite: false,
 		};
 		if (typeof THREE.MeshPhysicalMaterial === "function") {
 			return new THREE.MeshPhysicalMaterial({
 				...glassParameters,
+				ior: defaults.ior,
 				transmission: 0.28,
 				clearcoat: 1.0,
 				clearcoatRoughness: 0.04,
@@ -163,15 +186,20 @@ export class AssetManager {
 		return this.makeStandardMaterial(glassParameters);
 	}
 
-	makeEmissiveMaterial(parameters, color, intensity) {
-		return this.makeStandardMaterial({
-			...parameters,
+	makeEmissiveMaterial(parameters, color, intensity, defaults) {
+		const emissiveParameters = {
+			...this.withPbrDefaults(parameters, defaults),
 			emissive: color,
 			emissiveIntensity: intensity,
 			emissiveMap: parameters.map || null,
-			roughness: 0.25,
-			metalness: 0.0,
-		});
+		};
+		if (typeof THREE.MeshPhysicalMaterial === "function") {
+			return new THREE.MeshPhysicalMaterial({
+				...emissiveParameters,
+				ior: defaults.ior,
+			});
+		}
+		return this.makeStandardMaterial(emissiveParameters);
 	}
 
 	makeModernClassMaterial(material, materialClass, context = {}) {
@@ -183,20 +211,18 @@ export class AssetManager {
 			case "body":
 				return this.makePaintMaterial(parameters);
 			case "glass":
-				return this.makeGlassMaterial(parameters, 0.42);
+				return this.makeGlassMaterial(parameters, CAR_PBR_DEFAULTS.glass);
 			case "mirrorGlass":
-				return this.makeGlassMaterial(parameters, 0.58);
+				return this.makeGlassMaterial(parameters, CAR_PBR_DEFAULTS.glass);
 			case "headlamp":
-				return this.makeEmissiveMaterial(parameters, HEADLAMP_EMISSIVE, 1.35);
+				return this.makeEmissiveMaterial(parameters, HEADLAMP_EMISSIVE, 1.35, CAR_PBR_DEFAULTS.headlamp);
 			case "taillamp":
-				return this.makeEmissiveMaterial(parameters, TAILLAMP_EMISSIVE, 1.55);
+				return this.makeEmissiveMaterial(parameters, TAILLAMP_EMISSIVE, 1.55, CAR_PBR_DEFAULTS.taillamp);
 			case "exhaust":
-				return this.makeStandardMaterial({
+				return this.makePbrMaterial({
 					...parameters,
 					color: new THREE.Color(0x5c5750),
-					metalness: 0.82,
-					roughness: 0.42,
-				});
+				}, CAR_PBR_DEFAULTS.exhaust);
 			case "blackTrim":
 				return this.makeStandardMaterial({
 					...parameters,

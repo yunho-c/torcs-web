@@ -481,6 +481,12 @@ requireText(byPath["renderer/assets.js"], "setRenderProfile(profile)", "asset re
 requireText(byPath["renderer/assets.js"], "makeModernMaterial(material, context = {})", "modern material adapter entrypoint");
 requireText(byPath["renderer/assets.js"], "torcsMaterialClass", "remaster material metadata lookup");
 requireText(byPath["renderer/assets.js"], "makeModernClassMaterial(material, materialClass, context = {})", "modern material class adapter");
+requireText(byPath["renderer/assets.js"], "CAR_PBR_DEFAULTS", "car PBR material defaults");
+requireText(byPath["renderer/assets.js"], "body: Object.freeze({ metalness: 0.75, roughness: 0.1, ior: 1.5, opacity: 1.0 })", "body PBR defaults");
+requireText(byPath["renderer/assets.js"], "glass: Object.freeze({ metalness: 0.75, roughness: 0.025, ior: 1.5, opacity: 0.5 })", "glass PBR defaults");
+requireText(byPath["renderer/assets.js"], "headlamp: Object.freeze({ metalness: 0.0, roughness: 0.025, ior: 1.5, opacity: 0.05 })", "headlamp PBR defaults");
+requireText(byPath["renderer/assets.js"], "taillamp: Object.freeze({ metalness: 0.0, roughness: 0.1, ior: 1.5, opacity: 1.0 })", "taillamp PBR defaults");
+requireText(byPath["renderer/assets.js"], "exhaust: Object.freeze({ metalness: 0.9, roughness: 0.1, ior: 1.5, opacity: 1.0 })", "exhaust PBR defaults");
 requireText(byPath["renderer/assets.js"], "case \"road\":", "modern track road material class");
 requireText(byPath["renderer/assets.js"], "case \"treeFoliage\":", "modern track tree material class");
 requireText(byPath["renderer/assets.js"], "MeshPhysicalMaterial", "modern physical material support");
