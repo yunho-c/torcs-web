@@ -1,4 +1,5 @@
 import * as THREE from "three/webgpu";
+import { EXRLoader } from "three/addons/loaders/EXRLoader.js";
 import { TorcsEffects } from "./effects.js";
 import { SNAPSHOT } from "./runtime.js";
 
@@ -17,6 +18,8 @@ const FOG_FAR = 1200;
 const BACKGROUND_RADIUS = 500;
 const BACKGROUND_HEIGHT = BACKGROUND_RADIUS * 2;
 const BACKGROUND_VERTICAL_BIAS = 0;
+const DEFAULT_ENVIRONMENT_MAP = "./web/hdri/120_hdrmaps_com_free_2K.exr";
+const DEFAULT_ENVIRONMENT_INTENSITY = 0.8;
 const TORCS_TO_THREE_BASIS = new THREE.Matrix4().set(
 	1, 0, 0, 0,
 	0, 0, 1, 0,
@@ -185,7 +188,9 @@ export class TorcsScene {
 			forceWebGL: params.get("renderer") === "webgl",
 		});
 		await renderer.init();
-		return new TorcsScene(renderer);
+		const scene = new TorcsScene(renderer);
+		await scene.loadEnvironmentMap(DEFAULT_ENVIRONMENT_MAP);
+		return scene;
 	}
 
 	constructor(renderer) {
@@ -227,6 +232,7 @@ export class TorcsScene {
 		this.track = null;
 		this.trackVisual = null;
 		this.backgroundDome = null;
+		this.environmentMap = null;
 		this.renderProfile = "legacy";
 		this.carEffects = [];
 		this.effects = this.createCarEffects(0);
@@ -242,6 +248,34 @@ export class TorcsScene {
 		this.sunLight = new THREE.DirectionalLight(DEFAULT_SUN, 2.2);
 		this.sunLight.position.set(-90, 160, 80);
 		this.scene.add(this.sunLight);
+	}
+
+	async loadEnvironmentMap(relativePath) {
+		let sourceTexture = null;
+		let pmremGenerator = null;
+		try {
+			sourceTexture = await new EXRLoader().loadAsync(relativePath);
+			sourceTexture.mapping = THREE.EquirectangularReflectionMapping;
+			pmremGenerator = new THREE.PMREMGenerator(this.renderer);
+			const renderTarget = pmremGenerator.fromEquirectangular(sourceTexture);
+			this.environmentMap = renderTarget.texture;
+			this.scene.environment = this.environmentMap;
+			if ("environmentIntensity" in this.scene) {
+				this.scene.environmentIntensity = DEFAULT_ENVIRONMENT_INTENSITY;
+			}
+		} catch (error) {
+			console.warn("TORCS web renderer failed to load HDRI environment map", {
+				environmentMap: relativePath,
+				error,
+			});
+		} finally {
+			if (sourceTexture) {
+				sourceTexture.dispose();
+			}
+			if (pmremGenerator) {
+				pmremGenerator.dispose();
+			}
+		}
 	}
 
 	addReferenceGrid() {

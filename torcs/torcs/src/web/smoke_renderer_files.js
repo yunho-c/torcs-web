@@ -72,6 +72,14 @@ function checkWav(relativePath) {
 	}
 }
 
+function checkExr(relativePath) {
+	const filePath = path.join(root, relativePath);
+	const data = fs.readFileSync(filePath);
+	if (data.length < 16 || data.readUInt32LE(0) !== 0x01312f76) {
+		fail("TORCS web renderer smoke test found invalid EXR", { file: relativePath });
+	}
+}
+
 function checkObjectNames(entry, label) {
 	if (!Array.isArray(entry.objectNames) || entry.objectNames.length === 0 ||
 		entry.objectNames.some((name) => typeof name !== "string" || name.length === 0)) {
@@ -610,6 +618,10 @@ requireText(byPath["renderer/scene.js"], "import { TorcsEffects } from \"./effec
 requireText(byPath["renderer/scene.js"], "new THREE.WebGPURenderer", "WebGPU renderer creation");
 requireText(byPath["renderer/scene.js"], "await renderer.init()", "async WebGPU renderer initialization");
 requireText(byPath["renderer/scene.js"], "forceWebGL: params.get(\"renderer\") === \"webgl\"", "forced WebGL fallback option");
+requireText(byPath["renderer/scene.js"], "EXRLoader", "HDRI EXR loader import");
+requireText(byPath["renderer/scene.js"], "120_hdrmaps_com_free_2K.exr", "canonical HDRI environment asset");
+requireText(byPath["renderer/scene.js"], "new THREE.PMREMGenerator(this.renderer)", "HDRI PMREM generation");
+requireText(byPath["renderer/scene.js"], "this.scene.environment = this.environmentMap", "HDRI environment map binding");
 requireText(byPath["renderer/scene.js"], "new THREE.BoxGeometry", "simulated car box");
 requireText(byPath["renderer/scene.js"], "makeRoadMesh(track)", "sampled track road mesh");
 requireText(byPath["renderer/scene.js"], "setTrackVisual(model)", "converted track mesh hook");
@@ -736,6 +748,7 @@ if (typeof track.backgroundType !== "number") {
 }
 checkPng(track.backgroundTexture);
 checkPng(car7Trb1.materialMask);
+checkExr("web/hdri/120_hdrmaps_com_free_2K.exr");
 for (const field of ["backgroundColor", "ambientColor", "diffuseColor", "specularColor", "lightPosition"]) {
 	checkNumberTriplet(track, field, track.source);
 }

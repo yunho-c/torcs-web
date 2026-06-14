@@ -263,7 +263,12 @@ if(EMSCRIPTEN)
 			"${CMAKE_COMMAND}" -E copy_directory
 			"${TORCS_ROOT}/src/web/renderer"
 			"$<TARGET_FILE_DIR:torcs_web_probe>/renderer"
+		COMMAND
+			"${CMAKE_COMMAND}" -E copy_directory
+			"${TORCS_ROOT}/data/web/hdri"
+			"$<TARGET_FILE_DIR:torcs_web_probe>/web/hdri"
 		DEPENDS torcs_web_probe
+			"${TORCS_ROOT}/data/web/hdri/120_hdrmaps_com_free_2K.exr"
 		COMMENT "Copying TORCS WASM browser renderer"
 	)
 		if(TARGET torcs_web_assets)
