@@ -116,13 +116,32 @@ kids 0
 
 	def test_classifies_car_object_names(self):
 		self.assertEqual(convert.classify_car_object("WIFRONTWIND_s_0"), "glass")
+		self.assertEqual(convert.classify_car_object("WI_s_5"), "glass")
+		self.assertEqual(convert.classify_car_object("WI2_s_1"), "glass")
+		self.assertEqual(convert.classify_car_object("WI3_s_4"), "glass")
+		self.assertEqual(convert.classify_car_object("WIFRONT_s_0"), "glass")
+		self.assertEqual(convert.classify_car_object("WIREAR_s_0"), "glass")
+		self.assertEqual(convert.classify_car_object("WISIDE_s_3"), "glass")
 		self.assertEqual(convert.classify_car_object("MIRRORGLASS_s_1"), "mirrorGlass")
+		self.assertEqual(convert.classify_car_object("MIRRORGLAS_s_1"), "mirrorGlass")
 		self.assertEqual(convert.classify_car_object("FRONTLIGHTB_s_1"), "headlamp")
+		self.assertEqual(convert.classify_car_object("FRONLIGHTMO_s_1"), "headlamp")
+		self.assertEqual(convert.classify_car_object("MAINLIGHTFR_s_1"), "headlamp")
+		self.assertEqual(convert.classify_car_object("WIMAINLIGHT_s_1"), "headlamp")
 		self.assertEqual(convert.classify_car_object("REARLIGHTFR_s_1"), "taillamp")
+		self.assertEqual(convert.classify_car_object("WILIGHTREAR2_s_1"), "taillamp")
+		self.assertEqual(convert.classify_car_object("LIGHTREAR_s_7"), "taillamp")
 		self.assertEqual(convert.classify_car_object("EXHAUSTPIPE_s_3"), "exhaust")
+		self.assertEqual(convert.classify_car_object("OUTEREXHAUS_s_1"), "exhaust")
+		self.assertEqual(convert.classify_car_object("INNEREXHAUS_s_1"), "exhaust")
 		self.assertEqual(convert.classify_car_object("WIPER_s_5"), "blackTrim")
+		self.assertEqual(convert.classify_car_object("FRONTWINGSTABOUTSIDE_s_1", "carbon-128.rgb"), "blackTrim")
 		self.assertEqual(convert.classify_car_object("COCKPITREAR_s_0"), "interior")
+		self.assertEqual(convert.classify_car_object("DASHBOARD_s_1"), "interior")
+		self.assertEqual(convert.classify_car_object("STEERW_s_2"), "interior")
 		self.assertEqual(convert.classify_car_object("DRIVERPART1_s_5"), "driver")
+		self.assertEqual(convert.classify_car_object("BODY_s_1", "driver.rgb"), "driver")
+		self.assertEqual(convert.classify_car_object("BRAKECOOLIN_s_1"), "body")
 		self.assertEqual(convert.classify_car_object("ROOF_s_4"), "body")
 
 	def test_car_material_classes_split_primitives_and_glb_metadata(self):
@@ -192,6 +211,18 @@ kids 0
 		classes = {material["class"] for material in result["materials"]}
 		self.assertGreater(result["primitives"], 2)
 		self.assertTrue({"body", "glass", "headlamp", "taillamp", "exhaust"}.issubset(classes))
+
+	def test_kc_2000gt_windows_are_classified_as_glass(self):
+		source_path = SOURCE_ROOT / "data/cars/models/kc-2000gt/kc-2000gt.acc"
+		with tempfile.TemporaryDirectory() as tmp_dir:
+			output_path = Path(tmp_dir) / "kc-2000gt.glb"
+
+			result = convert.convert_ac_to_glb(SOURCE_ROOT, source_path, output_path, convert.classify_car_object)
+
+		glass_materials = [material for material in result["materials"] if material["class"] == "glass"]
+		glass_objects = {name for material in glass_materials for name in material["objectNames"]}
+		self.assertTrue(glass_materials)
+		self.assertIn("WI_s_5", glass_objects)
 
 	def test_convert_car_copies_optional_material_mask(self):
 		car_xml = Path("data/cars/models/demo-car/demo-car.xml")

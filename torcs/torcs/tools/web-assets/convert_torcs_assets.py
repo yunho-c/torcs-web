@@ -49,16 +49,31 @@ GLOBAL_SOUND_SAMPLES = {
 	"gearChange": "gear_change1.wav",
 }
 CRASH_SOUND_SAMPLES = [f"crash{i}.wav" for i in range(1, 7)]
-CAR_MATERIAL_CLASS_PATTERNS = [
-	("mirrorGlass", ["MIRRORGLASS"]),
-	("glass", ["WINDOW", "WIND"]),
-	("headlamp", ["FRONTLIGHT", "WIFRONTLIGH"]),
-	("taillamp", ["REARLIGHT", "WIREARLIGHT", "BRAKE"]),
-	("exhaust", ["EXHAUST"]),
-	("blackTrim", ["WIPER", "ANTENNA"]),
-	("interior", ["COCKPIT", "CONSOLE", "STEERING", "SEAT", "ROLLBAR"]),
-	("driver", ["DRIVER", "GIRTHS"]),
+CAR_MIRROR_GLASS_PATTERNS = ["MIRRORGLASS", "MIRRORGLAS"]
+CAR_GLASS_PATTERNS = ["WINDOW", "WIND", "WIFRONT", "WIREAR", "WISIDE"]
+CAR_GLASS_PREFIXES = ["WI_", "WI2", "WI3"]
+CAR_HEADLAMP_PATTERNS = [
+	"FRONTLIGHT",
+	"FRONLIGHT",
+	"MAINLIGHT",
+	"WIMAINLIGHT",
+	"WIFRONTLIGHT",
+	"WIFRONTLIGH",
+	"HEADLIGHT",
+	"LIGHTBULP",
 ]
+CAR_TAILLAMP_PATTERNS = [
+	"REARLIGHT",
+	"TAILLIGHT",
+	"WILIGHTREAR",
+	"WIREARLIGHT",
+	"LIGHTREAR",
+	"BRAKELIGHT",
+]
+CAR_EXHAUST_PATTERNS = ["EXHAUST", "EXHAUS", "MUFFLER", "EXHAUSTPIPE"]
+CAR_BLACK_TRIM_PATTERNS = ["WIPER", "ANTENNA"]
+CAR_INTERIOR_PATTERNS = ["COCKPIT", "CONSOLE", "DASH", "DASHBOARD", "STEERING", "STEERW", "SEAT", "ROLLBAR"]
+CAR_DRIVER_PATTERNS = ["DRIVER", "GIRTHS"]
 
 
 @dataclass
@@ -337,11 +352,33 @@ def apply_texture_alpha(material, texture):
 		material["alphaCutoff"] = TREE_ALPHA_CUTOFF
 
 
-def classify_car_object(name):
+def contains_any(text, patterns):
+	return any(pattern in text for pattern in patterns)
+
+
+def starts_with_any(text, prefixes):
+	return any(text.startswith(prefix) for prefix in prefixes)
+
+
+def classify_car_object(name, texture=""):
 	upper = name.upper()
-	for material_class, patterns in CAR_MATERIAL_CLASS_PATTERNS:
-		if any(pattern in upper for pattern in patterns):
-			return material_class
+	texture_upper = texture.upper()
+	if contains_any(upper, CAR_MIRROR_GLASS_PATTERNS):
+		return "mirrorGlass"
+	if contains_any(upper, CAR_TAILLAMP_PATTERNS):
+		return "taillamp"
+	if contains_any(upper, CAR_HEADLAMP_PATTERNS):
+		return "headlamp"
+	if contains_any(upper, CAR_GLASS_PATTERNS) or starts_with_any(upper, CAR_GLASS_PREFIXES):
+		return "glass"
+	if contains_any(upper, CAR_EXHAUST_PATTERNS):
+		return "exhaust"
+	if contains_any(upper, CAR_BLACK_TRIM_PATTERNS) or "CARBON" in texture_upper:
+		return "blackTrim"
+	if contains_any(upper, CAR_INTERIOR_PATTERNS):
+		return "interior"
+	if contains_any(upper, CAR_DRIVER_PATTERNS) or texture_upper == "DRIVER.RGB":
+		return "driver"
 	return "body"
 
 
@@ -438,7 +475,7 @@ def convert_ac_to_glb(source_root, source_path, output_path, object_classifier=N
 
 	for obj in objects:
 		texture = obj.texture
-		material_class = object_classifier(obj.name) if object_classifier else ""
+		material_class = object_classifier(obj.name, obj.texture) if object_classifier else ""
 		if texture:
 			resolved = resolve_texture(source_root, asset_source_dir, texture)
 			if resolved:
