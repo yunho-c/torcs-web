@@ -170,6 +170,7 @@ def main():
 			check_number(track, "shininess", label)
 			if track.get("backgroundTexture"):
 				check_texture(require(root, track["backgroundTexture"]))
+			check_material_metadata(track)
 			for texture in track.get("textures", {}).values():
 				check_texture(require(root, texture))
 		for car in cars.values():

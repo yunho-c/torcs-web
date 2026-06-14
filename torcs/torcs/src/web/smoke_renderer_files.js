@@ -79,32 +79,32 @@ function checkObjectNames(entry, label) {
 	}
 }
 
-function checkCarMaterialMetadata(lod, expectedClasses) {
-	if (!Array.isArray(lod.materialClasses) ||
-		lod.materialClasses.some((name) => typeof name !== "string" || name.length === 0)) {
-		fail("TORCS web renderer smoke test found malformed car material classes", {
-			model: lod.model,
+function checkMaterialMetadata(entry, expectedClasses, label) {
+	if (!Array.isArray(entry.materialClasses) ||
+		entry.materialClasses.some((name) => typeof name !== "string" || name.length === 0)) {
+		fail("TORCS web renderer smoke test found malformed material classes", {
+			label,
 		});
 	}
 	for (const expectedClass of expectedClasses) {
-		if (!lod.materialClasses.includes(expectedClass)) {
-			fail("TORCS web renderer smoke test missing expected car material class", {
-				model: lod.model,
+		if (!entry.materialClasses.includes(expectedClass)) {
+			fail("TORCS web renderer smoke test missing expected material class", {
+				label,
 				expectedClass,
-				classes: lod.materialClasses,
+				classes: entry.materialClasses,
 			});
 		}
 	}
-	if (!Array.isArray(lod.materials) || lod.materials.length < expectedClasses.length) {
-		fail("TORCS web renderer smoke test found missing car material records", {
-			model: lod.model,
+	if (!Array.isArray(entry.materials) || entry.materials.length < expectedClasses.length) {
+		fail("TORCS web renderer smoke test found missing material records", {
+			label,
 		});
 	}
-	for (const material of lod.materials) {
+	for (const material of entry.materials) {
 		if (!material || typeof material.class !== "string" ||
 			!Array.isArray(material.objectNames) || material.objectNames.length === 0) {
-			fail("TORCS web renderer smoke test found malformed car material record", {
-				model: lod.model,
+			fail("TORCS web renderer smoke test found malformed material record", {
+				label,
 				material,
 			});
 		}
@@ -481,6 +481,8 @@ requireText(byPath["renderer/assets.js"], "setRenderProfile(profile)", "asset re
 requireText(byPath["renderer/assets.js"], "makeModernMaterial(material, context = {})", "modern material adapter entrypoint");
 requireText(byPath["renderer/assets.js"], "torcsMaterialClass", "remaster material metadata lookup");
 requireText(byPath["renderer/assets.js"], "makeModernClassMaterial(material, materialClass, context = {})", "modern material class adapter");
+requireText(byPath["renderer/assets.js"], "case \"road\":", "modern track road material class");
+requireText(byPath["renderer/assets.js"], "case \"treeFoliage\":", "modern track tree material class");
 requireText(byPath["renderer/assets.js"], "MeshPhysicalMaterial", "modern physical material support");
 requireText(byPath["renderer/assets.js"], "materialMask", "car material mask loading");
 requireText(byPath["renderer/assets.js"], "loadDataTexture(relativePath)", "material mask data texture loading");
@@ -743,7 +745,8 @@ for (const lod of car.lods) {
 		});
 	}
 }
-checkCarMaterialMetadata(car7Trb1.lods[0], ["body", "glass", "headlamp", "taillamp", "exhaust"]);
+checkMaterialMetadata(track, ["road", "grass", "barrier", "treeFoliage"], track.source);
+checkMaterialMetadata(car7Trb1.lods[0], ["body", "glass", "headlamp", "taillamp", "exhaust"], car7Trb1.lods[0].model);
 if (!car.wheelFallback || car.wheelFallback.source !== "runtime-snapshot" ||
 	!car.wheelFallback.texture || !(car.wheelFallback.texture in car.textures)) {
 	fail("TORCS web renderer smoke test found missing wheel fallback metadata");

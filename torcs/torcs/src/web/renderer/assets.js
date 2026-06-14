@@ -216,6 +216,67 @@ export class AssetManager {
 					metalness: 0.0,
 					roughness: 0.82,
 				});
+			case "road":
+				return this.makeStandardMaterial({
+					...parameters,
+					metalness: 0.0,
+					roughness: 0.82,
+				});
+			case "grass":
+			case "sand":
+			case "terrain":
+				return this.makeStandardMaterial({
+					...parameters,
+					metalness: 0.0,
+					roughness: 0.94,
+				});
+			case "curb":
+				return this.makeStandardMaterial({
+					...parameters,
+					metalness: 0.0,
+					roughness: 0.64,
+				});
+			case "barrier":
+			case "fence":
+				return this.makeStandardMaterial({
+					...parameters,
+					metalness: 0.28,
+					roughness: 0.56,
+				});
+			case "tireWall":
+				return this.makeStandardMaterial({
+					...parameters,
+					metalness: 0.0,
+					roughness: 0.88,
+				});
+			case "treeFoliage":
+				return this.makeStandardMaterial({
+					...parameters,
+					metalness: 0.0,
+					roughness: 0.96,
+					side: THREE.DoubleSide,
+				});
+			case "concrete":
+				return this.makeStandardMaterial({
+					...parameters,
+					metalness: 0.0,
+					roughness: 0.78,
+				});
+			case "building":
+				return this.makeStandardMaterial({
+					...parameters,
+					metalness: 0.02,
+					roughness: 0.72,
+				});
+			case "sign":
+				return this.makeStandardMaterial({
+					...parameters,
+					emissive: new THREE.Color(0xffffff),
+					emissiveIntensity: 0.12,
+					emissiveMap: parameters.map || null,
+					metalness: 0.0,
+					roughness: 0.48,
+				});
 			default:
 				return null;
 		}

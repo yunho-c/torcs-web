@@ -72,8 +72,31 @@ CAR_TAILLAMP_PATTERNS = [
 ]
 CAR_EXHAUST_PATTERNS = ["EXHAUST", "EXHAUS", "MUFFLER", "EXHAUSTPIPE"]
 CAR_BLACK_TRIM_PATTERNS = ["WIPER", "ANTENNA"]
-CAR_INTERIOR_PATTERNS = ["COCKPIT", "CONSOLE", "DASH", "DASHBOARD", "STEERING", "STEERW", "SEAT", "ROLLBAR"]
+CAR_INTERIOR_PATTERNS = [
+	"COCKPIT",
+	"CONSOLE",
+	"DASH",
+	"DASHBOARD",
+	"STEERING",
+	"STEERW",
+	"SEAT",
+	"ROLLBAR",
+]
 CAR_DRIVER_PATTERNS = ["DRIVER", "GIRTHS"]
+TRACK_ROAD_TEXTURE_PATTERNS = ["ROAD", "TARMAC", "ASPHALT", "TRKASPH", "TRKROAD"]
+TRACK_GRASS_TEXTURE_PATTERNS = ["GRASS", "GRAS", "LAWN"]
+TRACK_SAND_TEXTURE_PATTERNS = ["SAND", "GRAVEL", "DIRT", "MUD"]
+TRACK_CURB_TEXTURE_PATTERNS = ["CURB", "KERB", "CURBS", "KERBS", "RUMBLE"]
+TRACK_BARRIER_TEXTURE_PATTERNS = ["BARRIER", "ARMCO", "GUARDRAIL", "RAIL", "WALL", "BAR-"]
+TRACK_TIRE_WALL_TEXTURE_PATTERNS = ["TIREWALL", "TYREWALL", "TIRE", "TYRE"]
+TRACK_TREE_TEXTURE_PATTERNS = ["TREE", "ARBOR", "ARBRE"]
+TRACK_CONCRETE_TEXTURE_PATTERNS = ["CONCRETE", "CONC", "CEMENT", "CMNT"]
+TRACK_BUILDING_TEXTURE_PATTERNS = ["BUILD", "BLDG", "HOUSE", "ROOF", "PIT", "STAND", "TRIB"]
+TRACK_FENCE_TEXTURE_PATTERNS = ["FENCE", "FENC", "WIRE", "MESH", "NET"]
+TRACK_SIGN_TEXTURE_PATTERNS = ["SIGN", "ADVER", "BANNER", "PANEL", "BILLBOARD", "SEMA"]
+TRACK_TERRAIN_OBJECT_PREFIXES = ["TERR", "TKLS", "TKRS", "T0LB", "T0RB"]
+TRACK_BARRIER_OBJECT_PREFIXES = ["B0LT", "B0RT", "B1LT", "B1RT", "B2LT", "B2RT", "BRLT", "BRRT"]
+TRACK_TREE_OBJECT_PREFIXES = ["TREE", "ARB"]
 
 
 @dataclass
@@ -380,6 +403,41 @@ def classify_car_object(name, texture=""):
 	if contains_any(upper, CAR_DRIVER_PATTERNS) or texture_upper == "DRIVER.RGB":
 		return "driver"
 	return "body"
+
+
+def classify_track_object(name, texture=""):
+	upper = name.upper()
+	texture_upper = texture.upper()
+	texture_stem = Path(texture_upper).stem
+	if contains_any(texture_upper, TRACK_TREE_TEXTURE_PATTERNS) or starts_with_any(upper, TRACK_TREE_OBJECT_PREFIXES):
+		return "treeFoliage"
+	if contains_any(texture_upper, TRACK_TIRE_WALL_TEXTURE_PATTERNS):
+		return "tireWall"
+	if contains_any(texture_upper, TRACK_CURB_TEXTURE_PATTERNS):
+		return "curb"
+	if (
+		contains_any(texture_upper, TRACK_BARRIER_TEXTURE_PATTERNS) or
+		texture_stem in {"TR-BAR", "TR-BARRIER", "TR-BARRIER-BW", "TR-BARRIER-BW2"} or
+		starts_with_any(upper, TRACK_BARRIER_OBJECT_PREFIXES)
+	):
+		return "barrier"
+	if contains_any(texture_upper, TRACK_FENCE_TEXTURE_PATTERNS):
+		return "fence"
+	if contains_any(texture_upper, TRACK_SIGN_TEXTURE_PATTERNS):
+		return "sign"
+	if contains_any(texture_upper, TRACK_BUILDING_TEXTURE_PATTERNS):
+		return "building"
+	if contains_any(texture_upper, TRACK_CONCRETE_TEXTURE_PATTERNS):
+		return "concrete"
+	if contains_any(texture_upper, TRACK_ROAD_TEXTURE_PATTERNS):
+		return "road"
+	if contains_any(texture_upper, TRACK_GRASS_TEXTURE_PATTERNS):
+		return "grass"
+	if contains_any(texture_upper, TRACK_SAND_TEXTURE_PATTERNS):
+		return "sand"
+	if starts_with_any(upper, TRACK_TERRAIN_OBJECT_PREFIXES):
+		return "terrain"
+	return ""
 
 
 def make_primitive_key(texture, material_class):
@@ -733,6 +791,7 @@ def convert_track(source_root, output_dir, track_xml):
 		source_root,
 		track_source_dir / track_meta["model"],
 		track_glb,
+		classify_track_object,
 	)
 	track_texture_outputs = {
 		name: relative_to_output(convert_texture(source, track_dir), output_dir)
@@ -764,6 +823,8 @@ def convert_track(source_root, output_dir, track_xml):
 		"textures": {name: track_texture_outputs[name] for name in track_result["textures"] if name in track_texture_outputs},
 		"primitiveCount": track_result["primitives"],
 		"objectNames": track_result["objects"],
+		"materialClasses": sorted({material["class"] for material in track_result["materials"]}),
+		"materials": track_result["materials"],
 	}
 	texture_outputs = set(track_texture_outputs.values())
 	if track_background_output:

@@ -144,6 +144,20 @@ kids 0
 		self.assertEqual(convert.classify_car_object("BRAKECOOLIN_s_1"), "body")
 		self.assertEqual(convert.classify_car_object("ROOF_s_4"), "body")
 
+	def test_classifies_track_object_names_and_textures(self):
+		self.assertEqual(convert.classify_track_object("TKMN708", "tr-road1.rgb"), "road")
+		self.assertEqual(convert.classify_track_object("TKRS703", "tr-grass6.rgb"), "grass")
+		self.assertEqual(convert.classify_track_object("TKLS6053", "sand-new.png"), "sand")
+		self.assertEqual(convert.classify_track_object("B0RT4781", "armco.png"), "barrier")
+		self.assertEqual(convert.classify_track_object("B2LT261", "tirewall.png"), "tireWall")
+		self.assertEqual(convert.classify_track_object("OBJ300", "treeg1.rgb"), "treeFoliage")
+		self.assertEqual(convert.classify_track_object("O17S0", "CONCTP.png"), "concrete")
+		self.assertEqual(convert.classify_track_object("STAIRSFENCES2", "TRIBB03.png"), "building")
+		self.assertEqual(convert.classify_track_object("FENCES0", "fence.png"), "fence")
+		self.assertEqual(convert.classify_track_object("OBJECT680", "SEMA02.png"), "sign")
+		self.assertEqual(convert.classify_track_object("TERR8", ""), "terrain")
+		self.assertEqual(convert.classify_track_object("OBJ1", "unknown.png"), "")
+
 	def test_car_material_classes_split_primitives_and_glb_metadata(self):
 		content = """AC3Db
 OBJECT world
@@ -305,6 +319,85 @@ kids 0
 
 		self.assertEqual(metadata["specularColor"], [0.11, 0.12, 0.13])
 		self.assertEqual(metadata["shininess"], 17.0)
+
+	def test_convert_track_adds_material_metadata(self):
+		track_xml = Path("data/tracks/road/demo/demo.xml")
+		content = """<?xml version="1.0"?>
+<params name="Demo Track">
+<section name="Header">
+<attstr name="name" val="Demo Track"/>
+<attstr name="category" val="road"/>
+</section>
+<section name="Graphic">
+<attstr name="3d description" val="demo.acc"/>
+<attstr name="background image" val="background.png"/>
+</section>
+</params>
+"""
+		asset = """AC3Db
+OBJECT world
+kids 3
+OBJECT poly
+name "TKMN0"
+texture "tr-road1.png" base
+numvert 3
+0 0 0
+1 0 0
+0 1 0
+numsurf 1
+SURF 0x14
+mat 0
+refs 3
+0 0 0
+1 1 0
+2 0 1
+kids 0
+OBJECT poly
+name "B0RT0"
+texture "armco.png" base
+numvert 3
+0 0 1
+1 0 1
+0 1 1
+numsurf 1
+SURF 0x14
+mat 0
+refs 3
+0 0 0
+1 1 0
+2 0 1
+kids 0
+OBJECT poly
+name "OBJ1"
+texture "treeg1.png" base
+numvert 3
+0 0 2
+1 0 2
+0 1 2
+numsurf 1
+SURF 0x14
+mat 0
+refs 3
+0 0 0
+1 1 0
+2 0 1
+kids 0
+"""
+		with tempfile.TemporaryDirectory() as tmp_dir:
+			source_root = Path(tmp_dir) / "source"
+			output_dir = Path(tmp_dir) / "out"
+			track_dir = source_root / track_xml.parent
+			track_dir.mkdir(parents=True)
+			(track_dir / track_xml.name).write_text(content, encoding="utf-8")
+			(track_dir / "demo.acc").write_text(asset, encoding="latin-1")
+			for name in ["tr-road1.png", "armco.png", "treeg1.png", "background.png"]:
+				convert.write_png(track_dir / name, 1, 1, b"\xff\0\0\xff")
+
+			_, entry, textures = convert.convert_track(source_root, output_dir, track_xml)
+
+		self.assertEqual(entry["materialClasses"], ["barrier", "road", "treeFoliage"])
+		self.assertEqual({material["class"] for material in entry["materials"]}, {"barrier", "road", "treeFoliage"})
+		self.assertIn("tracks/road/demo/tr-road1.png", textures)
 
 	def test_quick_mode_selects_golden_asset_pair(self):
 		with tempfile.TemporaryDirectory() as tmp_dir:
