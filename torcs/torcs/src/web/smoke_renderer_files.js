@@ -217,6 +217,21 @@ async function importAudioModuleForSmoke() {
 	}
 }
 
+async function importInputModuleForSmoke() {
+	const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "torcs-input-smoke-"));
+	const rendererDir = path.join(tempDir, "renderer");
+	fs.mkdirSync(rendererDir, { recursive: true });
+	try {
+		fs.writeFileSync(path.join(tempDir, "package.json"), "{\"type\":\"module\"}\n", "utf8");
+		fs.writeFileSync(path.join(rendererDir, "input.js"), byPath["renderer/input.js"].content, "utf8");
+		fs.writeFileSync(path.join(rendererDir, "runtime.js"), byPath["renderer/runtime.js"].content, "utf8");
+		const tag = Date.now();
+		return await import(`${pathToFileURL(path.join(rendererDir, "input.js")).href}?smoke=${tag}`);
+	} finally {
+		fs.rmSync(tempDir, { recursive: true, force: true });
+	}
+}
+
 function makeAudioSnapshot(SNAPSHOT, overrides = {}) {
 	const values = new Array(175).fill(0);
 	values[SNAPSHOT.x] = 10;
@@ -249,6 +264,138 @@ function makeAudioSnapshot(SNAPSHOT, overrides = {}) {
 		values[SNAPSHOT[key]] = value;
 	}
 	return values;
+}
+
+function makeInputElement(value, min = "0", max = "1") {
+	return {
+		value: String(value),
+		min,
+		max,
+		addEventListener() {},
+	};
+}
+
+function makeInputElements() {
+	return {
+		steer: makeInputElement(0, "-1", "1"),
+		accel: makeInputElement(0),
+		brake: makeInputElement(0),
+		clutch: makeInputElement(0),
+		gear: makeInputElement(1, "-1", "5"),
+	};
+}
+
+function makeInputSnapshot(time, speed) {
+	const values = new Array(175).fill(0);
+	values[0] = time;
+	values[7] = speed;
+	return values;
+}
+
+function makeGamepad({ axis0 = 0, brake = 0, accel = 0, pressed = [] } = {}) {
+	const buttons = Array.from({ length: 8 }, (_, index) => ({
+		value: pressed.includes(index) ? 1 : 0,
+	}));
+	buttons[6].value = brake;
+	buttons[7].value = accel;
+	return {
+		connected: true,
+		axes: [axis0, 0, 0, 0],
+		buttons,
+	};
+}
+
+function assertInput(condition, label, details = {}) {
+	if (!condition) {
+		fail("TORCS web renderer smoke test found input behavior mismatch", {
+			label,
+			...details,
+		});
+	}
+}
+
+async function checkInputControllerBehavior() {
+	const { InputController } = await importInputModuleForSmoke();
+	const oldWindow = globalThis.window;
+	globalThis.window = { addEventListener() {} };
+	try {
+		const changes = [];
+		const elements = makeInputElements();
+		const input = new InputController(elements, (controls) => changes.push({ ...controls }));
+
+		input.keys.add("ArrowLeft");
+		input.syncKeyboard(1 / 60, makeInputSnapshot(2, 0));
+		const firstSteer = Number(elements.steer.value);
+		assertInput(firstSteer < 0 && firstSteer > -0.05, "keyboard steering ramps instead of jumping", { firstSteer });
+		input.syncKeyboard(1 / 60, makeInputSnapshot(2, 0));
+		assertInput(Number(elements.steer.value) < firstSteer, "held keyboard steering accumulates", {
+			firstSteer,
+			secondSteer: Number(elements.steer.value),
+		});
+
+		input.keys.clear();
+		input.syncKeyboard(0, makeInputSnapshot(2, 0));
+		assertInput(Number(elements.steer.value) === 0, "keyboard steering release returns to neutral");
+
+		input.keys.add("ArrowUp");
+		input.syncKeyboard(1 / 60, makeInputSnapshot(2, 0));
+		assertInput(Math.abs(Number(elements.accel.value) - 0.2) < 0.000001, "keyboard throttle uses TORCS digital slew limit", {
+			accel: Number(elements.accel.value),
+		});
+		input.syncKeyboard(1 / 60, makeInputSnapshot(2, 0));
+		assertInput(Math.abs(Number(elements.accel.value) - 0.4) < 0.000001, "keyboard throttle slew continues while held", {
+			accel: Number(elements.accel.value),
+		});
+
+		input.keys.clear();
+		input.syncKeyboard(0, makeInputSnapshot(2, 0));
+		input.keys.add("ArrowLeft");
+		input.syncKeyboard(0.2, makeInputSnapshot(2, 0));
+		const lowSpeedSteer = Math.abs(Number(elements.steer.value));
+		input.keys.clear();
+		input.syncKeyboard(0, makeInputSnapshot(2, 0));
+		input.keys.add("ArrowLeft");
+		input.syncKeyboard(0.2, makeInputSnapshot(2, 100));
+		const highSpeedSteer = Math.abs(Number(elements.steer.value));
+		assertInput(highSpeedSteer < lowSpeedSteer, "keyboard steering is speed-sensitive", {
+			lowSpeedSteer,
+			highSpeedSteer,
+		});
+
+		input.keys.clear();
+		input.syncKeyboard(0, makeInputSnapshot(2, 0));
+		input.updateGamepad(makeGamepad({ axis0: 0.54, brake: 0.35, accel: 0.8, pressed: [5] }));
+		const shapedSteer = Number(elements.steer.value);
+		assertInput(shapedSteer > 0.2 && shapedSteer < 0.54, "gamepad steering applies dead-zone and sensitivity", {
+			shapedSteer,
+		});
+		assertInput(Math.abs(Number(elements.accel.value) - 0.8) < 0.000001, "gamepad right trigger controls throttle", {
+			accel: Number(elements.accel.value),
+		});
+		assertInput(Math.abs(Number(elements.brake.value) - 0.35) < 0.000001, "gamepad left trigger controls brake", {
+			brake: Number(elements.brake.value),
+		});
+		assertInput(Number(elements.gear.value) === 2, "gamepad shoulder upshifts once per press", {
+			gear: Number(elements.gear.value),
+		});
+		input.updateGamepad(makeGamepad({ pressed: [5] }));
+		assertInput(Number(elements.gear.value) === 2, "held gamepad shift button does not repeat", {
+			gear: Number(elements.gear.value),
+		});
+		input.updateGamepad(makeGamepad());
+		input.updateGamepad(makeGamepad({ pressed: [4] }));
+		assertInput(Number(elements.gear.value) === 1, "gamepad shoulder downshifts after release", {
+			gear: Number(elements.gear.value),
+		});
+
+		return {
+			changes: changes.length,
+			firstSteer,
+			shapedSteer,
+		};
+	} finally {
+		globalThis.window = oldWindow;
+	}
 }
 
 function assertAudio(condition, label, details = {}) {
@@ -579,7 +726,7 @@ requireText(byPath["renderer/main.js"], "scene.setEffectTextures(effects ? effec
 requireText(byPath["renderer/main.js"], "audio.update(snapshot, cameras.camera, deltaTime)", "snapshot-driven audio update");
 requireText(byPath["renderer/main.js"], "audio.enable(elements.car.value)", "user-gesture audio unlock");
 requireText(byPath["renderer/main.js"], "hud.setTrack(trackSamples)", "Phase 5 HUD track-map handoff");
-requireText(byPath["renderer/main.js"], "input.updateGamepad()", "Phase 5 gamepad polling");
+requireText(byPath["renderer/main.js"], "input.update(deltaTime, snapshot)", "TORCS-faithful per-frame input polling");
 
 requireText(byPath["renderer/hud.js"], "fmtTime(value)", "Phase 5 lap time formatting");
 requireText(byPath["renderer/hud.js"], "setTrack(track)", "Phase 5 track map setup");
@@ -591,7 +738,10 @@ requireText(byPath["renderer/hud.js"], "SNAPSHOT.currentLapTime", "Phase 5 curre
 requireText(byPath["renderer/hud.js"], "SNAPSHOT.racePosition", "Phase 5 race position HUD snapshot field");
 
 requireText(byPath["renderer/input.js"], "navigator.getGamepads", "Phase 5 browser gamepad API");
-requireText(byPath["renderer/input.js"], "updateGamepad()", "Phase 5 gamepad control update");
+requireText(byPath["renderer/input.js"], "updateGamepad(", "Phase 5 gamepad control update");
+requireText(byPath["renderer/input.js"], "KEYBOARD_STEER_SPEED_SENSITIVITY", "TORCS keyboard speed-sensitive steering");
+requireText(byPath["renderer/input.js"], "DIGITAL_PEDAL_INC_RATE", "TORCS digital pedal slew rate");
+requireText(byPath["renderer/input.js"], "GAMEPAD_GEAR_BUTTONS", "DualSense-compatible gamepad gear buttons");
 requireText(byPath["renderer/input.js"], "this.setRangeValue(this.elements.steer, axis(0))", "Phase 5 gamepad steering");
 requireText(byPath["renderer/input.js"], "this.changeGear(delta)", "Phase 5 gamepad gear buttons");
 
@@ -806,13 +956,14 @@ crashSounds.forEach((entry, index) => {
 	checkWav(entry.asset);
 });
 
-Promise.all([checkAudioModelBehavior(), checkTrackAlignment(track.asset)])
-	.then(([audioModel, alignment]) => {
+Promise.all([checkAudioModelBehavior(), checkInputControllerBehavior(), checkTrackAlignment(track.asset)])
+	.then(([audioModel, inputController, alignment]) => {
 		console.log(JSON.stringify({
 			rendererFiles: files.length,
 			html: "torcs_web_renderer.html",
 			entrypoint: "renderer/main.js",
 			audioModel,
+			inputController,
 			webAssetTracks: Object.keys(manifest.tracks).length,
 			webAssetCars: Object.keys(manifest.cars).length,
 			alignment,

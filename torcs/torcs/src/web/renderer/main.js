@@ -188,7 +188,7 @@ function step(deltaTime = 1 / 60) {
 	if (!runtime || !runtime.active) {
 		return;
 	}
-	input.updateGamepad();
+	input.update(deltaTime, snapshot);
 	applyControls();
 	runtime.step(deltaTime);
 	readAndRender(deltaTime);
