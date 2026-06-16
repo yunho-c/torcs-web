@@ -33,6 +33,7 @@ export class InputController {
 			accel: 0,
 			brake: 0,
 		};
+		this.gamepadActive = false;
 		this.lastSnapshot = null;
 		this.bind();
 	}
@@ -122,10 +123,19 @@ export class InputController {
 	}
 
 	getGamepad() {
-		if (!navigator.getGamepads) {
+		if (typeof navigator === "undefined" || !navigator.getGamepads) {
 			return null;
 		}
 		return Array.from(navigator.getGamepads()).find((gamepad) => gamepad && gamepad.connected) || null;
+	}
+
+	hasGamepadInput(gamepad) {
+		if (!gamepad) {
+			return false;
+		}
+		const hasAxisInput = (gamepad.axes || []).some((value) => Math.abs(value || 0) > GAMEPAD_AXIS_DEAD_ZONE);
+		const hasButtonInput = (gamepad.buttons || []).some((button) => (button ? button.value : 0) > 0.01);
+		return hasAxisInput || hasButtonInput;
 	}
 
 	updateGamepad(gamepad = this.getGamepad()) {
@@ -159,8 +169,13 @@ export class InputController {
 			this.lastSnapshot = snapshot;
 		}
 		const gamepad = this.getGamepad();
-		if (gamepad) {
-			return this.updateGamepad(gamepad);
+		const gamepadHasInput = this.hasGamepadInput(gamepad);
+		if (gamepad && (gamepadHasInput || this.gamepadActive)) {
+			this.updateGamepad(gamepad);
+			this.gamepadActive = gamepadHasInput;
+			if (gamepadHasInput || this.keys.size === 0) {
+				return true;
+			}
 		}
 		if (this.keys.size > 0) {
 			return this.syncKeyboard(deltaTime, snapshot);

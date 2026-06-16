@@ -381,6 +381,21 @@ async function checkInputControllerBehavior() {
 			globalThis.navigator = oldNavigator;
 		}
 
+		const keyboardWithIdleGamepadElements = makeInputElements();
+		const keyboardWithIdleGamepad = new InputController(keyboardWithIdleGamepadElements, () => {});
+		const oldIdleGamepadNavigator = globalThis.navigator;
+		globalThis.navigator = { getGamepads: () => [makeGamepad()] };
+		try {
+			keyboardWithIdleGamepad.keys.add("ArrowLeft");
+			keyboardWithIdleGamepad.update(1 / 60, makeInputSnapshot(2, 0));
+			const idleGamepadSteer = Number(keyboardWithIdleGamepadElements.steer.value);
+			assertInput(idleGamepadSteer < 0 && idleGamepadSteer > -0.05, "idle connected gamepad does not suppress keyboard steering", {
+				idleGamepadSteer,
+			});
+		} finally {
+			globalThis.navigator = oldIdleGamepadNavigator;
+		}
+
 		input.keys.add("ArrowLeft");
 		input.syncKeyboard(0.2, makeInputSnapshot(2, 0));
 		const lowSpeedSteer = Math.abs(Number(elements.steer.value));
