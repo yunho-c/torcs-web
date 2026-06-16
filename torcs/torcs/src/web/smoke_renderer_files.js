@@ -363,6 +363,24 @@ async function checkInputControllerBehavior() {
 			preventDefault() {},
 		}, false);
 
+		const idleElements = makeInputElements();
+		const idleInput = new InputController(idleElements, () => {});
+		const oldNavigator = globalThis.navigator;
+		globalThis.navigator = {};
+		try {
+			idleInput.update(1 / 60, makeInputSnapshot(2, 0));
+			idleInput.handleKey({
+				code: "ArrowUp",
+				repeat: false,
+				preventDefault() {},
+			}, true);
+			assertInput(Math.abs(Number(idleElements.accel.value) - 0.2) < 0.000001, "idle keydown uses cached race time for pedal slew", {
+				accel: Number(idleElements.accel.value),
+			});
+		} finally {
+			globalThis.navigator = oldNavigator;
+		}
+
 		input.keys.add("ArrowLeft");
 		input.syncKeyboard(0.2, makeInputSnapshot(2, 0));
 		const lowSpeedSteer = Math.abs(Number(elements.steer.value));

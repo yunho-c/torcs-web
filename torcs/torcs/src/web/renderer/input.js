@@ -155,6 +155,9 @@ export class InputController {
 	}
 
 	update(deltaTime = 1 / 60, snapshot = null) {
+		if (snapshot) {
+			this.lastSnapshot = snapshot;
+		}
 		const gamepad = this.getGamepad();
 		if (gamepad) {
 			return this.updateGamepad(gamepad);
