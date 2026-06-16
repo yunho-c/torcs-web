@@ -349,6 +349,20 @@ async function checkInputControllerBehavior() {
 
 		input.keys.clear();
 		input.syncKeyboard(0, makeInputSnapshot(2, 0));
+		input.handleKey({
+			code: "ArrowUp",
+			repeat: false,
+			preventDefault() {},
+		}, true);
+		assertInput(Math.abs(Number(elements.accel.value) - 0.2) < 0.000001, "keydown path preserves digital pedal slew after race start", {
+			accel: Number(elements.accel.value),
+		});
+		input.handleKey({
+			code: "ArrowUp",
+			repeat: false,
+			preventDefault() {},
+		}, false);
+
 		input.keys.add("ArrowLeft");
 		input.syncKeyboard(0.2, makeInputSnapshot(2, 0));
 		const lowSpeedSteer = Math.abs(Number(elements.steer.value));

@@ -33,6 +33,7 @@ export class InputController {
 			accel: 0,
 			brake: 0,
 		};
+		this.lastSnapshot = null;
 		this.bind();
 	}
 
@@ -94,6 +95,9 @@ export class InputController {
 	}
 
 	syncKeyboard(deltaTime = 1 / 60, snapshot = null) {
+		if (snapshot) {
+			this.lastSnapshot = snapshot;
+		}
 		const left = this.keys.has("ArrowLeft") || this.keys.has("KeyA");
 		const right = this.keys.has("ArrowRight") || this.keys.has("KeyD");
 		const throttle = this.keys.has("ArrowUp") || this.keys.has("KeyW");
@@ -184,7 +188,7 @@ export class InputController {
 		} else {
 			this.keys.delete(event.code);
 		}
-		this.syncKeyboard(pressed ? 1 / 60 : 0);
+		this.syncKeyboard(pressed ? 1 / 60 : 0, this.lastSnapshot);
 	}
 
 	bind() {
