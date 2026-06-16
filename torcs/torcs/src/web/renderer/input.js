@@ -138,6 +138,13 @@ export class InputController {
 		return hasAxisInput || hasButtonInput;
 	}
 
+	resetGamepadControls() {
+		this.setRangeValue(this.elements.steer, 0);
+		this.setRangeValue(this.elements.accel, 0);
+		this.setRangeValue(this.elements.brake, 0);
+		this.onChange(this.getControls());
+	}
+
 	updateGamepad(gamepad = this.getGamepad()) {
 		if (!gamepad) {
 			return false;
@@ -170,6 +177,13 @@ export class InputController {
 		}
 		const gamepad = this.getGamepad();
 		const gamepadHasInput = this.hasGamepadInput(gamepad);
+		if (!gamepad && this.gamepadActive) {
+			this.resetGamepadControls();
+			this.gamepadActive = false;
+			if (this.keys.size === 0) {
+				return true;
+			}
+		}
 		if (gamepad && (gamepadHasInput || this.gamepadActive)) {
 			this.updateGamepad(gamepad);
 			this.gamepadActive = gamepadHasInput;

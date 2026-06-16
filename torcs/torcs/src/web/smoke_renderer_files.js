@@ -383,18 +383,13 @@ async function checkInputControllerBehavior() {
 
 		const keyboardWithIdleGamepadElements = makeInputElements();
 		const keyboardWithIdleGamepad = new InputController(keyboardWithIdleGamepadElements, () => {});
-		const oldIdleGamepadNavigator = globalThis.navigator;
-		globalThis.navigator = { getGamepads: () => [makeGamepad()] };
-		try {
-			keyboardWithIdleGamepad.keys.add("ArrowLeft");
-			keyboardWithIdleGamepad.update(1 / 60, makeInputSnapshot(2, 0));
-			const idleGamepadSteer = Number(keyboardWithIdleGamepadElements.steer.value);
-			assertInput(idleGamepadSteer < 0 && idleGamepadSteer > -0.05, "idle connected gamepad does not suppress keyboard steering", {
-				idleGamepadSteer,
-			});
-		} finally {
-			globalThis.navigator = oldIdleGamepadNavigator;
-		}
+		keyboardWithIdleGamepad.getGamepad = () => makeGamepad();
+		keyboardWithIdleGamepad.keys.add("ArrowLeft");
+		keyboardWithIdleGamepad.update(1 / 60, makeInputSnapshot(2, 0));
+		const idleGamepadSteer = Number(keyboardWithIdleGamepadElements.steer.value);
+		assertInput(idleGamepadSteer < 0 && idleGamepadSteer > -0.05, "idle connected gamepad does not suppress keyboard steering", {
+			idleGamepadSteer,
+		});
 
 		input.keys.add("ArrowLeft");
 		input.syncKeyboard(0.2, makeInputSnapshot(2, 0));
@@ -434,6 +429,23 @@ async function checkInputControllerBehavior() {
 		assertInput(Number(elements.gear.value) === 1, "gamepad shoulder downshifts after release", {
 			gear: Number(elements.gear.value),
 		});
+
+		const disconnectElements = makeInputElements();
+		const disconnectInput = new InputController(disconnectElements, () => {});
+		let connectedGamepad = makeGamepad({ axis0: 0.8, accel: 0.75 });
+		disconnectInput.getGamepad = () => connectedGamepad;
+		disconnectInput.update(1 / 60, makeInputSnapshot(2, 0));
+		assertInput(Number(disconnectElements.accel.value) > 0, "active gamepad controls apply before disconnect", {
+			accel: Number(disconnectElements.accel.value),
+		});
+		connectedGamepad = null;
+		disconnectInput.update(1 / 60, makeInputSnapshot(2, 0));
+		assertInput(Number(disconnectElements.steer.value) === 0 && Number(disconnectElements.accel.value) === 0 &&
+			Number(disconnectElements.brake.value) === 0, "disconnecting an active gamepad releases controls", {
+				steer: Number(disconnectElements.steer.value),
+				accel: Number(disconnectElements.accel.value),
+				brake: Number(disconnectElements.brake.value),
+			});
 
 		return {
 			changes: changes.length,
