@@ -168,10 +168,10 @@ export class InputController {
 
 		for (const [index, delta] of GAMEPAD_GEAR_BUTTONS) {
 			if (pressed(index)) {
-				if (!this.gamepadGearButtons.has(index)) {
-					this.changeGear(delta);
-				}
 				this.gamepadGearButtons.add(index);
+			} else if (this.gamepadGearButtons.has(index)) {
+				this.gamepadGearButtons.delete(index);
+				this.changeGear(delta);
 			} else {
 				this.gamepadGearButtons.delete(index);
 			}
@@ -216,18 +216,17 @@ export class InputController {
 		}
 		event.preventDefault();
 
+		const wasHeld = this.keys.has(event.code);
 		if (pressed) {
 			this.keys.add(event.code);
-			if (!event.repeat && event.code === "KeyE") {
-				this.changeGear(1);
-				return;
-			}
-			if (!event.repeat && event.code === "KeyQ") {
-				this.changeGear(-1);
-				return;
-			}
 		} else {
 			this.keys.delete(event.code);
+			if (wasHeld && event.code === "KeyE") {
+				this.changeGear(1);
+			}
+			if (wasHeld && event.code === "KeyQ") {
+				this.changeGear(-1);
+			}
 		}
 		if (!pressed) {
 			this.syncKeyboard(0, this.lastSnapshot, { allowPedalIncrease: false });

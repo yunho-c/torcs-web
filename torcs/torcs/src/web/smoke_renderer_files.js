@@ -374,6 +374,22 @@ async function checkInputControllerBehavior() {
 			repeat: false,
 			preventDefault() {},
 		}, false);
+		input.handleKey({
+			code: "KeyE",
+			repeat: false,
+			preventDefault() {},
+		}, true);
+		assertInput(Number(elements.gear.value) === 1, "keyboard upshift waits for native release edge", {
+			gear: Number(elements.gear.value),
+		});
+		input.handleKey({
+			code: "KeyE",
+			repeat: false,
+			preventDefault() {},
+		}, false);
+		assertInput(Number(elements.gear.value) === 2, "keyboard upshift applies on release", {
+			gear: Number(elements.gear.value),
+		});
 
 		const idleElements = makeInputElements();
 		const idleInput = new InputController(idleElements, () => {});
@@ -432,6 +448,7 @@ async function checkInputControllerBehavior() {
 
 		input.keys.clear();
 		input.syncKeyboard(0, makeInputSnapshot(2, 0));
+		elements.gear.value = "1";
 		input.updateGamepad(makeGamepad({ axis0: 0.54, brake: 0.35, accel: 0.8, pressed: [5] }));
 		const shapedSteer = Number(elements.steer.value);
 		assertInput(shapedSteer > 0.2 && shapedSteer < 0.54, "gamepad steering applies dead-zone and sensitivity", {
@@ -443,16 +460,23 @@ async function checkInputControllerBehavior() {
 		assertInput(Math.abs(Number(elements.brake.value) - 0.35) < 0.000001, "gamepad left trigger controls brake", {
 			brake: Number(elements.brake.value),
 		});
-		assertInput(Number(elements.gear.value) === 2, "gamepad shoulder upshifts once per press", {
+		assertInput(Number(elements.gear.value) === 1, "gamepad shoulder waits for native release edge", {
 			gear: Number(elements.gear.value),
 		});
 		input.updateGamepad(makeGamepad({ pressed: [5] }));
-		assertInput(Number(elements.gear.value) === 2, "held gamepad shift button does not repeat", {
+		assertInput(Number(elements.gear.value) === 1, "held gamepad shift button does not repeat", {
 			gear: Number(elements.gear.value),
 		});
 		input.updateGamepad(makeGamepad());
+		assertInput(Number(elements.gear.value) === 2, "gamepad shoulder upshifts on release", {
+			gear: Number(elements.gear.value),
+		});
 		input.updateGamepad(makeGamepad({ pressed: [4] }));
-		assertInput(Number(elements.gear.value) === 1, "gamepad shoulder downshifts after release", {
+		assertInput(Number(elements.gear.value) === 2, "gamepad shoulder downshift waits for release", {
+			gear: Number(elements.gear.value),
+		});
+		input.updateGamepad(makeGamepad());
+		assertInput(Number(elements.gear.value) === 1, "gamepad shoulder downshifts on release", {
 			gear: Number(elements.gear.value),
 		});
 
@@ -478,14 +502,19 @@ async function checkInputControllerBehavior() {
 		connectedGamepad = makeGamepad({ pressed: [5] });
 		heldShiftDisconnectInput.getGamepad = () => connectedGamepad;
 		heldShiftDisconnectInput.update(1 / 60, makeInputSnapshot(2, 0));
-		assertInput(Number(heldShiftDisconnectElements.gear.value) === 2, "gamepad shift applies before disconnect", {
+		assertInput(Number(heldShiftDisconnectElements.gear.value) === 1, "gamepad shift waits for release before disconnect", {
 			gear: Number(heldShiftDisconnectElements.gear.value),
 		});
 		connectedGamepad = null;
 		heldShiftDisconnectInput.update(1 / 60, makeInputSnapshot(2, 0));
 		connectedGamepad = makeGamepad({ pressed: [5] });
 		heldShiftDisconnectInput.update(1 / 60, makeInputSnapshot(2, 0));
-		assertInput(Number(heldShiftDisconnectElements.gear.value) === 3, "gamepad shift latch clears on disconnect", {
+		assertInput(Number(heldShiftDisconnectElements.gear.value) === 1, "gamepad shift latch clears on disconnect without stale release", {
+			gear: Number(heldShiftDisconnectElements.gear.value),
+		});
+		connectedGamepad = makeGamepad();
+		heldShiftDisconnectInput.update(1 / 60, makeInputSnapshot(2, 0));
+		assertInput(Number(heldShiftDisconnectElements.gear.value) === 2, "reconnected gamepad shift releases once", {
 			gear: Number(heldShiftDisconnectElements.gear.value),
 		});
 
