@@ -292,7 +292,7 @@ function makeInputSnapshot(time, speed) {
 	return values;
 }
 
-function makeGamepad({ axis0 = 0, brake = 0, accel = 0, pressed = [] } = {}) {
+function makeGamepad({ axes = [], axis0 = 0, brake = 0, accel = 0, pressed = [] } = {}) {
 	const buttons = Array.from({ length: 8 }, (_, index) => ({
 		value: pressed.includes(index) ? 1 : 0,
 	}));
@@ -300,7 +300,7 @@ function makeGamepad({ axis0 = 0, brake = 0, accel = 0, pressed = [] } = {}) {
 	buttons[7].value = accel;
 	return {
 		connected: true,
-		axes: [axis0, 0, 0, 0],
+		axes: [axis0, 0, 0, 0].map((value, index) => axes[index] ?? value),
 		buttons,
 	};
 }
@@ -391,6 +391,16 @@ async function checkInputControllerBehavior() {
 			idleGamepadSteer,
 		});
 
+		const keyboardWithRightStickElements = makeInputElements();
+		const keyboardWithRightStick = new InputController(keyboardWithRightStickElements, () => {});
+		keyboardWithRightStick.getGamepad = () => makeGamepad({ axes: [0, 0, 0.65, -0.4] });
+		keyboardWithRightStick.keys.add("ArrowLeft");
+		keyboardWithRightStick.update(1 / 60, makeInputSnapshot(2, 0));
+		const rightStickDriftSteer = Number(keyboardWithRightStickElements.steer.value);
+		assertInput(rightStickDriftSteer < 0 && rightStickDriftSteer > -0.05, "unmapped gamepad axes do not suppress keyboard steering", {
+			rightStickDriftSteer,
+		});
+
 		input.keys.add("ArrowLeft");
 		input.syncKeyboard(0.2, makeInputSnapshot(2, 0));
 		const lowSpeedSteer = Math.abs(Number(elements.steer.value));
@@ -442,10 +452,26 @@ async function checkInputControllerBehavior() {
 		disconnectInput.update(1 / 60, makeInputSnapshot(2, 0));
 		assertInput(Number(disconnectElements.steer.value) === 0 && Number(disconnectElements.accel.value) === 0 &&
 			Number(disconnectElements.brake.value) === 0, "disconnecting an active gamepad releases controls", {
-				steer: Number(disconnectElements.steer.value),
-				accel: Number(disconnectElements.accel.value),
-				brake: Number(disconnectElements.brake.value),
-			});
+			steer: Number(disconnectElements.steer.value),
+			accel: Number(disconnectElements.accel.value),
+			brake: Number(disconnectElements.brake.value),
+		});
+
+		const heldShiftDisconnectElements = makeInputElements();
+		const heldShiftDisconnectInput = new InputController(heldShiftDisconnectElements, () => {});
+		connectedGamepad = makeGamepad({ pressed: [5] });
+		heldShiftDisconnectInput.getGamepad = () => connectedGamepad;
+		heldShiftDisconnectInput.update(1 / 60, makeInputSnapshot(2, 0));
+		assertInput(Number(heldShiftDisconnectElements.gear.value) === 2, "gamepad shift applies before disconnect", {
+			gear: Number(heldShiftDisconnectElements.gear.value),
+		});
+		connectedGamepad = null;
+		heldShiftDisconnectInput.update(1 / 60, makeInputSnapshot(2, 0));
+		connectedGamepad = makeGamepad({ pressed: [5] });
+		heldShiftDisconnectInput.update(1 / 60, makeInputSnapshot(2, 0));
+		assertInput(Number(heldShiftDisconnectElements.gear.value) === 3, "gamepad shift latch clears on disconnect", {
+			gear: Number(heldShiftDisconnectElements.gear.value),
+		});
 
 		return {
 			changes: changes.length,

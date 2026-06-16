@@ -5,6 +5,8 @@ const KEYBOARD_STEER_SPEED_SENSITIVITY = 0.7 / 100;
 const DIGITAL_PEDAL_INC_RATE = 0.2;
 const GAMEPAD_AXIS_DEAD_ZONE = 0.08;
 const GAMEPAD_STEER_SENSITIVITY = 1 / 0.8;
+const GAMEPAD_BRAKE_BUTTON = 6;
+const GAMEPAD_ACCEL_BUTTON = 7;
 const GAMEPAD_GEAR_BUTTONS = [
 	[5, 1],  // R1/RB
 	[0, 1],  // Cross/A, matching TORCS default BTN1 upshift
@@ -133,15 +135,18 @@ export class InputController {
 		if (!gamepad) {
 			return false;
 		}
-		const hasAxisInput = (gamepad.axes || []).some((value) => Math.abs(value || 0) > GAMEPAD_AXIS_DEAD_ZONE);
-		const hasButtonInput = (gamepad.buttons || []).some((button) => (button ? button.value : 0) > 0.01);
-		return hasAxisInput || hasButtonInput;
+		const button = (index) => gamepad.buttons && gamepad.buttons[index] ? gamepad.buttons[index].value : 0;
+		return Math.abs((gamepad.axes || [])[0] || 0) > GAMEPAD_AXIS_DEAD_ZONE ||
+			button(GAMEPAD_BRAKE_BUTTON) > 0.01 ||
+			button(GAMEPAD_ACCEL_BUTTON) > 0.01 ||
+			GAMEPAD_GEAR_BUTTONS.some(([index]) => button(index) > 0.5);
 	}
 
 	resetGamepadControls() {
 		this.setRangeValue(this.elements.steer, 0);
 		this.setRangeValue(this.elements.accel, 0);
 		this.setRangeValue(this.elements.brake, 0);
+		this.gamepadGearButtons.clear();
 		this.onChange(this.getControls());
 	}
 
@@ -154,8 +159,8 @@ export class InputController {
 		const pressed = (index) => button(index) > 0.5;
 
 		this.setRangeValue(this.elements.steer, axis(0));
-		this.setRangeValue(this.elements.accel, button(7));
-		this.setRangeValue(this.elements.brake, button(6));
+		this.setRangeValue(this.elements.accel, button(GAMEPAD_ACCEL_BUTTON));
+		this.setRangeValue(this.elements.brake, button(GAMEPAD_BRAKE_BUTTON));
 
 		for (const [index, delta] of GAMEPAD_GEAR_BUTTONS) {
 			if (pressed(index)) {
