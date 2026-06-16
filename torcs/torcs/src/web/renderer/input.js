@@ -85,8 +85,11 @@ export class InputController {
 		return clamp(previous + KEYBOARD_STEER_SENSITIVITY * deltaTime / speedFactor, 0, 1);
 	}
 
-	rampDigitalPedal(previous, pressed, currentTime) {
+	rampDigitalPedal(previous, pressed, currentTime, allowIncrease = true) {
 		const target = pressed ? 1 : 0;
+		if (!allowIncrease && target > previous) {
+			return previous;
+		}
 		if (currentTime <= 1 || target <= previous) {
 			return target;
 		}
@@ -97,7 +100,7 @@ export class InputController {
 		return previous + DIGITAL_PEDAL_INC_RATE * Math.sign(delta);
 	}
 
-	syncKeyboard(deltaTime = 1 / 60, snapshot = null) {
+	syncKeyboard(deltaTime = 1 / 60, snapshot = null, options = {}) {
 		if (snapshot) {
 			this.lastSnapshot = snapshot;
 		}
@@ -110,8 +113,9 @@ export class InputController {
 
 		this.keyboardState.leftSteer = this.rampKeyboardSteer(this.keyboardState.leftSteer, left, deltaTime, speed);
 		this.keyboardState.rightSteer = this.rampKeyboardSteer(this.keyboardState.rightSteer, right, deltaTime, speed);
-		this.keyboardState.accel = this.rampDigitalPedal(this.keyboardState.accel, throttle, currentTime);
-		this.keyboardState.brake = this.rampDigitalPedal(this.keyboardState.brake, brake, currentTime);
+		const allowPedalIncrease = options.allowPedalIncrease !== false;
+		this.keyboardState.accel = this.rampDigitalPedal(this.keyboardState.accel, throttle, currentTime, allowPedalIncrease);
+		this.keyboardState.brake = this.rampDigitalPedal(this.keyboardState.brake, brake, currentTime, allowPedalIncrease);
 
 		this.setRangeValue(this.elements.steer, this.keyboardState.rightSteer - this.keyboardState.leftSteer);
 		this.setRangeValue(this.elements.accel, this.keyboardState.accel);
@@ -225,7 +229,9 @@ export class InputController {
 		} else {
 			this.keys.delete(event.code);
 		}
-		this.syncKeyboard(pressed ? 1 / 60 : 0, this.lastSnapshot);
+		if (!pressed) {
+			this.syncKeyboard(0, this.lastSnapshot, { allowPedalIncrease: false });
+		}
 	}
 
 	bind() {

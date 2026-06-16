@@ -354,7 +354,19 @@ async function checkInputControllerBehavior() {
 			repeat: false,
 			preventDefault() {},
 		}, true);
-		assertInput(Math.abs(Number(elements.accel.value) - 0.2) < 0.000001, "keydown path preserves digital pedal slew after race start", {
+		assertInput(Number(elements.accel.value) === 0, "keydown records held pedal without applying an extra event-frame slew", {
+			accel: Number(elements.accel.value),
+		});
+		input.update(1 / 60, makeInputSnapshot(2, 0));
+		assertInput(Math.abs(Number(elements.accel.value) - 0.2) < 0.000001, "first frame after keydown uses one TORCS digital pedal slew step", {
+			accel: Number(elements.accel.value),
+		});
+		input.handleKey({
+			code: "KeyQ",
+			repeat: false,
+			preventDefault() {},
+		}, false);
+		assertInput(Math.abs(Number(elements.accel.value) - 0.2) < 0.000001, "unrelated key release does not increase held pedal", {
 			accel: Number(elements.accel.value),
 		});
 		input.handleKey({
@@ -374,6 +386,10 @@ async function checkInputControllerBehavior() {
 				repeat: false,
 				preventDefault() {},
 			}, true);
+			assertInput(Number(idleElements.accel.value) === 0, "idle keydown waits for the frame update before applying pedal slew", {
+				accel: Number(idleElements.accel.value),
+			});
+			idleInput.update(1 / 60, makeInputSnapshot(2, 0));
 			assertInput(Math.abs(Number(idleElements.accel.value) - 0.2) < 0.000001, "idle keydown uses cached race time for pedal slew", {
 				accel: Number(idleElements.accel.value),
 			});
