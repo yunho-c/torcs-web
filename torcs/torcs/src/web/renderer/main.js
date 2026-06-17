@@ -5,6 +5,7 @@ import { AssetManager } from "./assets.js";
 import { TorcsAudio } from "./audio.js";
 import { createTorcsRuntime } from "./runtime.js";
 import { TorcsScene } from "./scene.js";
+import { warnOnce } from "./diagnostics.js";
 
 const elements = {
 	canvas: document.getElementById("renderer"),
@@ -222,6 +223,26 @@ async function loadVisualAssets() {
 		scene.setTrackAtmosphere(track ? track.entry : null, track ? track.backgroundTexture : null);
 		scene.setCarVisual(car);
 		scene.setEffectTextures(effects ? effects.textures : null);
+		if (!track) {
+			warnOnce(
+				`track-visual-fallback:${elements.track.value}`,
+				"TORCS web renderer using runtime sampled track geometry fallback",
+				{
+					track: elements.track.value,
+					reason: "converted track visual unavailable",
+				},
+			);
+		}
+		if (!car) {
+			warnOnce(
+				`car-visual-fallback:${elements.car.value}`,
+				"TORCS web renderer using generated car box and wheel fallback",
+				{
+					car: elements.car.value,
+					reason: "converted car asset unavailable",
+				},
+			);
+		}
 		return Boolean(track && car);
 	} catch (error) {
 		console.warn("TORCS web renderer asset load failed", error);

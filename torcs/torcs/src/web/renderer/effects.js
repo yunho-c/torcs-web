@@ -1,5 +1,6 @@
 import * as THREE from "three/webgpu";
 import { SNAPSHOT } from "./runtime.js";
+import { warnOnce } from "./diagnostics.js";
 
 const WHEEL_COUNT = 4;
 const ROAD_EFFECT_Y = 0.075;
@@ -161,6 +162,11 @@ function makeSlipVelocity(car, accelSlip, sideSlip, horizontalScale, verticalSpe
 		.addScaledVector(side, sideSlip * horizontalScale);
 }
 
+function carAssetWarningId(asset) {
+	const entry = asset && asset.entry;
+	return entry ? entry.xml || entry.source || entry.name || "unknown-car" : "unknown-car";
+}
+
 export class TorcsEffects {
 	constructor(groups) {
 		this.groups = groups;
@@ -214,7 +220,27 @@ export class TorcsEffects {
 		this.shadow.material.color.set(this.textures.shadow ? 0xffffff : 0x000000);
 		this.shadow.material.opacity = this.textures.shadow ? 0.54 : 0.34;
 		this.shadow.material.needsUpdate = true;
+		if (asset && !this.textures.shadow) {
+			warnOnce(
+				`generic-shadow:${carAssetWarningId(asset)}`,
+				"TORCS web renderer using generic planar shadow fallback",
+				{
+					car: carAssetWarningId(asset),
+					shadowTexture: asset.entry ? asset.entry.shadowTexture : "",
+				},
+			);
+		}
 		this.setAssetLights(asset && asset.entry ? asset.entry.lights : []);
+		if (asset && this.assetLightSprites.length === 0) {
+			warnOnce(
+				`default-light-anchors:${carAssetWarningId(asset)}`,
+				"TORCS web renderer using default dimension-based car light anchors",
+				{
+					car: carAssetWarningId(asset),
+					lightCount: asset.entry && Array.isArray(asset.entry.lights) ? asset.entry.lights.length : 0,
+				},
+			);
+		}
 	}
 
 	setVisible(visible) {

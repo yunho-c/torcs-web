@@ -2,6 +2,7 @@ import * as THREE from "three/webgpu";
 import { EXRLoader } from "three/addons/loaders/EXRLoader.js";
 import { TorcsEffects } from "./effects.js";
 import { SNAPSHOT } from "./runtime.js";
+import { warnOnce } from "./diagnostics.js";
 
 const ROAD_Y = 0.03;
 const WHEEL_ORDER = [0, 1, 2, 3];
@@ -132,6 +133,11 @@ function colorFromRgb(values, fallback) {
 		clamp01(values[1]),
 		clamp01(values[2]),
 	);
+}
+
+function carAssetWarningId(asset) {
+	const entry = asset && asset.entry;
+	return entry ? entry.xml || entry.source || entry.name || "unknown-car" : "unknown-car";
 }
 
 function getCarLodFactor(camera, position, canvas) {
@@ -532,6 +538,18 @@ export class TorcsScene {
 		for (const wheel of this.generatedWheels) {
 			wheel.root.visible = next.lod.wheels !== false;
 		}
+		if (next.lod.wheels !== false) {
+			warnOnce(
+				`generated-wheels:${carAssetWarningId(this.carAsset)}:${next.lod.model || next.lod.threshold}`,
+				"TORCS web renderer using runtime generated wheels for car LOD",
+				{
+					car: carAssetWarningId(this.carAsset),
+					lod: next.lod.model || "",
+					threshold: next.lod.threshold,
+					wheelFallback: this.carAsset && this.carAsset.entry ? this.carAsset.entry.wheelFallback : null,
+				},
+			);
+		}
 		this.activeCarLod = next;
 	}
 
@@ -675,6 +693,18 @@ export class TorcsScene {
 		}
 		for (const wheel of opponent.wheels) {
 			wheel.root.visible = next.lod.wheels !== false;
+		}
+		if (next.lod.wheels !== false) {
+			warnOnce(
+				`generated-opponent-wheels:${carAssetWarningId(this.carAsset)}:${next.lod.model || next.lod.threshold}`,
+				"TORCS web renderer using runtime generated wheels for opponent car LOD",
+				{
+					car: carAssetWarningId(this.carAsset),
+					lod: next.lod.model || "",
+					threshold: next.lod.threshold,
+					wheelFallback: this.carAsset && this.carAsset.entry ? this.carAsset.entry.wheelFallback : null,
+				},
+			);
 		}
 		opponent.activeLod = next;
 	}

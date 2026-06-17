@@ -896,6 +896,7 @@ const files = [
 	"../CMakeLists.txt",
 	"torcs_web_renderer.html",
 	"renderer/main.js",
+	"renderer/diagnostics.js",
 	"renderer/assets.js",
 	"renderer/runtime.js",
 	"renderer/scene.js",
@@ -966,8 +967,14 @@ requireText(byPath["renderer/assets.js"], "materialMask", "car material mask loa
 requireText(byPath["renderer/assets.js"], "loadDataTexture(relativePath)", "material mask data texture loading");
 requireText(byPath["renderer/assets.js"], "clearcoatMap: remasterMaterialMask", "paint clearcoat mask binding");
 requireText(byPath["renderer/assets.js"], "roughnessMap: remasterMaterialMask", "paint roughness mask binding");
+requireText(byPath["renderer/assets.js"], "const source = normalizeRuntimePath(carPath)", "car asset source path annotation");
+requireText(byPath["renderer/assets.js"], "return { entry: carEntry, lods, shadowTexture, materialMask }", "loaded car entry source metadata");
 requireText(byPath["renderer/assets.js"], "return this.makeLegacyMaterial(material)", "modern profile preserves legacy visual baseline");
 requireText(byPath["renderer/assets.js"], "TORCS web renderer failed to load track background texture", "background texture load warning");
+requireText(byPath["renderer/diagnostics.js"], "export function warnOnce", "one-shot warning helper export");
+requireText(byPath["renderer/diagnostics.js"], "emittedWarnings.has(key)", "one-shot warning dedupe");
+requireText(byPath["renderer/main.js"], "TORCS web renderer using runtime sampled track geometry fallback", "track visual fallback warning");
+requireText(byPath["renderer/main.js"], "TORCS web renderer using generated car box and wheel fallback", "car visual fallback warning");
 requireText(byPath["renderer/main.js"], "populateAssetSelects()", "manifest-driven asset select discovery");
 requireText(byPath["renderer/main.js"], "Object.entries(entries || {})", "manifest asset option enumeration");
 requireText(byPath["renderer/main.js"], "DEFAULT_TRACK_PATH", "default track selection preservation");
@@ -1135,6 +1142,8 @@ requireText(byPath["renderer/scene.js"], "opponent.effects.update(values, oppone
 requireText(byPath["renderer/effects.js"], "setVisible(visible)", "Phase 6 effect visibility control");
 requireText(byPath["renderer/scene.js"], "export { getTorcsPoseQuaternion, torcsToThree }", "shared TORCS pose export");
 requireText(byPath["renderer/scene.js"], "createGeneratedWheels(values)", "generated wheel fallback");
+requireText(byPath["renderer/scene.js"], "TORCS web renderer using runtime generated wheels for car LOD", "selected car generated wheel warning");
+requireText(byPath["renderer/scene.js"], "TORCS web renderer using runtime generated wheels for opponent car LOD", "opponent generated wheel warning");
 requireText(byPath["renderer/scene.js"], "setObjectQuaternionFromTorcsPosMat(this.car, values)", "car body pose matrix conversion");
 requireText(byPath["renderer/scene.js"], "CAR_ROTATION_MATRIX.multiplyMatrices(TORCS_TO_THREE_BASIS, TORCS_POS_MATRIX)", "TORCS-to-Three body basis conversion");
 requireText(byPath["renderer/scene.js"], "wheelBrakeTemp0", "brake heat wheel feedback");
@@ -1183,6 +1192,8 @@ requireText(byPath["renderer/effects.js"], "textures[\"grey-tracks.rgb\"]", "nat
 requireText(byPath["renderer/effects.js"], "SNAPSHOT.lightCommand", "light snapshot field use");
 requireText(byPath["renderer/effects.js"], "SNAPSHOT.collision", "collision snapshot field use");
 requireText(byPath["renderer/effects.js"], "makeRadialTexture", "effect texture fallback");
+requireText(byPath["renderer/effects.js"], "TORCS web renderer using generic planar shadow fallback", "generic shadow fallback warning");
+requireText(byPath["renderer/effects.js"], "TORCS web renderer using default dimension-based car light anchors", "default light anchor fallback warning");
 if (byPath["renderer/effects.js"].content.includes("velocity: tempVector.copy(world).sub(car.position)")) {
 	fail("TORCS web renderer smoke test found shared tempVector exhaust fire velocity");
 }

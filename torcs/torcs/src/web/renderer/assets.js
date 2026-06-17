@@ -388,10 +388,12 @@ export class AssetManager {
 
 	async loadCar(carPath) {
 		const manifest = await this.loadManifest();
-		const entry = manifest.cars[normalizeRuntimePath(carPath)];
+		const source = normalizeRuntimePath(carPath);
+		const entry = manifest.cars[source];
 		if (!entry || !entry.lods.length) {
 			return null;
 		}
+		const carEntry = { ...entry, source };
 		const materialMask = entry.materialMask ? await this.loadDataTexture(entry.materialMask) : null;
 		const lods = await Promise.all(entry.lods.map(async (lod) => {
 			const scene = await this.loadGltf(lod.asset, { materialMask });
@@ -404,6 +406,6 @@ export class AssetManager {
 		if (shadowPath) {
 			shadowTexture = await this.loadTexture(shadowPath);
 		}
-		return { entry, lods, shadowTexture, materialMask };
+		return { entry: carEntry, lods, shadowTexture, materialMask };
 	}
 }
