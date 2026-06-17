@@ -43,6 +43,8 @@ const LOOKAROUND_DISTANCE_SCALE = 1.55;
 const LOOKAROUND_SIDE_DISTANCE_SCALE = 3.8;
 const LOOKAROUND_HEIGHT = 1.8;
 const LOOKAROUND_TARGET_HEIGHT = 0.95;
+const ANALOG_LOOK_SIDE_SCALE = 1.8;
+const ANALOG_LOOK_FORWARD_SCALE = 0.9;
 
 export class CameraRig {
 	constructor(canvas) {
@@ -114,16 +116,27 @@ export class CameraRig {
 
 	update(values, lookaround = "") {
 		const car = torcsToThree(values[SNAPSHOT.x], values[SNAPSHOT.y], values[SNAPSHOT.z]);
-		const hasLookaround = Object.hasOwn(CAMERA_LOOKAROUNDS, lookaround);
-		if (hasLookaround) {
+		const keyboardLookaround = typeof lookaround === "string" && Object.hasOwn(CAMERA_LOOKAROUNDS, lookaround) ? lookaround : "";
+		const analogLookaround = lookaround && lookaround.type === "gamepad" ? lookaround : null;
+		if (keyboardLookaround) {
 			this.updateCarBasis(values);
-			this.updateLookaround(values, car, lookaround);
+			this.updateLookaround(values, car, keyboardLookaround);
+			return;
+		}
+		if (analogLookaround) {
+			this.updateCarBasis(values);
+		}
+		if (analogLookaround && analogLookaround.front) {
+			this.updateLookaround(values, car, "front", analogLookaround);
 			return;
 		}
 		if (this.mode === "top") {
 			const view = this.trackView || { center: car, height: 260 };
 			this.camera.position.set(view.center.x, view.height, view.center.z);
 			this.target.set(view.center.x, 0, view.center.z);
+			if (analogLookaround) {
+				this.applyAnalogLookTarget(values, analogLookaround);
+			}
 			this.camera.up.set(0, 0, -1);
 			this.camera.lookAt(this.target);
 			return;
@@ -134,6 +147,9 @@ export class CameraRig {
 			this.camera.position.copy(view.position);
 			this.target.copy(car).lerp(view.center, 0.12);
 			this.target.y += settings.targetHeight;
+			if (analogLookaround) {
+				this.applyAnalogLookTarget(values, analogLookaround);
+			}
 			this.camera.up.set(0, 1, 0);
 			this.camera.lookAt(this.target);
 			return;
@@ -158,6 +174,9 @@ export class CameraRig {
 		this.target.copy(car)
 			.addScaledVector(this.forward, settings.targetAhead)
 			.add(new THREE.Vector3(0, settings.targetHeight, 0));
+		if (analogLookaround) {
+			this.applyAnalogLookTarget(values, analogLookaround);
+		}
 		this.camera.position.copy(cameraPos);
 		this.camera.lookAt(this.target);
 	}
@@ -169,18 +188,31 @@ export class CameraRig {
 		this.up.set(0, 1, 0).applyQuaternion(this.carRotation).normalize();
 	}
 
-	updateLookaround(values, car, lookaround) {
+	updateLookaround(values, car, lookaround, analogLookaround = null) {
 		const view = CAMERA_LOOKAROUNDS[lookaround];
 		const dimX = Math.max(0.1, values[SNAPSHOT.dimensionX]);
 		const dimY = Math.max(0.1, values[SNAPSHOT.dimensionY]);
 		const distance = Math.max(6, dimX * LOOKAROUND_DISTANCE_SCALE, dimY * LOOKAROUND_SIDE_DISTANCE_SCALE);
 		this.camera.up.set(0, 1, 0);
 		this.target.copy(car).add(new THREE.Vector3(0, LOOKAROUND_TARGET_HEIGHT, 0));
+		if (analogLookaround) {
+			this.applyAnalogLookTarget(values, analogLookaround);
+		}
 		this.camera.position.copy(car)
 			.addScaledVector(this.forward, view.forward * distance)
 			.addScaledVector(this.side, view.side * distance)
 			.add(new THREE.Vector3(0, LOOKAROUND_HEIGHT, 0));
 		this.camera.lookAt(this.target);
+	}
+
+	applyAnalogLookTarget(values, lookaround) {
+		const dimX = Math.max(0.1, values[SNAPSHOT.dimensionX]);
+		const dimY = Math.max(0.1, values[SNAPSHOT.dimensionY]);
+		const sideOffset = Math.max(1.2, dimY * ANALOG_LOOK_SIDE_SCALE);
+		const forwardOffset = Math.max(2.0, dimX * ANALOG_LOOK_FORWARD_SCALE);
+		this.target
+			.addScaledVector(this.side, -lookaround.x * sideOffset)
+			.addScaledVector(this.forward, -lookaround.y * forwardOffset);
 	}
 
 	selectTracksideView(car) {

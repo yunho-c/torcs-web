@@ -7,6 +7,9 @@ const GAMEPAD_AXIS_DEAD_ZONE = 0.08;
 const GAMEPAD_STEER_SENSITIVITY = 1 / 0.8;
 const GAMEPAD_BRAKE_BUTTON = 6;
 const GAMEPAD_ACCEL_BUTTON = 7;
+const GAMEPAD_LOOK_X_AXIS = 2;
+const GAMEPAD_LOOK_Y_AXIS = 3;
+const GAMEPAD_LOOK_BUTTON = 11;
 const GAMEPAD_GEAR_BUTTONS = [
 	[5, 1],  // R1/RB
 	[0, 1],  // Cross/A, matching TORCS default BTN1 upshift
@@ -34,6 +37,12 @@ export class InputController {
 		this.onChange = onChange;
 		this.keys = new Set();
 		this.lookaroundKeys = [];
+		this.gamepadLook = {
+			x: 0,
+			y: 0,
+			front: false,
+		};
+		this.gamepadLookButtonHeld = false;
 		this.gamepadGearButtons = new Set();
 		this.keyboardState = {
 			leftSteer: 0,
@@ -57,8 +66,21 @@ export class InputController {
 	}
 
 	getCameraLookaround() {
+		this.updateGamepadLook(this.getGamepad());
 		const code = this.lookaroundKeys[this.lookaroundKeys.length - 1];
-		return CAMERA_LOOKAROUND_KEYS.get(code) || "";
+		const keyboardLookaround = CAMERA_LOOKAROUND_KEYS.get(code);
+		if (keyboardLookaround) {
+			return keyboardLookaround;
+		}
+		if (this.gamepadLook.front || this.gamepadLook.x !== 0 || this.gamepadLook.y !== 0) {
+			return {
+				type: "gamepad",
+				x: this.gamepadLook.x,
+				y: this.gamepadLook.y,
+				front: this.gamepadLook.front,
+			};
+		}
+		return "";
 	}
 
 	setValue(input, value) {
@@ -86,6 +108,14 @@ export class InputController {
 		}
 		const normalized = (magnitude - GAMEPAD_AXIS_DEAD_ZONE) / (1 - GAMEPAD_AXIS_DEAD_ZONE);
 		return Math.sign(value) * Math.pow(normalized, GAMEPAD_STEER_SENSITIVITY);
+	}
+
+	shapeGamepadLookAxis(value) {
+		const magnitude = Math.abs(value);
+		if (magnitude <= GAMEPAD_AXIS_DEAD_ZONE) {
+			return 0;
+		}
+		return Math.sign(value) * ((magnitude - GAMEPAD_AXIS_DEAD_ZONE) / (1 - GAMEPAD_AXIS_DEAD_ZONE));
 	}
 
 	rampKeyboardSteer(previous, pressed, deltaTime, speed) {
@@ -165,6 +195,29 @@ export class InputController {
 		this.onChange(this.getControls());
 	}
 
+	updateGamepadLook(gamepad = this.getGamepad()) {
+		const previous = { ...this.gamepadLook };
+		if (!gamepad) {
+			this.gamepadLook.x = 0;
+			this.gamepadLook.y = 0;
+			this.gamepadLook.front = false;
+			this.gamepadLookButtonHeld = false;
+			return previous.x !== 0 || previous.y !== 0 || previous.front;
+		}
+		const axes = gamepad.axes || [];
+		const buttons = gamepad.buttons || [];
+		const pressed = Boolean(buttons[GAMEPAD_LOOK_BUTTON] && buttons[GAMEPAD_LOOK_BUTTON].value > 0.5);
+		this.gamepadLook.x = this.shapeGamepadLookAxis(axes[GAMEPAD_LOOK_X_AXIS] || 0);
+		this.gamepadLook.y = this.shapeGamepadLookAxis(axes[GAMEPAD_LOOK_Y_AXIS] || 0);
+		if (pressed && !this.gamepadLookButtonHeld) {
+			this.gamepadLook.front = !this.gamepadLook.front;
+		}
+		this.gamepadLookButtonHeld = pressed;
+		return previous.x !== this.gamepadLook.x ||
+			previous.y !== this.gamepadLook.y ||
+			previous.front !== this.gamepadLook.front;
+	}
+
 	updateGamepad(gamepad = this.getGamepad()) {
 		if (!gamepad) {
 			return false;
@@ -196,6 +249,7 @@ export class InputController {
 			this.lastSnapshot = snapshot;
 		}
 		const gamepad = this.getGamepad();
+		const gamepadLookChanged = this.updateGamepadLook(gamepad);
 		const gamepadHasInput = this.hasGamepadInput(gamepad);
 		if (!gamepad && this.gamepadActive) {
 			this.resetGamepadControls();
@@ -214,7 +268,7 @@ export class InputController {
 		if (this.keys.size > 0) {
 			return this.syncKeyboard(deltaTime, snapshot);
 		}
-		return false;
+		return gamepadLookChanged;
 	}
 
 	handleKey(event, pressed) {
