@@ -58,15 +58,21 @@ function setObjectQuaternionFromTorcsPosMat(object, values) {
 }
 
 function makeLine(points, color, opacity, yOffset = ROAD_Y) {
-	const geometry = new THREE.BufferGeometry().setFromPoints(
-		points.map((point) => torcsToThree(point.x, point.y, yOffset)),
-	);
+	const geometry = new THREE.BufferGeometry().setFromPoints(makeClosedLinePoints(points, yOffset));
 	const material = new THREE.LineBasicMaterial({
 		color,
 		transparent: opacity < 1,
 		opacity,
 	});
-	return new THREE.LineLoop(geometry, material);
+	return new THREE.Line(geometry, material);
+}
+
+function makeClosedLinePoints(points, yOffset = ROAD_Y) {
+	const linePoints = points.map((point) => torcsToThree(point.x, point.y, yOffset));
+	if (linePoints.length > 1) {
+		linePoints.push(linePoints[0].clone());
+	}
+	return linePoints;
 }
 
 function makeRoadMesh(track) {
@@ -764,6 +770,7 @@ export class TorcsScene {
 				ROAD_Y + 0.08,
 			));
 		}
+		footprintPoints.push(footprintPoints[0].clone());
 		this.footprint.geometry.dispose();
 		this.footprint.geometry = new THREE.BufferGeometry().setFromPoints(footprintPoints);
 		this.effects.update(values, this.car, camera);

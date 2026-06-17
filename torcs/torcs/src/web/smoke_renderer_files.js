@@ -1093,6 +1093,7 @@ requireText(byPath["renderer/scene.js"], "import * as THREE from \"three/webgpu\
 requireText(byPath["renderer/scene.js"], "import { TorcsEffects } from \"./effects.js\"", "effects module import");
 requireText(byPath["renderer/scene.js"], "new THREE.WebGPURenderer", "WebGPU renderer creation");
 requireText(byPath["renderer/scene.js"], "await renderer.init()", "async WebGPU renderer initialization");
+requireText(byPath["renderer/scene.js"], "return new THREE.Line(geometry, material)", "WebGPU-compatible closed line primitive");
 requireText(byPath["renderer/scene.js"], "forceWebGL: params.get(\"renderer\") === \"webgl\"", "forced WebGL fallback option");
 requireText(byPath["renderer/scene.js"], "EXRLoader", "HDRI EXR loader import");
 requireText(byPath["renderer/scene.js"], "120_hdrmaps_com_free_2K.exr", "canonical HDRI environment asset");
@@ -1154,6 +1155,9 @@ if (byPath["renderer/scene.js"].content.includes("this.car.rotation.set(values[S
 }
 if (byPath["renderer/scene.js"].content.includes("WebGLRenderer")) {
 	fail("TORCS web renderer smoke test found legacy WebGLRenderer creation");
+}
+if (byPath["renderer/scene.js"].content.includes("LineLoop")) {
+	fail("TORCS web renderer smoke test found unsupported WebGPU LineLoop usage");
 }
 
 requireText(byPath["renderer/effects.js"], "export class TorcsEffects", "effects layer export");
