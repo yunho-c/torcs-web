@@ -14,6 +14,16 @@ const FIRE_LIFE = SMOKE_LIFE / 8;
 const FIRE_STEP0_LIFE = SMOKE_LIFE / 50;
 const COLLISION_FLASH_LIFE = 0.45;
 const HEAD_LIGHT_MASK = 0x00000003;
+const HEAD1_LIGHT_MASK = 0x00000001;
+const HEAD2_LIGHT_MASK = 0x00000002;
+const VALID_CAR_LIGHT_TYPES = new Set(["head1", "head2", "rear", "brake", "brake2"]);
+const CAR_LIGHT_SPRITES = {
+	head1: { texture: "frontlight", color: 0xfff1ca, scale: [5.75, 2.3] },
+	head2: { texture: "frontlight", color: 0xfff1ca, scale: [5.75, 2.3] },
+	rear: { texture: "rearlight", color: 0xff2a22, scale: [5.5, 2.4] },
+	brake: { texture: "brakelight", color: 0xff321f, scale: [3.9, 1.6] },
+	brake2: { texture: "brakelight", color: 0xff321f, scale: [3.9, 1.6] },
+};
 
 const SURFACE_EFFECTS = [
 	{ color: [0, 0, 0], smoke: [0.8, 0.8, 0.8], sensitivity: 0.5, threshold: 0.1, initSpeed: 0.01, lifeCoefficient: 30, speedCoefficient: 0, slingMud: 0 },
@@ -61,6 +71,41 @@ function makeSpriteMaterial(texture, color, opacity, additive = false) {
 
 function torcsToThree(x, y, z = 0) {
 	return new THREE.Vector3(x, z, -y);
+}
+
+function isFiniteNumber(value) {
+	return typeof value === "number" && Number.isFinite(value);
+}
+
+function isValidCarLight(light) {
+	return light && VALID_CAR_LIGHT_TYPES.has(light.type) &&
+		Array.isArray(light.position) && light.position.length === 3 &&
+		light.position.every(isFiniteNumber) &&
+		isFiniteNumber(light.size) && light.size > 0;
+}
+
+function getCarLightOpacity(type, lightCommand, brake) {
+	const head1On = (lightCommand & HEAD1_LIGHT_MASK) !== 0;
+	const head2On = (lightCommand & HEAD2_LIGHT_MASK) !== 0;
+	switch (type) {
+	case "head1":
+		return head1On ? 0.72 : 0;
+	case "head2":
+		return head2On ? 0.72 : 0;
+	case "rear":
+		return head1On || head2On ? 0.24 : 0;
+	case "brake":
+	case "brake2":
+		return brake * 0.95;
+	default:
+		return 0;
+	}
+}
+
+function getCarLightScale(type, size) {
+	const spec = CAR_LIGHT_SPRITES[type] || CAR_LIGHT_SPRITES.rear;
+	const diameter = Math.max(0.04, size || 0.2);
+	return [diameter * spec.scale[0], diameter * spec.scale[1]];
 }
 
 function getWheelLocal(values, index, yOffset = 0) {
@@ -132,6 +177,7 @@ export class TorcsEffects {
 		this.shadow = this.createShadow();
 		this.skidMarks = this.createSkidMarks();
 		this.lightSprites = this.createLightSprites();
+		this.assetLightSprites = [];
 		this.collisionFlash = this.createCollisionFlash();
 		this.smokeParticles = [];
 		this.fireParticles = [];
@@ -168,6 +214,7 @@ export class TorcsEffects {
 		this.shadow.material.color.set(this.textures.shadow ? 0xffffff : 0x000000);
 		this.shadow.material.opacity = this.textures.shadow ? 0.54 : 0.34;
 		this.shadow.material.needsUpdate = true;
+		this.setAssetLights(asset && asset.entry ? asset.entry.lights : []);
 	}
 
 	setVisible(visible) {
@@ -176,6 +223,9 @@ export class TorcsEffects {
 		this.collisionFlash.visible = visible;
 		for (const sprite of Object.values(this.lightSprites)) {
 			sprite.visible = visible;
+		}
+		for (const record of this.assetLightSprites) {
+			record.sprite.visible = visible;
 		}
 		for (const particle of this.smokeParticles) {
 			particle.sprite.visible = visible;
@@ -268,6 +318,30 @@ export class TorcsEffects {
 		return sprites;
 	}
 
+	setAssetLights(lights = []) {
+		for (const record of this.assetLightSprites) {
+			this.groups.carLights.remove(record.sprite);
+			record.sprite.material.dispose();
+		}
+		this.assetLightSprites = [];
+		for (const light of lights || []) {
+			if (!isValidCarLight(light)) {
+				continue;
+			}
+			const spec = CAR_LIGHT_SPRITES[light.type];
+			const scale = getCarLightScale(light.type, light.size);
+			const sprite = new THREE.Sprite(makeSpriteMaterial(this.textures[spec.texture], spec.color, 0, true));
+			sprite.scale.set(scale[0], scale[1], 1);
+			sprite.userData.type = spec.texture;
+			this.groups.carLights.add(sprite);
+			this.assetLightSprites.push({
+				sprite,
+				type: light.type,
+				local: torcsToThree(light.position[0], light.position[1], light.position[2]),
+			});
+		}
+	}
+
 	createCollisionFlash() {
 		const mesh = new THREE.Mesh(
 			new THREE.RingGeometry(1.3, 1.55, 32),
@@ -290,6 +364,10 @@ export class TorcsEffects {
 		for (const sprite of Object.values(this.lightSprites)) {
 			sprite.material.map = this.textures[sprite.userData.type];
 			sprite.material.needsUpdate = true;
+		}
+		for (const record of this.assetLightSprites) {
+			record.sprite.material.map = this.textures[record.sprite.userData.type];
+			record.sprite.material.needsUpdate = true;
 		}
 		for (const particle of this.smokeParticles) {
 			particle.sprite.material.map = this.textures.smoke;
@@ -466,11 +544,23 @@ export class TorcsEffects {
 	}
 
 	updateLights(values, car) {
+		const lightCommand = values[SNAPSHOT.lightCommand] || 0;
+		const brake = clamp01(values[SNAPSHOT.controlBrake] || 0);
+		if (this.assetLightSprites.length > 0) {
+			for (const sprite of Object.values(this.lightSprites)) {
+				sprite.material.opacity = 0;
+			}
+			for (const record of this.assetLightSprites) {
+				worldFromCarLocal(car, record.local, tempVector2);
+				record.sprite.position.copy(tempVector2);
+				record.sprite.material.opacity = getCarLightOpacity(record.type, lightCommand, brake);
+			}
+			return;
+		}
 		const dimX = Math.max(0.4, values[SNAPSHOT.dimensionX]);
 		const dimY = Math.max(0.4, values[SNAPSHOT.dimensionY]);
 		const dimZ = Math.max(0.2, values[SNAPSHOT.dimensionZ]);
-		const headOn = ((values[SNAPSHOT.lightCommand] || 0) & HEAD_LIGHT_MASK) !== 0;
-		const brake = clamp01(values[SNAPSHOT.controlBrake] || 0);
+		const headOn = (lightCommand & HEAD_LIGHT_MASK) !== 0;
 		const lightPositions = {
 			headL: [dimX * 0.52, dimZ * 0.36, -dimY * 0.28],
 			headR: [dimX * 0.52, dimZ * 0.36, dimY * 0.28],
@@ -490,6 +580,9 @@ export class TorcsEffects {
 		this.lightSprites.rearR.material.opacity = 0.24 + brake * 0.22;
 		this.lightSprites.brakeL.material.opacity = brake * 0.95;
 		this.lightSprites.brakeR.material.opacity = brake * 0.95;
+		for (const record of this.assetLightSprites) {
+			record.sprite.material.opacity = 0;
+		}
 	}
 
 	updateCollision(values, car, time) {

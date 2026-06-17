@@ -129,6 +129,32 @@ function checkNumberTriplet(entry, field, label) {
 	}
 }
 
+function checkCarLights(entry, expectedTypes, label) {
+	if (!Array.isArray(entry.lights)) {
+		fail("TORCS web renderer smoke test found malformed car light metadata", { label });
+	}
+	for (const expectedType of expectedTypes) {
+		if (!entry.lights.some((light) => light && light.type === expectedType)) {
+			fail("TORCS web renderer smoke test missing expected car light type", {
+				label,
+				expectedType,
+				lights: entry.lights,
+			});
+		}
+	}
+	for (const light of entry.lights) {
+		if (!light || typeof light.type !== "string" ||
+			!Array.isArray(light.position) || light.position.length !== 3 ||
+			light.position.some((value) => typeof value !== "number" || !Number.isFinite(value)) ||
+			typeof light.size !== "number" || !Number.isFinite(light.size) || light.size <= 0) {
+			fail("TORCS web renderer smoke test found malformed car light", {
+				label,
+				light,
+			});
+		}
+	}
+}
+
 function extendBounds(bounds, x, z) {
 	bounds.minX = Math.min(bounds.minX, x);
 	bounds.maxX = Math.max(bounds.maxX, x);
@@ -966,6 +992,10 @@ requireText(byPath["renderer/effects.js"], "createSkidMarks()", "dynamic skid-ma
 requireText(byPath["renderer/effects.js"], "updateSmoke(values, car, time, deltaTime)", "smoke sprite update");
 requireText(byPath["renderer/effects.js"], "updateFire(values, car, time, deltaTime)", "exhaust fire sprite update");
 requireText(byPath["renderer/effects.js"], "updateLights(values, car)", "head rear brake light sprites");
+requireText(byPath["renderer/effects.js"], "asset.entry ? asset.entry.lights : []", "manifest-driven car light metadata handoff");
+requireText(byPath["renderer/effects.js"], "this.assetLightSprites.length > 0", "authored car light sprite path");
+requireText(byPath["renderer/effects.js"], "torcsToThree(light.position[0], light.position[1], light.position[2])", "TORCS car light coordinate conversion");
+requireText(byPath["renderer/effects.js"], "getCarLightOpacity(record.type, lightCommand, brake)", "authored car light state mapping");
 requireText(byPath["renderer/effects.js"], "updateCollision(values, car, time)", "collision feedback hook");
 requireText(byPath["renderer/effects.js"], "resetDynamics()", "dynamic effect lifecycle reset");
 requireText(byPath["renderer/effects.js"], "SNAPSHOT.wheelSkidIntensity0", "skid snapshot field use");
@@ -984,6 +1014,10 @@ if (byPath["renderer/effects.js"].content.includes("velocity: tempVector.copy(wo
 }
 if (byPath["renderer/effects.js"].content.includes("sideSlip * surface.initSpeed * 0.08,\n\t\t\t\t).multiplyScalar(deltaTime * 60)")) {
 	fail("TORCS web renderer smoke test found spawn-time-scaled smoke velocity");
+}
+if (byPath["renderer/effects.js"].content.includes("headL: [dimX * 0.52") &&
+	!byPath["renderer/effects.js"].content.includes("this.assetLightSprites.length > 0")) {
+	fail("TORCS web renderer smoke test found only hardcoded car light placement");
 }
 
 requireText(byPath["renderer/cameras.js"], "getTorcsPoseQuaternion(values, this.carRotation)", "camera pose matrix conversion");
@@ -1044,6 +1078,8 @@ for (const lod of car.lods) {
 		});
 	}
 }
+checkCarLights(car, ["head1", "rear", "brake"], car.name);
+checkCarLights(car7Trb1, ["rear", "brake2"], car7Trb1.name);
 checkMaterialMetadata(track, ["road", "grass", "barrier", "treeFoliage"], track.source);
 checkMaterialMetadata(car7Trb1.lods[0], ["body", "glass", "headlamp", "taillamp", "exhaust"], car7Trb1.lods[0].model);
 if (!car.wheelFallback || car.wheelFallback.source !== "runtime-snapshot" ||

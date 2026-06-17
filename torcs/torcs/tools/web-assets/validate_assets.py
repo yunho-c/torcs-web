@@ -22,6 +22,7 @@ DEFAULT_CAR_XMLS = [
 	GOLDEN_CAR_XML,
 	"data/cars/models/kc-a110/kc-a110.xml",
 ]
+VALID_CAR_LIGHT_TYPES = {"head1", "head2", "rear", "brake", "brake2"}
 
 
 def fail(message):
@@ -140,6 +141,23 @@ def check_material_metadata(lod):
 			raise ValueError(f"{lod.get('model', 'car LOD')} has material without object names")
 
 
+def check_car_lights(car):
+	lights = car.get("lights")
+	label = car.get("name", "car")
+	if not isinstance(lights, list):
+		raise ValueError(f"{label} has malformed light metadata")
+	for index, light in enumerate(lights):
+		light_label = f"{label} light {index}"
+		if not isinstance(light, dict):
+			raise ValueError(f"{light_label} has malformed light metadata")
+		if light.get("type") not in VALID_CAR_LIGHT_TYPES:
+			raise ValueError(f"{light_label} has unsupported type {light.get('type')}")
+		check_number_triplet(light, "position", light_label)
+		check_number(light, "size", light_label)
+		if light["size"] <= 0:
+			raise ValueError(f"{light_label} has non-positive size")
+
+
 def main():
 	args = parse_args()
 	manifest_path = args.manifest.resolve()
@@ -174,6 +192,7 @@ def main():
 			for texture in track.get("textures", {}).values():
 				check_texture(require(root, texture))
 		for car in cars.values():
+			check_car_lights(car)
 			wheel_fallback = car.get("wheelFallback") or {}
 			wheel_texture = wheel_fallback.get("texture")
 			if wheel_fallback.get("source") != "runtime-snapshot" or not wheel_texture:

@@ -83,6 +83,7 @@ CAR_INTERIOR_PATTERNS = [
 	"ROLLBAR",
 ]
 CAR_DRIVER_PATTERNS = ["DRIVER", "GIRTHS"]
+CAR_LIGHT_TYPES = {"head1", "head2", "rear", "brake", "brake2"}
 TRACK_ROAD_TEXTURE_PATTERNS = ["ROAD", "TARMAC", "ASPHALT", "TRKASPH", "TRKROAD"]
 TRACK_GRASS_TEXTURE_PATTERNS = ["GRASS", "GRAS", "LAWN"]
 TRACK_SAND_TEXTURE_PATTERNS = ["SAND", "GRAVEL", "DIRT", "MUD"]
@@ -232,6 +233,29 @@ def parse_track_metadata(source_root, track_xml):
 	}
 
 
+def parse_car_lights(objects):
+	lights = find_section(objects, "Light") if objects is not None else None
+	if lights is None:
+		return []
+	result = []
+	for child in lights:
+		if child.tag != "section":
+			continue
+		light_type = attstr(child, "type")
+		if light_type not in CAR_LIGHT_TYPES:
+			continue
+		result.append({
+			"type": light_type,
+			"position": [
+				attnum(child, "xpos"),
+				attnum(child, "ypos"),
+				attnum(child, "zpos"),
+			],
+			"size": attnum(child, "size", 0.2),
+		})
+	return result
+
+
 def parse_car_metadata(source_root, car_xml):
 	root = ElementTree.fromstring(clean_xml(source_root / car_xml))
 	objects = find_section(root, "Graphic Objects")
@@ -254,6 +278,7 @@ def parse_car_metadata(source_root, car_xml):
 		"name": root.attrib.get("name", car_xml.parent.name),
 		"wheelTexture": attstr(objects, "wheel texture"),
 		"shadowTexture": attstr(objects, "shadow texture"),
+		"lights": parse_car_lights(objects),
 		"sound": {
 			"engineSample": attstr(sound, "engine sample", "engine-1.wav") if sound is not None else "engine-1.wav",
 			"rpmScale": attnum(sound, "rpm scale", 1.0) if sound is not None else 1.0,
@@ -888,6 +913,7 @@ def convert_car(source_root, output_dir, car_xml):
 			"turboLag": car_meta["sound"]["turboLag"],
 		},
 		"lods": car_meta["lods"],
+		"lights": car_meta["lights"],
 		"materialMask": material_mask_output,
 		"textures": {
 			name: car_texture_outputs[name]

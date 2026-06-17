@@ -245,6 +245,29 @@ kids 0
 <section name="Graphic Objects">
 <attstr name="wheel texture" val="wheel.png"/>
 <attstr name="shadow texture" val="shadow.png"/>
+<section name="Light">
+<section name="1">
+<attstr name="type" val="head1"/>
+<attnum name="xpos" val="1.9"/>
+<attnum name="ypos" val="0.4"/>
+<attnum name="zpos" val="0.3"/>
+<attnum name="size" val="0.2"/>
+</section>
+<section name="2">
+<attstr name="type" val="rear"/>
+<attnum name="xpos" val="-1.8"/>
+<attnum name="ypos" val="-0.45"/>
+<attnum name="zpos" val="0.35"/>
+<attnum name="size" val="0.1"/>
+</section>
+<section name="3">
+<attstr name="type" val="brake"/>
+<attnum name="xpos" val="-1.8"/>
+<attnum name="ypos" val="0.45"/>
+<attnum name="zpos" val="0.35"/>
+<attnum name="size" val="0.2"/>
+</section>
+</section>
 <section name="Ranges">
 <section name="1">
 <attnum name="threshold" val="0"/>
@@ -289,6 +312,11 @@ kids 0
 			_, entry, textures, _ = convert.convert_car(source_root, output_dir, car_xml)
 
 			self.assertEqual(entry["materialMask"], "cars/demo-car/demo-car-material-mask.png")
+			self.assertEqual(entry["lights"], [
+				{"type": "head1", "position": [1.9, 0.4, 0.3], "size": 0.2},
+				{"type": "rear", "position": [-1.8, -0.45, 0.35], "size": 0.1},
+				{"type": "brake", "position": [-1.8, 0.45, 0.35], "size": 0.2},
+			])
 			self.assertIn("cars/demo-car/demo-car-material-mask.png", textures)
 			self.assertTrue((output_dir / entry["materialMask"]).exists())
 
