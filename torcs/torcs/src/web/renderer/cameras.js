@@ -34,6 +34,15 @@ const CAMERA_MODES = {
 		far: 4000,
 	},
 };
+const CAMERA_LOOKAROUNDS = {
+	left: { side: 1, forward: 0 },
+	right: { side: -1, forward: 0 },
+	front: { side: 0, forward: 1 },
+};
+const LOOKAROUND_DISTANCE_SCALE = 1.55;
+const LOOKAROUND_SIDE_DISTANCE_SCALE = 3.8;
+const LOOKAROUND_HEIGHT = 1.8;
+const LOOKAROUND_TARGET_HEIGHT = 0.95;
 
 export class CameraRig {
 	constructor(canvas) {
@@ -42,6 +51,7 @@ export class CameraRig {
 		this.target = new THREE.Vector3();
 		this.carRotation = new THREE.Quaternion();
 		this.forward = new THREE.Vector3();
+		this.side = new THREE.Vector3();
 		this.up = new THREE.Vector3();
 		this.trackView = null;
 		this.tracksideViews = [];
@@ -102,8 +112,14 @@ export class CameraRig {
 		this.camera.updateProjectionMatrix();
 	}
 
-	update(values) {
+	update(values, lookaround = "") {
 		const car = torcsToThree(values[SNAPSHOT.x], values[SNAPSHOT.y], values[SNAPSHOT.z]);
+		const hasLookaround = Object.hasOwn(CAMERA_LOOKAROUNDS, lookaround);
+		if (hasLookaround) {
+			this.updateCarBasis(values);
+			this.updateLookaround(values, car, lookaround);
+			return;
+		}
 		if (this.mode === "top") {
 			const view = this.trackView || { center: car, height: 260 };
 			this.camera.position.set(view.center.x, view.height, view.center.z);
@@ -124,9 +140,7 @@ export class CameraRig {
 		}
 
 		this.camera.up.set(0, 1, 0);
-		getTorcsPoseQuaternion(values, this.carRotation);
-		this.forward.set(1, 0, 0).applyQuaternion(this.carRotation).normalize();
-		this.up.set(0, 1, 0).applyQuaternion(this.carRotation).normalize();
+		this.updateCarBasis(values);
 
 		const settings = CAMERA_MODES[this.mode];
 		const carHeight = Math.max(0.1, values[SNAPSHOT.dimensionZ]);
@@ -145,6 +159,27 @@ export class CameraRig {
 			.addScaledVector(this.forward, settings.targetAhead)
 			.add(new THREE.Vector3(0, settings.targetHeight, 0));
 		this.camera.position.copy(cameraPos);
+		this.camera.lookAt(this.target);
+	}
+
+	updateCarBasis(values) {
+		getTorcsPoseQuaternion(values, this.carRotation);
+		this.forward.set(1, 0, 0).applyQuaternion(this.carRotation).normalize();
+		this.side.set(0, 0, -1).applyQuaternion(this.carRotation).normalize();
+		this.up.set(0, 1, 0).applyQuaternion(this.carRotation).normalize();
+	}
+
+	updateLookaround(values, car, lookaround) {
+		const view = CAMERA_LOOKAROUNDS[lookaround];
+		const dimX = Math.max(0.1, values[SNAPSHOT.dimensionX]);
+		const dimY = Math.max(0.1, values[SNAPSHOT.dimensionY]);
+		const distance = Math.max(6, dimX * LOOKAROUND_DISTANCE_SCALE, dimY * LOOKAROUND_SIDE_DISTANCE_SCALE);
+		this.camera.up.set(0, 1, 0);
+		this.target.copy(car).add(new THREE.Vector3(0, LOOKAROUND_TARGET_HEIGHT, 0));
+		this.camera.position.copy(car)
+			.addScaledVector(this.forward, view.forward * distance)
+			.addScaledVector(this.side, view.side * distance)
+			.add(new THREE.Vector3(0, LOOKAROUND_HEIGHT, 0));
 		this.camera.lookAt(this.target);
 	}
 

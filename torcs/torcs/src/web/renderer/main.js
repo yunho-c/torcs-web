@@ -162,7 +162,7 @@ function readAndRender(deltaTime = 0) {
 		return;
 	}
 	hud.update(snapshot, snapshots, selectedCarIndex);
-	cameras.update(snapshot);
+	cameras.update(snapshot, input ? input.getCameraLookaround() : "");
 	scene.updateCars(snapshots, cameras.camera, selectedCarIndex);
 	audio.update(snapshot, cameras.camera, deltaTime);
 	scene.render(cameras.camera);
@@ -274,7 +274,7 @@ async function startSession() {
 	snapshots = runtime.readSnapshots();
 	snapshot = findSnapshotByCarIndex(selectedCarIndex) || snapshots[0] || null;
 	syncCurrentCarOptions();
-	cameras.update(snapshot);
+	cameras.update(snapshot, input ? input.getCameraLookaround() : "");
 	scene.updateCars(snapshots, cameras.camera, selectedCarIndex);
 	hud.setState("ready");
 	setEnabled(true);

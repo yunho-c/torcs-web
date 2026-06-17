@@ -417,6 +417,52 @@ async function checkInputControllerBehavior() {
 			gear: Number(elements.gear.value),
 		});
 
+		input.handleKey({
+			code: "BracketLeft",
+			repeat: false,
+			preventDefault() {},
+		}, true);
+		assertInput(input.getCameraLookaround() === "left", "left lookaround key is held temporarily", {
+			lookaround: input.getCameraLookaround(),
+		});
+		input.handleKey({
+			code: "BracketRight",
+			repeat: false,
+			preventDefault() {},
+		}, true);
+		assertInput(input.getCameraLookaround() === "right", "right lookaround key overrides while held", {
+			lookaround: input.getCameraLookaround(),
+		});
+		input.handleKey({
+			code: "BracketRight",
+			repeat: false,
+			preventDefault() {},
+		}, false);
+		assertInput(input.getCameraLookaround() === "left", "lookaround release returns to previous held direction", {
+			lookaround: input.getCameraLookaround(),
+		});
+		input.handleKey({
+			code: "BracketLeft",
+			repeat: false,
+			preventDefault() {},
+		}, false);
+		input.handleKey({
+			code: "Backslash",
+			repeat: false,
+			preventDefault() {},
+		}, true);
+		assertInput(input.getCameraLookaround() === "front", "front lookaround key is held temporarily", {
+			lookaround: input.getCameraLookaround(),
+		});
+		input.handleKey({
+			code: "Backslash",
+			repeat: false,
+			preventDefault() {},
+		}, false);
+		assertInput(input.getCameraLookaround() === "", "lookaround release returns to normal camera", {
+			lookaround: input.getCameraLookaround(),
+		});
+
 		const idleElements = makeInputElements();
 		const idleInput = new InputController(idleElements, () => {});
 		const oldNavigator = globalThis.navigator;
@@ -883,6 +929,7 @@ requireText(byPath["renderer/main.js"], "audio.update(snapshot, cameras.camera, 
 requireText(byPath["renderer/main.js"], "audio.enable(elements.car.value)", "user-gesture audio unlock");
 requireText(byPath["renderer/main.js"], "hud.setTrack(trackSamples)", "Phase 5 HUD track-map handoff");
 requireText(byPath["renderer/main.js"], "input.update(deltaTime, snapshot)", "TORCS-faithful per-frame input polling");
+requireText(byPath["renderer/main.js"], "input ? input.getCameraLookaround() : \"\"", "temporary camera lookaround handoff");
 
 requireText(byPath["renderer/hud.js"], "fmtTime(value)", "Phase 5 lap time formatting");
 requireText(byPath["renderer/hud.js"], "setTrack(track)", "Phase 5 track map setup");
@@ -900,6 +947,10 @@ requireText(byPath["renderer/input.js"], "DIGITAL_PEDAL_INC_RATE", "TORCS digita
 requireText(byPath["renderer/input.js"], "GAMEPAD_GEAR_BUTTONS", "DualSense-compatible gamepad gear buttons");
 requireText(byPath["renderer/input.js"], "this.setRangeValue(this.elements.steer, axis(0))", "Phase 5 gamepad steering");
 requireText(byPath["renderer/input.js"], "this.changeGear(delta)", "Phase 5 gamepad gear buttons");
+requireText(byPath["renderer/input.js"], "\"BracketLeft\", \"left\"", "left camera lookaround key");
+requireText(byPath["renderer/input.js"], "\"BracketRight\", \"right\"", "right camera lookaround key");
+requireText(byPath["renderer/input.js"], "\"Backslash\", \"front\"", "front camera lookaround key");
+requireText(byPath["renderer/input.js"], "getCameraLookaround()", "temporary camera lookaround state");
 
 requireText(byPath["renderer/audio.js"], "export class TorcsAudio", "audio runtime export");
 requireText(byPath["renderer/audio.js"], "export class AudioAssets", "audio asset loader export");
@@ -1028,6 +1079,8 @@ requireText(byPath["renderer/cameras.js"], "fov: 30", "TORCS road camera FOV");
 requireText(byPath["renderer/cameras.js"], "this.tracksideViews = this.makeTracksideViews(min, max, center, span)", "generated trackside camera placement");
 requireText(byPath["renderer/cameras.js"], "selectTracksideView(car)", "nearest trackside camera selection");
 requireText(byPath["renderer/cameras.js"], "this.trackView = { center, height: span * 0.78 }", "fixed top alignment camera framing");
+requireText(byPath["renderer/cameras.js"], "CAMERA_LOOKAROUNDS", "temporary camera lookaround modes");
+requireText(byPath["renderer/cameras.js"], "updateLookaround(values, car, lookaround)", "temporary car-relative lookaround camera");
 requireText(byPath["renderer/main.js"], "cameras.setTrack(trackSamples)", "camera track-sample alignment handoff");
 if (byPath["renderer/cameras.js"].content.includes("Math.cos(yaw)")) {
 	fail("TORCS web renderer smoke test found scalar-yaw camera direction");

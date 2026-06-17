@@ -13,6 +13,11 @@ const GAMEPAD_GEAR_BUTTONS = [
 	[4, -1], // L1/LB
 	[1, -1], // Circle/B, matching TORCS default BTN2 downshift
 ];
+const CAMERA_LOOKAROUND_KEYS = new Map([
+	["BracketLeft", "left"],
+	["BracketRight", "right"],
+	["Backslash", "front"],
+]);
 
 function clamp(value, min, max) {
 	return Math.max(min, Math.min(max, value));
@@ -28,6 +33,7 @@ export class InputController {
 		this.elements = elements;
 		this.onChange = onChange;
 		this.keys = new Set();
+		this.lookaroundKeys = [];
 		this.gamepadGearButtons = new Set();
 		this.keyboardState = {
 			leftSteer: 0,
@@ -48,6 +54,11 @@ export class InputController {
 			clutch: Number(this.elements.clutch.value),
 			gear: Number(this.elements.gear.value),
 		};
+	}
+
+	getCameraLookaround() {
+		const code = this.lookaroundKeys[this.lookaroundKeys.length - 1];
+		return CAMERA_LOOKAROUND_KEYS.get(code) || "";
 	}
 
 	setValue(input, value) {
@@ -207,6 +218,14 @@ export class InputController {
 	}
 
 	handleKey(event, pressed) {
+		if (CAMERA_LOOKAROUND_KEYS.has(event.code)) {
+			event.preventDefault();
+			this.lookaroundKeys = this.lookaroundKeys.filter((code) => code !== event.code);
+			if (pressed) {
+				this.lookaroundKeys.push(event.code);
+			}
+			return;
+		}
 		const controlCodes = new Set([
 			"ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown",
 			"KeyA", "KeyD", "KeyW", "KeyS", "Space", "KeyQ", "KeyE",
