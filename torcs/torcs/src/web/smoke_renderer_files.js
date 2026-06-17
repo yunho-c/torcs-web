@@ -326,7 +326,10 @@ function makeGamepad({ axes = [], axis0 = 0, brake = 0, accel = 0, pressed = [] 
 	buttons[7].value = accel;
 	return {
 		connected: true,
-		axes: [axis0, 0, 0, 0].map((value, index) => axes[index] ?? value),
+		axes: Array.from({ length: Math.max(8, axes.length) }, (_, index) => {
+			const fallback = index === 0 ? axis0 : 0;
+			return axes[index] ?? fallback;
+		}),
 		buttons,
 	};
 }
@@ -592,6 +595,58 @@ async function checkInputControllerBehavior() {
 		assertInput(Math.abs(Number(elements.brake.value) - 0.35) < 0.000001, "gamepad left trigger controls brake", {
 			brake: Number(elements.brake.value),
 		});
+		input.updateGamepad(makeGamepad({ axes: [0, 0, 0, 0, 0.42, 0.73], brake: 1, accel: 1, pressed: [5] }));
+		assertInput(Math.abs(Number(elements.accel.value) - 0.73) < 0.000001, "gamepad trigger axis fallback controls throttle depth", {
+			accel: Number(elements.accel.value),
+		});
+		assertInput(Math.abs(Number(elements.brake.value) - 0.42) < 0.000001, "gamepad trigger axis fallback controls brake depth", {
+			brake: Number(elements.brake.value),
+		});
+		const throttleLeakElements = makeInputElements();
+		const throttleLeakInput = new InputController(throttleLeakElements, () => {});
+		throttleLeakInput.updateGamepad(makeGamepad({ axes: [0, 0, 0, 0, 0, 0, 0.66, 0.42], brake: 1 }));
+		assertInput(Number(throttleLeakElements.accel.value) === 0,
+			"brake button suppresses stray throttle-axis fallback", {
+				accel: Number(throttleLeakElements.accel.value),
+			});
+		assertInput(Math.abs(Number(throttleLeakElements.brake.value) - 0.42) < 0.000001,
+			"brake button still allows brake-axis fallback depth", {
+				brake: Number(throttleLeakElements.brake.value),
+			});
+		const brakeLeakElements = makeInputElements();
+		const brakeLeakInput = new InputController(brakeLeakElements, () => {});
+		brakeLeakInput.updateGamepad(makeGamepad({ axes: [0, 0, 0, 0, 0.42, 0, 0.66, 0.44], accel: 1 }));
+		assertInput(Math.abs(Number(brakeLeakElements.accel.value) - 0.66) < 0.000001,
+			"throttle button still allows throttle-axis fallback depth", {
+				accel: Number(brakeLeakElements.accel.value),
+			});
+		assertInput(Number(brakeLeakElements.brake.value) === 0,
+			"throttle button suppresses stray brake-axis fallback", {
+				brake: Number(brakeLeakElements.brake.value),
+			});
+		const signedTriggerElements = makeInputElements();
+		const signedTriggerInput = new InputController(signedTriggerElements, () => {});
+		signedTriggerInput.updateGamepad(makeGamepad({ axes: [0, 0, 0, 0, 0, 0, -1, -1] }));
+		signedTriggerInput.updateGamepad(makeGamepad({ axes: [0, 0, 0, 0, 0, 0, 0.5, 0] }));
+		assertInput(Math.abs(Number(signedTriggerElements.brake.value) - 0.5) < 0.000001,
+			"signed gamepad trigger axis fallback normalizes brake depth", {
+				brake: Number(signedTriggerElements.brake.value),
+			});
+		assertInput(Math.abs(Number(signedTriggerElements.accel.value) - 0.75) < 0.000001,
+			"signed gamepad trigger axis fallback normalizes throttle depth", {
+				accel: Number(signedTriggerElements.accel.value),
+			});
+		const triggerNoiseInput = new InputController(makeInputElements(), () => {});
+		assertInput(!triggerNoiseInput.hasGamepadInput(makeGamepad({ axes: [0, 0, 0, 0, 0.01, 0.01] })),
+			"gamepad trigger axis fallback ignores idle noise");
+		const rightStickOnlyElements = makeInputElements();
+		const rightStickOnlyInput = new InputController(rightStickOnlyElements, () => {});
+		rightStickOnlyInput.updateGamepad(makeGamepad({ axes: [0, 0, 0.65, -0.65] }));
+		assertInput(Number(rightStickOnlyElements.accel.value) === 0 && Number(rightStickOnlyElements.brake.value) === 0,
+			"right stick axes are not treated as trigger fallbacks", {
+				accel: Number(rightStickOnlyElements.accel.value),
+				brake: Number(rightStickOnlyElements.brake.value),
+			});
 		assertInput(Number(elements.gear.value) === 1, "gamepad shoulder waits for native release edge", {
 			gear: Number(elements.gear.value),
 		});

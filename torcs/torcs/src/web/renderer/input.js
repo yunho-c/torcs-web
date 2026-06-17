@@ -5,8 +5,11 @@ const KEYBOARD_STEER_SPEED_SENSITIVITY = 0.7 / 100;
 const DIGITAL_PEDAL_INC_RATE = 0.2;
 const GAMEPAD_AXIS_DEAD_ZONE = 0.08;
 const GAMEPAD_STEER_SENSITIVITY = 1 / 0.8;
+const GAMEPAD_TRIGGER_DEAD_ZONE = 0.02;
 const GAMEPAD_BRAKE_BUTTON = 6;
 const GAMEPAD_ACCEL_BUTTON = 7;
+const GAMEPAD_BRAKE_AXIS_CANDIDATES = [7, 4];
+const GAMEPAD_ACCEL_AXIS_CANDIDATES = [6, 5];
 const GAMEPAD_LOOK_X_AXIS = 2;
 const GAMEPAD_LOOK_Y_AXIS = 3;
 const GAMEPAD_LOOK_BUTTON = 11;
@@ -44,6 +47,7 @@ export class InputController {
 		};
 		this.gamepadLookButtonHeld = false;
 		this.gamepadGearButtons = new Set();
+		this.gamepadTriggerAxisModes = new Map();
 		this.keyboardState = {
 			leftSteer: 0,
 			rightSteer: 0,
@@ -118,6 +122,56 @@ export class InputController {
 		return Math.sign(value) * ((magnitude - GAMEPAD_AXIS_DEAD_ZONE) / (1 - GAMEPAD_AXIS_DEAD_ZONE));
 	}
 
+	shapeGamepadTriggerAxis(value, modeKey) {
+		if (!Number.isFinite(value)) {
+			return 0;
+		}
+		const clamped = clamp(value, -1, 1);
+		if (clamped < -0.5) {
+			this.gamepadTriggerAxisModes.set(modeKey, "signed");
+		}
+		const triggerValue = this.gamepadTriggerAxisModes.get(modeKey) === "signed" ?
+			(clamped + 1) / 2 :
+			clamped;
+		return triggerValue > GAMEPAD_TRIGGER_DEAD_ZONE ? clamp(triggerValue, 0, 1) : 0;
+	}
+
+	getGamepadButtonValue(buttons, buttonIndex) {
+		const button = buttons[buttonIndex];
+		const buttonValue = button && Number.isFinite(button.value) ? button.value : 0;
+		return clamp(buttonValue, 0, 1);
+	}
+
+	getGamepadTriggerAxis(gamepad, axisCandidates, modeKey) {
+		const axes = gamepad.axes || [];
+		let axisValue = 0;
+		for (const index of axisCandidates) {
+			if (index < axes.length) {
+				axisValue = Math.max(axisValue, this.shapeGamepadTriggerAxis(axes[index], `${modeKey}:${index}`));
+			}
+		}
+		return axisValue;
+	}
+
+	getGamepadPedals(gamepad) {
+		const buttons = gamepad.buttons || [];
+		const brakeButton = this.getGamepadButtonValue(buttons, GAMEPAD_BRAKE_BUTTON);
+		const accelButton = this.getGamepadButtonValue(buttons, GAMEPAD_ACCEL_BUTTON);
+		let brakeAxis = this.getGamepadTriggerAxis(gamepad, GAMEPAD_BRAKE_AXIS_CANDIDATES, "brake");
+		let accelAxis = this.getGamepadTriggerAxis(gamepad, GAMEPAD_ACCEL_AXIS_CANDIDATES, "accel");
+
+		if (brakeButton > GAMEPAD_TRIGGER_DEAD_ZONE && accelButton <= GAMEPAD_TRIGGER_DEAD_ZONE) {
+			accelAxis = 0;
+		}
+		if (accelButton > GAMEPAD_TRIGGER_DEAD_ZONE && brakeButton <= GAMEPAD_TRIGGER_DEAD_ZONE) {
+			brakeAxis = 0;
+		}
+		return {
+			brake: brakeAxis > 0 ? brakeAxis : brakeButton,
+			accel: accelAxis > 0 ? accelAxis : accelButton,
+		};
+	}
+
 	rampKeyboardSteer(previous, pressed, deltaTime, speed) {
 		if (!pressed) {
 			return 0;
@@ -181,9 +235,10 @@ export class InputController {
 			return false;
 		}
 		const button = (index) => gamepad.buttons && gamepad.buttons[index] ? gamepad.buttons[index].value : 0;
+		const { brake, accel } = this.getGamepadPedals(gamepad);
 		return Math.abs((gamepad.axes || [])[0] || 0) > GAMEPAD_AXIS_DEAD_ZONE ||
-			button(GAMEPAD_BRAKE_BUTTON) > 0.01 ||
-			button(GAMEPAD_ACCEL_BUTTON) > 0.01 ||
+			brake > GAMEPAD_TRIGGER_DEAD_ZONE ||
+			accel > GAMEPAD_TRIGGER_DEAD_ZONE ||
 			GAMEPAD_GEAR_BUTTONS.some(([index]) => button(index) > 0.5);
 	}
 
@@ -191,6 +246,7 @@ export class InputController {
 		this.setRangeValue(this.elements.steer, 0);
 		this.setRangeValue(this.elements.accel, 0);
 		this.setRangeValue(this.elements.brake, 0);
+		this.gamepadTriggerAxisModes.clear();
 		this.gamepadGearButtons.clear();
 		this.onChange(this.getControls());
 	}
@@ -225,10 +281,11 @@ export class InputController {
 		const axis = (index) => this.shapeGamepadAxis(gamepad.axes[index] || 0);
 		const button = (index) => gamepad.buttons[index] ? gamepad.buttons[index].value : 0;
 		const pressed = (index) => button(index) > 0.5;
+		const { accel, brake } = this.getGamepadPedals(gamepad);
 
 		this.setRangeValue(this.elements.steer, axis(0));
-		this.setRangeValue(this.elements.accel, button(GAMEPAD_ACCEL_BUTTON));
-		this.setRangeValue(this.elements.brake, button(GAMEPAD_BRAKE_BUTTON));
+		this.setRangeValue(this.elements.accel, accel);
+		this.setRangeValue(this.elements.brake, brake);
 
 		for (const [index, delta] of GAMEPAD_GEAR_BUTTONS) {
 			if (pressed(index)) {
