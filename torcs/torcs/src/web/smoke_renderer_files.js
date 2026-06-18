@@ -1156,7 +1156,7 @@ requireText(byPath["renderer/scene.js"], "setObjectQuaternionFromTorcsPosMat(thi
 requireText(byPath["renderer/scene.js"], "CAR_ROTATION_MATRIX.multiplyMatrices(TORCS_TO_THREE_BASIS, TORCS_POS_MATRIX)", "TORCS-to-Three body basis conversion");
 requireText(byPath["renderer/scene.js"], "wheelBrakeTemp0", "brake heat wheel feedback");
 requireText(byPath["renderer/scene.js"], "wheel.camber.rotation.x", "wheel camber transform node");
-requireText(byPath["renderer/scene.js"], "wheel.spin.rotation.z", "wheel spin transform node");
+requireText(byPath["renderer/scene.js"], "wheel.spin.rotation.z = -(values[SNAPSHOT.wheelSpinAngle0 + index] || 0)", "wheel spin transform node");
 requireText(byPath["renderer/scene.js"], "selectCarLod(camera)", "deterministic car LOD switching");
 requireText(byPath["renderer/scene.js"], "getCarLodFactor(camera, this.car.position", "TORCS-style car LOD factor");
 requireText(byPath["renderer/scene.js"], "lodFactor >= item.lod.threshold", "native car LOD threshold comparison");

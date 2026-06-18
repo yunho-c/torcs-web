@@ -684,7 +684,7 @@ export class TorcsScene {
 			));
 			wheel.steer.rotation.y = values[SNAPSHOT.wheelSteerAngle0 + index];
 			wheel.camber.rotation.x = values[SNAPSHOT.wheelRelRoll0 + index];
-			wheel.spin.rotation.z = values[SNAPSHOT.wheelSpinAngle0 + index];
+			wheel.spin.rotation.z = -(values[SNAPSHOT.wheelSpinAngle0 + index] || 0);
 			if (wheel.scale) {
 				wheel.scale.scale.set(radius * 2, radius * 2, width);
 			}
@@ -921,7 +921,7 @@ export class TorcsScene {
 			));
 			wheel.steer.rotation.y = values[SNAPSHOT.wheelSteerAngle0 + index];
 			wheel.camber.rotation.x = values[SNAPSHOT.wheelRelRoll0 + index];
-			wheel.spin.rotation.z = values[SNAPSHOT.wheelSpinAngle0 + index];
+			wheel.spin.rotation.z = -(values[SNAPSHOT.wheelSpinAngle0 + index] || 0);
 			if (wheel.scale) {
 				wheel.scale.scale.set(radius * 2, radius * 2, width);
 			}
