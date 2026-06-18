@@ -258,6 +258,37 @@ async function importInputModuleForSmoke() {
 	}
 }
 
+async function importHapticsModuleForSmoke() {
+	const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "torcs-haptics-smoke-"));
+	const rendererDir = path.join(tempDir, "renderer");
+	fs.mkdirSync(rendererDir, { recursive: true });
+	try {
+		const hapticsSource = byPath["renderer/haptics.js"].content.replace(
+			"import { Dualsense, TriggerEffect, findDualsenseAudioDevices } from \"dualsense-ts\";",
+			`const TriggerEffect = {
+\tFeedback: "feedback",
+\tVibration: "vibration",
+};
+class Dualsense {}
+async function findDualsenseAudioDevices() {
+\treturn { outputs: [], inputs: [] };
+}`,
+		);
+		fs.writeFileSync(path.join(tempDir, "package.json"), "{\"type\":\"module\"}\n", "utf8");
+		fs.writeFileSync(path.join(rendererDir, "haptics.js"), hapticsSource, "utf8");
+		fs.writeFileSync(path.join(rendererDir, "runtime.js"), byPath["renderer/runtime.js"].content, "utf8");
+		const tag = Date.now();
+		const hapticsModule = await import(`${pathToFileURL(path.join(rendererDir, "haptics.js")).href}?smoke=${tag}`);
+		const runtimeModule = await import(`${pathToFileURL(path.join(rendererDir, "runtime.js")).href}?smoke=${tag}`);
+		return {
+			...hapticsModule,
+			SNAPSHOT: runtimeModule.SNAPSHOT,
+		};
+	} finally {
+		fs.rmSync(tempDir, { recursive: true, force: true });
+	}
+}
+
 function makeAudioSnapshot(SNAPSHOT, overrides = {}) {
 	const values = new Array(193).fill(0);
 	values[SNAPSHOT.x] = 10;
@@ -341,6 +372,74 @@ function assertInput(condition, label, details = {}) {
 			...details,
 		});
 	}
+}
+
+function assertHaptics(condition, label, details = {}) {
+	if (!condition) {
+		fail("TORCS web renderer smoke test found haptics behavior mismatch", {
+			label,
+			...details,
+		});
+	}
+}
+
+async function checkHapticsModelBehavior() {
+	const { DualSenseTelemetryModel, SNAPSHOT } = await importHapticsModuleForSmoke();
+	const lowThrottle = new DualSenseTelemetryModel().update(makeAudioSnapshot(SNAPSHOT, {
+		controlAccel: 0.15,
+		engineRpm: 4200,
+		engineRedline: 7000,
+	}));
+	const highThrottle = new DualSenseTelemetryModel().update(makeAudioSnapshot(SNAPSHOT, {
+		controlAccel: 0.95,
+		engineRpm: 4200,
+		engineRedline: 7000,
+	}));
+	assertHaptics(
+		highThrottle.engine.amplitude > lowThrottle.engine.amplitude,
+		"engine haptics amplitude rises with throttle at fixed RPM",
+		{ low: lowThrottle.engine.amplitude, high: highThrottle.engine.amplitude },
+	);
+
+	const leftDirtValues = makeAudioSnapshot(SNAPSHOT, { speed: 44 });
+	for (const index of [1, 3]) {
+		leftDirtValues[SNAPSHOT.wheelSurfaceKind0 + index] = 4;
+		leftDirtValues[SNAPSHOT.wheelRoughness0 + index] = 0.85;
+		leftDirtValues[SNAPSHOT.wheelReaction0 + index] = 5200;
+	}
+	for (const index of [0, 2]) {
+		leftDirtValues[SNAPSHOT.wheelSurfaceKind0 + index] = 0;
+		leftDirtValues[SNAPSHOT.wheelRoughness0 + index] = 0.04;
+		leftDirtValues[SNAPSHOT.wheelReaction0 + index] = 1800;
+	}
+	const leftDirt = new DualSenseTelemetryModel().update(leftDirtValues);
+	assertHaptics(leftDirt.left.texture > leftDirt.right.texture * 1.8, "left-side rough surface routes to left haptics", {
+		left: leftDirt.left.texture,
+		right: leftDirt.right.texture,
+	});
+
+	const gearModel = new DualSenseTelemetryModel();
+	const gearValues = makeAudioSnapshot(SNAPSHOT, { gearChangeEvent: 1 });
+	const firstGear = gearModel.update(gearValues);
+	const secondGear = gearModel.update(gearValues);
+	assertHaptics(firstGear.transients.gear && !secondGear.transients.gear, "gear-change haptic transient is edge-triggered", {
+		first: firstGear.transients.gear,
+		second: secondGear.transients.gear,
+	});
+
+	const absValues = makeAudioSnapshot(SNAPSHOT, { controlBrake: 0.9 });
+	absValues[SNAPSHOT.wheelSkidIntensity0 + 0] = 0.85;
+	absValues[SNAPSHOT.wheelSlipAccel0 + 0] = 18;
+	const absModel = new DualSenseTelemetryModel().update(absValues);
+	assertHaptics(absModel.triggers.brake.effect === "vibration", "front slip under braking maps to L2 ABS trigger vibration", {
+		trigger: absModel.triggers.brake,
+	});
+
+	return {
+		engineHz: highThrottle.engine.frequency,
+		leftTexture: leftDirt.left.texture,
+		absTrigger: absModel.triggers.brake.effect,
+	};
 }
 
 async function checkInputControllerBehavior() {
@@ -980,6 +1079,7 @@ const files = [
 	"renderer/scene.js",
 	"renderer/effects.js",
 	"renderer/audio.js",
+	"renderer/haptics.js",
 	"renderer/cameras.js",
 	"renderer/input.js",
 	"renderer/hud.js",
@@ -1004,6 +1104,10 @@ requireText(byPath["torcs_web_renderer.html"], "<option value=\"trackside\">Trac
 requireText(byPath["torcs_web_renderer.html"], "id=\"audio\"", "audio unlock button");
 requireText(byPath["torcs_web_renderer.html"], "id=\"volume\"", "audio volume slider");
 requireText(byPath["torcs_web_renderer.html"], "id=\"audio-state\"", "audio status readout");
+requireText(byPath["torcs_web_renderer.html"], "id=\"haptics\"", "DualSense haptics unlock button");
+requireText(byPath["torcs_web_renderer.html"], "id=\"haptics-intensity\"", "DualSense haptics intensity slider");
+requireText(byPath["torcs_web_renderer.html"], "id=\"haptics-state\"", "DualSense haptics status readout");
+requireText(byPath["torcs_web_renderer.html"], "https://esm.sh/dualsense-ts@6.15.0?bundle", "pinned dualsense-ts import map");
 requireText(byPath["torcs_web_renderer.html"], "id=\"track-map\"", "Phase 5 track map canvas");
 requireText(byPath["torcs_web_renderer.html"], "id=\"car-count\"", "Phase 6 car count control");
 requireText(byPath["torcs_web_renderer.html"], "id=\"current-car\"", "Phase 6 current car selector");
@@ -1130,10 +1234,13 @@ requireText(byPath["renderer/runtime.js"], "collision: 114", "Phase 4 collision 
 
 requireText(byPath["renderer/main.js"], "createTorcsRuntime", "runtime factory import");
 requireText(byPath["renderer/main.js"], "import { TorcsAudio } from \"./audio.js\"", "audio runtime import");
+requireText(byPath["renderer/main.js"], "import { DualSenseHaptics } from \"./haptics.js\"", "DualSense haptics runtime import");
 requireText(byPath["renderer/main.js"], "new AssetManager", "asset manager creation");
 requireText(byPath["renderer/main.js"], "new TorcsAudio(\"./web-assets/\"", "audio runtime creation");
+requireText(byPath["renderer/main.js"], "new DualSenseHaptics", "DualSense haptics runtime creation");
 requireText(byPath["renderer/main.js"], "new AssetManager(\"./web-assets/\", scene.renderer, activeRenderProfile)", "asset render profile handoff");
 requireText(byPath["renderer/main.js"], "audio.enabled ? \"Stop\" : \"Audio\"", "audio button start/stop label");
+requireText(byPath["renderer/main.js"], "haptics.enabled ? \"Stop\" : \"Haptics\"", "haptics button start/stop label");
 requireText(byPath["renderer/main.js"], "scene = await TorcsScene.create(elements.canvas)", "async WebGPU scene creation");
 requireText(byPath["renderer/main.js"], "scene.setRenderProfile(activeRenderProfile)", "scene render profile handoff");
 requireText(byPath["renderer/main.js"], "scene.setLightIntensityScale(activeLightIntensity)", "scene light intensity handoff");
@@ -1152,7 +1259,9 @@ requireText(byPath["renderer/main.js"], "scene.setTrackAtmosphere(track ? track.
 requireText(byPath["renderer/main.js"], "assets.loadEffects()", "effect texture asset loading");
 requireText(byPath["renderer/main.js"], "scene.setEffectTextures(effects ? effects.textures : null)", "effect texture scene handoff");
 requireText(byPath["renderer/main.js"], "audio.update(snapshot, cameras.camera, deltaTime)", "snapshot-driven audio update");
+requireText(byPath["renderer/main.js"], "haptics.update(snapshot, deltaTime)", "snapshot-driven DualSense haptics update");
 requireText(byPath["renderer/main.js"], "audio.enable(elements.car.value)", "user-gesture audio unlock");
+requireText(byPath["renderer/main.js"], "haptics.enable()", "user-gesture haptics unlock");
 requireText(byPath["renderer/main.js"], "hud.setTrack(trackSamples)", "Phase 5 HUD track-map handoff");
 requireText(byPath["renderer/main.js"], "input.update(deltaTime, snapshot)", "TORCS-faithful per-frame input polling");
 requireText(byPath["renderer/main.js"], "input ? input.getCameraLookaround() : \"\"", "temporary camera lookaround handoff");
@@ -1201,6 +1310,13 @@ requireText(byPath["renderer/audio.js"], "SNAPSHOT.gearChangeEvent", "latched ge
 requireText(byPath["renderer/audio.js"], "SNAPSHOT.collisionEvent", "latched collision event use");
 requireText(byPath["renderer/audio.js"], "SNAPSHOT.wheelOtherSurfaceContribution0", "mixed-surface audio use");
 requireText(byPath["renderer/audio.js"], "SNAPSHOT.wheelSurfaceStyle0", "curb style audio use");
+
+requireText(byPath["renderer/haptics.js"], "export class DualSenseHaptics", "DualSense haptics runtime export");
+requireText(byPath["renderer/haptics.js"], "export class DualSenseTelemetryModel", "DualSense telemetry model export");
+requireText(byPath["renderer/haptics.js"], "findDualsenseAudioDevices", "DualSense USB audio sink discovery");
+requireText(byPath["renderer/haptics.js"], "TriggerEffect.Vibration", "adaptive trigger ABS vibration");
+requireText(byPath["renderer/haptics.js"], "controller.left.rumble", "fallback left rumble output");
+requireText(byPath["renderer/haptics.js"], "wheelOtherSurfaceContribution0", "mixed-surface haptic routing");
 
 requireText(byPath["renderer/scene.js"], "import * as THREE from \"three/webgpu\"", "Three.js WebGPU module import");
 requireText(byPath["renderer/scene.js"], "import { TorcsEffects } from \"./effects.js\"", "effects module import");
@@ -1456,14 +1572,21 @@ crashSounds.forEach((entry, index) => {
 	checkWav(entry.asset);
 });
 
-Promise.all([checkAudioModelBehavior(), checkInputControllerBehavior(), checkTrackAlignment(track.asset), checkMultiCarModelMetadata()])
-	.then(([audioModel, inputController, alignment, multiCarModels]) => {
+Promise.all([
+	checkAudioModelBehavior(),
+	checkInputControllerBehavior(),
+	checkHapticsModelBehavior(),
+	checkTrackAlignment(track.asset),
+	checkMultiCarModelMetadata(),
+])
+	.then(([audioModel, inputController, hapticsModel, alignment, multiCarModels]) => {
 		console.log(JSON.stringify({
 			rendererFiles: files.length,
 			html: "torcs_web_renderer.html",
 			entrypoint: "renderer/main.js",
 			audioModel,
 			inputController,
+			hapticsModel,
 			webAssetTracks: Object.keys(manifest.tracks).length,
 			webAssetCars: Object.keys(manifest.cars).length,
 			alignment,

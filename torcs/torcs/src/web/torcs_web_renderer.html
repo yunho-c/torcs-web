@@ -113,6 +113,11 @@
 				align-items: end;
 		}
 
+			.haptics-row {
+				grid-template-columns: auto 1fr minmax(86px, auto);
+				align-items: end;
+			}
+
 		.race-row {
 			grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 		}
@@ -297,7 +302,8 @@
 			.controls > label,
 			.controls .assets,
 			.controls .race-row,
-			.controls .audio-row {
+			.controls .audio-row,
+			.controls .haptics-row {
 				display: none;
 			}
 
@@ -407,6 +413,13 @@
 			</label>
 			<div class="audio-state" id="audio-state">locked</div>
 		</div>
+		<div class="row haptics-row">
+			<button id="haptics" type="button">Haptics</button>
+			<label>Force
+				<input id="haptics-intensity" type="range" min="0" max="1" step="0.01" value="0.65">
+			</label>
+			<div class="audio-state" id="haptics-state">locked</div>
+		</div>
 		<label>Steer
 			<input id="steer" type="range" min="-1" max="1" step="0.01" value="0">
 		</label>
@@ -451,7 +464,8 @@
 				"three": "https://cdn.jsdelivr.net/npm/three@0.183.0/build/three.webgpu.js",
 				"three/webgpu": "https://cdn.jsdelivr.net/npm/three@0.183.0/build/three.webgpu.js",
 				"three/tsl": "https://cdn.jsdelivr.net/npm/three@0.183.0/build/three.tsl.js",
-				"three/addons/": "https://cdn.jsdelivr.net/npm/three@0.183.0/examples/jsm/"
+				"three/addons/": "https://cdn.jsdelivr.net/npm/three@0.183.0/examples/jsm/",
+				"dualsense-ts": "https://esm.sh/dualsense-ts@6.15.0?bundle"
 			}
 		}
 	</script>

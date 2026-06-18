@@ -3,6 +3,7 @@ import { Hud } from "./hud.js";
 import { InputController } from "./input.js";
 import { AssetManager } from "./assets.js";
 import { TorcsAudio } from "./audio.js";
+import { DualSenseHaptics } from "./haptics.js";
 import { createTorcsRuntime } from "./runtime.js";
 import { TorcsScene } from "./scene.js";
 import { warnOnce } from "./diagnostics.js";
@@ -17,6 +18,9 @@ const elements = {
 	audio: document.getElementById("audio"),
 	volume: document.getElementById("volume"),
 		audioState: document.getElementById("audio-state"),
+		haptics: document.getElementById("haptics"),
+		hapticsIntensity: document.getElementById("haptics-intensity"),
+		hapticsState: document.getElementById("haptics-state"),
 		camera: document.getElementById("camera"),
 		renderProfile: document.getElementById("render-profile"),
 		lightIntensity: document.getElementById("light-intensity"),
@@ -57,6 +61,7 @@ let scene = null;
 let cameras = null;
 let assets = null;
 let audio = null;
+let haptics = null;
 let input = null;
 let runtime = null;
 let activeRenderProfile = getInitialRenderProfile();
@@ -97,6 +102,7 @@ function setEnabled(enabled) {
 	elements.step.disabled = !enabled;
 	elements.reset.disabled = !runtime;
 	elements.audio.disabled = !runtime;
+	elements.haptics.disabled = !runtime;
 }
 
 function applyControls(controls = input.getControls()) {
@@ -181,6 +187,7 @@ function readAndRender(deltaTime = 0) {
 	cameras.update(snapshot, input ? input.getCameraLookaround() : "");
 	scene.updateCars(snapshots, cameras.camera, selectedCarIndex, carAssets);
 	audio.update(snapshot, cameras.camera, deltaTime);
+	haptics.update(snapshot, deltaTime);
 	scene.render(cameras.camera);
 }
 
@@ -344,6 +351,9 @@ async function startSession() {
 		return;
 	}
 	selectedCarIndex = 0;
+	if (haptics) {
+		haptics.resetDynamics();
+	}
 	applyControls();
 	const trackSamples = runtime.readTrackSamples();
 	scene.setTrack(trackSamples);
@@ -391,6 +401,23 @@ function bindUi() {
 	elements.volume.addEventListener("input", () => {
 		audio.setVolume(Number(elements.volume.value));
 	});
+	elements.haptics.addEventListener("click", async () => {
+		if (haptics.enabled) {
+			haptics.disable();
+			return;
+		}
+		try {
+			await haptics.enable();
+			if (snapshot) {
+				haptics.update(snapshot, 0);
+			}
+		} catch (error) {
+			console.warn("TORCS web DualSense haptics failed to start", error);
+		}
+	});
+	elements.hapticsIntensity.addEventListener("input", () => {
+		haptics.setIntensity(Number(elements.hapticsIntensity.value));
+	});
 	elements.camera.addEventListener("change", () => {
 		cameras.setMode(elements.camera.value);
 		if (snapshot) {
@@ -437,6 +464,11 @@ async function main() {
 			elements.audioState.textContent = status;
 			elements.audio.textContent = audio.enabled ? "Stop" : "Audio";
 		});
+		haptics = new DualSenseHaptics((status) => {
+			elements.hapticsState.textContent = status;
+			elements.haptics.textContent = haptics.enabled ? "Stop" : "Haptics";
+		});
+		haptics.setIntensity(Number(elements.hapticsIntensity.value));
 		input = new InputController({
 			steer: elements.steer,
 			accel: elements.accel,
