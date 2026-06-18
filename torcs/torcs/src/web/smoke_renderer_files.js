@@ -1143,6 +1143,14 @@ requireText(byPath["torcs_web_renderer.html"], "id=\"haptics-state\"", "DualSens
 requireText(byPath["torcs_web_renderer.html"], "id=\"rumble-config-open\"", "DualSense rumble config button");
 requireText(byPath["torcs_web_renderer.html"], "id=\"rumble-config-modal\"", "DualSense rumble config modal");
 requireText(byPath["torcs_web_renderer.html"], "id=\"rumble-config-body\"", "DualSense rumble config source body");
+requireText(byPath["torcs_web_renderer.html"], "id=\"rumble-config-sources-tab\"", "DualSense rumble config sources tab");
+requireText(byPath["torcs_web_renderer.html"], "id=\"rumble-config-signal-tab\"", "DualSense rumble signal tab");
+requireText(byPath["torcs_web_renderer.html"], "id=\"rumble-config-signal-panel\"", "DualSense rumble signal panel");
+requireText(byPath["torcs_web_renderer.html"], "id=\"rumble-signal-status\"", "DualSense rumble signal status");
+requireText(byPath["torcs_web_renderer.html"], "id=\"rumble-signal-left-fill\"", "DualSense rumble left meter");
+requireText(byPath["torcs_web_renderer.html"], "id=\"rumble-signal-right-fill\"", "DualSense rumble right meter");
+requireText(byPath["torcs_web_renderer.html"], "id=\"rumble-signal-scope\"", "DualSense rumble signal scope canvas");
+requireText(byPath["torcs_web_renderer.html"], "id=\"rumble-signal-contributions\"", "DualSense rumble contribution meter container");
 requireText(byPath["torcs_web_renderer.html"], "id=\"rumble-config-json\"", "DualSense rumble config JSON textarea");
 requireText(byPath["torcs_web_renderer.html"], "id=\"rumble-config-reset\"", "DualSense rumble config reset button");
 requireText(byPath["torcs_web_renderer.html"], "id=\"rumble-config-copy\"", "DualSense rumble config copy button");
@@ -1309,6 +1317,13 @@ requireText(byPath["renderer/main.js"], "setRumbleConfigOpen", "DualSense rumble
 requireText(byPath["renderer/main.js"], "haptics.setRumbleConfig", "DualSense rumble config change handler");
 requireText(byPath["renderer/main.js"], "haptics.importRumbleConfig", "DualSense rumble config JSON import handler");
 requireText(byPath["renderer/main.js"], "navigator.clipboard", "DualSense rumble config clipboard integration");
+requireText(byPath["renderer/main.js"], "RUMBLE_SIGNAL_CONTRIBUTIONS", "DualSense rumble signal source definitions");
+requireText(byPath["renderer/main.js"], "RUMBLE_SIGNAL_HISTORY_LIMIT", "DualSense rumble signal history bound");
+requireText(byPath["renderer/main.js"], "setRumbleConfigTab", "DualSense rumble config tab switching");
+requireText(byPath["renderer/main.js"], "buildRumbleSignalUi", "DualSense rumble signal contribution UI builder");
+requireText(byPath["renderer/main.js"], "updateRumbleSignalUi", "DualSense rumble signal live updater");
+requireText(byPath["renderer/main.js"], "drawRumbleSignalScope", "DualSense rumble signal scope drawing");
+requireText(byPath["renderer/main.js"], "diagnostics.rumbleOutput", "DualSense rumble signal diagnostics source");
 requireText(byPath["renderer/main.js"], "hud.setTrack(trackSamples)", "Phase 5 HUD track-map handoff");
 requireText(byPath["renderer/main.js"], "input.update(deltaTime, snapshot)", "TORCS-faithful per-frame input polling");
 requireText(byPath["renderer/main.js"], "input ? input.getCameraLookaround() : \"\"", "temporary camera lookaround handoff");

@@ -216,7 +216,7 @@
 			width: min(760px, calc(100vw - 36px));
 			max-height: min(720px, calc(100vh - 36px));
 			display: grid;
-			grid-template-rows: auto minmax(0, 1fr) auto;
+			grid-template-rows: auto auto minmax(0, 1fr) auto;
 			border: 1px solid var(--line);
 			background: var(--panel);
 			backdrop-filter: blur(10px);
@@ -245,11 +245,30 @@
 			text-transform: uppercase;
 		}
 
+		.rumble-config-tabs {
+			display: flex;
+			gap: 8px;
+			padding: 10px 10px 0;
+		}
+
+		.rumble-config-tabs button[data-active="true"] {
+			border-color: var(--green);
+			color: var(--green);
+		}
+
+		.rumble-config-panel {
+			min-height: 0;
+			overflow: auto;
+		}
+
+		.rumble-config-panel[hidden] {
+			display: none;
+		}
+
 		.rumble-config-body {
 			display: grid;
 			gap: 8px;
 			padding: 10px;
-			overflow: auto;
 		}
 
 		.rumble-source-row {
@@ -283,6 +302,98 @@
 		.rumble-source-toggles button[data-active="true"] {
 			border-color: var(--green);
 			color: var(--green);
+		}
+
+		.rumble-signal-panel {
+			display: grid;
+			gap: 10px;
+			padding: 10px;
+		}
+
+		.rumble-signal-status {
+			min-height: 24px;
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 10px;
+			color: var(--muted);
+			text-transform: uppercase;
+			font-size: 0.72rem;
+		}
+
+		.rumble-signal-meters,
+		.rumble-signal-contributions {
+			display: grid;
+			gap: 8px;
+		}
+
+		.rumble-signal-meters {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+
+		.rumble-signal-meter,
+		.rumble-signal-source {
+			display: grid;
+			grid-template-columns: 86px minmax(0, 1fr) 42px;
+			gap: 8px;
+			align-items: center;
+			padding: 8px;
+			border: 1px solid var(--line);
+			background: var(--panel-strong);
+			color: var(--muted);
+			text-transform: uppercase;
+			font-size: 0.72rem;
+		}
+
+		.rumble-signal-track {
+			height: 12px;
+			overflow: hidden;
+			border: 1px solid rgba(98, 130, 114, 0.45);
+			background: #080b09;
+		}
+
+		.rumble-signal-fill {
+			width: 0%;
+			height: 100%;
+			background: var(--green);
+			transform-origin: left center;
+			transition: width 60ms linear;
+		}
+
+		.rumble-signal-fill.right {
+			background: #7da2ff;
+		}
+
+		.rumble-signal-fill.event {
+			background: #cfa65a;
+		}
+
+		.rumble-signal-value {
+			color: var(--ink);
+			text-align: right;
+			font-variant-numeric: tabular-nums;
+		}
+
+		.rumble-signal-scope-wrap {
+			display: grid;
+			gap: 6px;
+			padding: 8px;
+			border: 1px solid var(--line);
+			background: var(--panel-strong);
+		}
+
+		.rumble-signal-scope-wrap span {
+			color: var(--muted);
+			text-transform: uppercase;
+			font-size: 0.72rem;
+		}
+
+		.rumble-signal-scope {
+			width: 100%;
+			height: 150px;
+			display: block;
+			border: 1px solid rgba(98, 130, 114, 0.45);
+			background: #050806;
 		}
 
 		.rumble-json {
@@ -441,6 +552,10 @@
 			.rumble-source-row {
 				grid-template-columns: 1fr;
 			}
+
+			.rumble-signal-meters {
+				grid-template-columns: 1fr;
+			}
 		}
 	</style>
 </head>
@@ -548,7 +663,36 @@
 				<h2 id="rumble-config-title">Rumble Config</h2>
 				<button id="rumble-config-close" type="button">Close</button>
 			</header>
-			<div class="rumble-config-body" id="rumble-config-body"></div>
+			<div class="rumble-config-tabs" role="tablist" aria-label="Rumble configuration views">
+				<button id="rumble-config-sources-tab" type="button" role="tab" aria-selected="true" aria-controls="rumble-config-sources-panel" data-active="true">Sources</button>
+				<button id="rumble-config-signal-tab" type="button" role="tab" aria-selected="false" aria-controls="rumble-config-signal-panel" data-active="false">Signal</button>
+			</div>
+			<div class="rumble-config-panel" id="rumble-config-sources-panel" role="tabpanel" aria-labelledby="rumble-config-sources-tab">
+				<div class="rumble-config-body" id="rumble-config-body"></div>
+			</div>
+			<div class="rumble-config-panel rumble-signal-panel" id="rumble-config-signal-panel" role="tabpanel" aria-labelledby="rumble-config-signal-tab" hidden>
+				<div class="rumble-signal-status">
+					<span id="rumble-signal-status">waiting for rumble data</span>
+					<span>HID envelope</span>
+				</div>
+				<div class="rumble-signal-meters">
+					<div class="rumble-signal-meter">
+						<span>Left</span>
+						<div class="rumble-signal-track"><div class="rumble-signal-fill" id="rumble-signal-left-fill"></div></div>
+						<span class="rumble-signal-value" id="rumble-signal-left-value">0.00</span>
+					</div>
+					<div class="rumble-signal-meter">
+						<span>Right</span>
+						<div class="rumble-signal-track"><div class="rumble-signal-fill right" id="rumble-signal-right-fill"></div></div>
+						<span class="rumble-signal-value" id="rumble-signal-right-value">0.00</span>
+					</div>
+				</div>
+				<div class="rumble-signal-scope-wrap">
+					<span>Rolling output, last 4 seconds</span>
+					<canvas class="rumble-signal-scope" id="rumble-signal-scope" width="640" height="150"></canvas>
+				</div>
+				<div class="rumble-signal-contributions" id="rumble-signal-contributions"></div>
+			</div>
 			<footer>
 				<textarea class="rumble-json" id="rumble-config-json" spellcheck="false"></textarea>
 				<button id="rumble-config-reset" type="button">Reset Defaults</button>

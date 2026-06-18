@@ -98,6 +98,11 @@ Diagnostics include a compact `rumbleConfig` summary and the last
 possible to tell whether a source is mathematically active even when the
 physical controller feel is subtle.
 
+The `Signal` tab visualizes the same diagnostics data. It shows the final left
+and right HID rumble envelopes, per-source contribution bars, and a short
+rolling scope. This is not an audio-rate PCM waveform; it is the control-rate
+signal sent through `controller.left.rumble()` and `controller.right.rumble()`.
+
 ## Source Contributions
 
 ### Engine

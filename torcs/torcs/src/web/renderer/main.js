@@ -25,11 +25,22 @@ const elements = {
 		hapticsState: document.getElementById("haptics-state"),
 		rumbleConfigModal: document.getElementById("rumble-config-modal"),
 		rumbleConfigClose: document.getElementById("rumble-config-close"),
+		rumbleConfigSourcesTab: document.getElementById("rumble-config-sources-tab"),
+		rumbleConfigSignalTab: document.getElementById("rumble-config-signal-tab"),
+		rumbleConfigSourcesPanel: document.getElementById("rumble-config-sources-panel"),
+		rumbleConfigSignalPanel: document.getElementById("rumble-config-signal-panel"),
 		rumbleConfigBody: document.getElementById("rumble-config-body"),
 		rumbleConfigJson: document.getElementById("rumble-config-json"),
 		rumbleConfigReset: document.getElementById("rumble-config-reset"),
 		rumbleConfigCopy: document.getElementById("rumble-config-copy"),
 		rumbleConfigPaste: document.getElementById("rumble-config-paste"),
+		rumbleSignalStatus: document.getElementById("rumble-signal-status"),
+		rumbleSignalLeftFill: document.getElementById("rumble-signal-left-fill"),
+		rumbleSignalLeftValue: document.getElementById("rumble-signal-left-value"),
+		rumbleSignalRightFill: document.getElementById("rumble-signal-right-fill"),
+		rumbleSignalRightValue: document.getElementById("rumble-signal-right-value"),
+		rumbleSignalScope: document.getElementById("rumble-signal-scope"),
+		rumbleSignalContributions: document.getElementById("rumble-signal-contributions"),
 		camera: document.getElementById("camera"),
 		renderProfile: document.getElementById("render-profile"),
 		lightIntensity: document.getElementById("light-intensity"),
@@ -133,6 +144,20 @@ const RUMBLE_CONFIG_SOURCES = [
 		],
 	},
 ];
+const RUMBLE_SIGNAL_CONTRIBUTIONS = [
+	["engine", "Engine", ""],
+	["leftSlip", "L Slip", ""],
+	["rightSlip", "R Slip", "right"],
+	["leftTexture", "L Texture", ""],
+	["rightTexture", "R Texture", "right"],
+	["gear", "Gear", "event"],
+	["collision", "Collision", "event"],
+	["abs", "ABS", "event"],
+];
+const RUMBLE_SIGNAL_HISTORY_LIMIT = 240;
+let activeRumbleConfigTab = "sources";
+let rumbleSignalFrame = 0;
+let rumbleSignalHistory = [];
 
 function findSnapshotByCarIndex(carIndex) {
 	return snapshots.find((values, index) => (values.carIndex ?? index) === carIndex) || null;
@@ -166,6 +191,202 @@ function updateRumbleConfigJson() {
 		return;
 	}
 	elements.rumbleConfigJson.value = formatRumbleConfigJson();
+}
+
+function clampUnit(value) {
+	const number = Number(value);
+	return Number.isFinite(number) ? Math.max(0, Math.min(1, number)) : 0;
+}
+
+function formatSignalValue(value) {
+	return clampUnit(value).toFixed(2);
+}
+
+function isRumbleConfigOpen() {
+	return Boolean(elements.rumbleConfigModal && elements.rumbleConfigModal.classList.contains("open"));
+}
+
+function getRumbleSignalOutput() {
+	if (!haptics || typeof haptics.getDiagnostics !== "function") {
+		return {
+			status: "off",
+			output: { left: 0, right: 0, contributions: {} },
+		};
+	}
+	const diagnostics = haptics.getDiagnostics();
+	return {
+		status: diagnostics.status || "off",
+		output: diagnostics.rumbleOutput || { left: 0, right: 0, contributions: {} },
+	};
+}
+
+function setSignalBar(fill, valueElement, value) {
+	const level = clampUnit(value);
+	if (fill) {
+		fill.style.width = `${Math.round(level * 1000) / 10}%`;
+	}
+	if (valueElement) {
+		valueElement.textContent = formatSignalValue(level);
+	}
+}
+
+function buildRumbleSignalUi() {
+	if (!elements.rumbleSignalContributions || elements.rumbleSignalContributions.childElementCount) {
+		return;
+	}
+	for (const [key, label, tone] of RUMBLE_SIGNAL_CONTRIBUTIONS) {
+		const row = document.createElement("div");
+		row.className = "rumble-signal-source";
+		row.dataset.rumbleSignalSource = key;
+
+		const name = document.createElement("span");
+		name.textContent = label;
+		const track = document.createElement("div");
+		track.className = "rumble-signal-track";
+		const fill = document.createElement("div");
+		fill.className = `rumble-signal-fill${tone ? ` ${tone}` : ""}`;
+		fill.dataset.rumbleSignalFill = key;
+		track.append(fill);
+		const value = document.createElement("span");
+		value.className = "rumble-signal-value";
+		value.dataset.rumbleSignalValue = key;
+		value.textContent = "0.00";
+
+		row.append(name, track, value);
+		elements.rumbleSignalContributions.append(row);
+	}
+}
+
+function resizeRumbleSignalScope(canvas) {
+	const rect = canvas.getBoundingClientRect();
+	const scale = window.devicePixelRatio || 1;
+	const width = Math.max(1, Math.floor(rect.width * scale));
+	const height = Math.max(1, Math.floor(rect.height * scale));
+	if (canvas.width !== width || canvas.height !== height) {
+		canvas.width = width;
+		canvas.height = height;
+	}
+	return { width, height, scale };
+}
+
+function drawRumbleSignalScope() {
+	const canvas = elements.rumbleSignalScope;
+	if (!canvas || typeof canvas.getContext !== "function") {
+		return;
+	}
+	const context = canvas.getContext("2d");
+	if (!context) {
+		return;
+	}
+	const { width, height, scale } = resizeRumbleSignalScope(canvas);
+	context.clearRect(0, 0, width, height);
+	context.fillStyle = "#050806";
+	context.fillRect(0, 0, width, height);
+	context.strokeStyle = "rgba(98, 130, 114, 0.28)";
+	context.lineWidth = Math.max(1, scale);
+	for (let i = 1; i < 4; i += 1) {
+		const y = (height * i) / 4;
+		context.beginPath();
+		context.moveTo(0, y);
+		context.lineTo(width, y);
+		context.stroke();
+	}
+
+	const drawTrace = (key, color) => {
+		if (rumbleSignalHistory.length < 2) {
+			return;
+		}
+		context.strokeStyle = color;
+		context.lineWidth = Math.max(1.5, 1.5 * scale);
+		context.beginPath();
+		rumbleSignalHistory.forEach((sample, index) => {
+			const x = width * (index / Math.max(1, RUMBLE_SIGNAL_HISTORY_LIMIT - 1));
+			const y = height - clampUnit(sample[key]) * height;
+			if (index === 0) {
+				context.moveTo(x, y);
+			} else {
+				context.lineTo(x, y);
+			}
+		});
+		context.stroke();
+	};
+
+	drawTrace("left", "#70d39a");
+	drawTrace("right", "#7da2ff");
+}
+
+function updateRumbleSignalUi() {
+	if (activeRumbleConfigTab !== "signal" || !isRumbleConfigOpen()) {
+		rumbleSignalFrame = 0;
+		return;
+	}
+
+	const signal = getRumbleSignalOutput();
+	const output = signal.output;
+	const left = clampUnit(output.left);
+	const right = clampUnit(output.right);
+	const contributions = output.contributions || {};
+	setSignalBar(elements.rumbleSignalLeftFill, elements.rumbleSignalLeftValue, left);
+	setSignalBar(elements.rumbleSignalRightFill, elements.rumbleSignalRightValue, right);
+	if (elements.rumbleSignalStatus) {
+		if (haptics && haptics.enabled) {
+			elements.rumbleSignalStatus.textContent = signal.status === "active" ? "active" : signal.status;
+		} else {
+			elements.rumbleSignalStatus.textContent = left || right ? "last output" : "off";
+		}
+	}
+
+	for (const [key] of RUMBLE_SIGNAL_CONTRIBUTIONS) {
+		const fill = elements.rumbleSignalContributions?.querySelector(`[data-rumble-signal-fill="${key}"]`);
+		const value = elements.rumbleSignalContributions?.querySelector(`[data-rumble-signal-value="${key}"]`);
+		setSignalBar(fill, value, contributions[key] || 0);
+	}
+
+	rumbleSignalHistory.push({ left, right });
+	if (rumbleSignalHistory.length > RUMBLE_SIGNAL_HISTORY_LIMIT) {
+		rumbleSignalHistory = rumbleSignalHistory.slice(-RUMBLE_SIGNAL_HISTORY_LIMIT);
+	}
+	drawRumbleSignalScope();
+	rumbleSignalFrame = requestAnimationFrame(updateRumbleSignalUi);
+}
+
+function startRumbleSignalUi() {
+	buildRumbleSignalUi();
+	if (!rumbleSignalFrame) {
+		rumbleSignalFrame = requestAnimationFrame(updateRumbleSignalUi);
+	}
+}
+
+function stopRumbleSignalUi() {
+	if (rumbleSignalFrame) {
+		cancelAnimationFrame(rumbleSignalFrame);
+		rumbleSignalFrame = 0;
+	}
+}
+
+function setRumbleConfigTab(tab) {
+	activeRumbleConfigTab = tab === "signal" ? "signal" : "sources";
+	const showingSignal = activeRumbleConfigTab === "signal";
+	if (elements.rumbleConfigSourcesTab) {
+		elements.rumbleConfigSourcesTab.dataset.active = showingSignal ? "false" : "true";
+		elements.rumbleConfigSourcesTab.setAttribute("aria-selected", showingSignal ? "false" : "true");
+	}
+	if (elements.rumbleConfigSignalTab) {
+		elements.rumbleConfigSignalTab.dataset.active = showingSignal ? "true" : "false";
+		elements.rumbleConfigSignalTab.setAttribute("aria-selected", showingSignal ? "true" : "false");
+	}
+	if (elements.rumbleConfigSourcesPanel) {
+		elements.rumbleConfigSourcesPanel.hidden = showingSignal;
+	}
+	if (elements.rumbleConfigSignalPanel) {
+		elements.rumbleConfigSignalPanel.hidden = !showingSignal;
+	}
+	if (showingSignal && isRumbleConfigOpen()) {
+		startRumbleSignalUi();
+	} else {
+		stopRumbleSignalUi();
+		updateRumbleConfigUi();
+	}
 }
 
 function applyRumbleConfigChange(sourceId, updates) {
@@ -278,7 +499,13 @@ function setRumbleConfigOpen(open) {
 	elements.rumbleConfigModal.classList.toggle("open", open);
 	elements.rumbleConfigModal.setAttribute("aria-hidden", open ? "false" : "true");
 	if (open) {
-		updateRumbleConfigUi();
+		if (activeRumbleConfigTab === "signal") {
+			startRumbleSignalUi();
+		} else {
+			updateRumbleConfigUi();
+		}
+	} else {
+		stopRumbleSignalUi();
 	}
 }
 
@@ -610,6 +837,8 @@ function bindUi() {
 	});
 	elements.rumbleConfigOpen.addEventListener("click", () => setRumbleConfigOpen(true));
 	elements.rumbleConfigClose.addEventListener("click", () => setRumbleConfigOpen(false));
+	elements.rumbleConfigSourcesTab.addEventListener("click", () => setRumbleConfigTab("sources"));
+	elements.rumbleConfigSignalTab.addEventListener("click", () => setRumbleConfigTab("signal"));
 	elements.rumbleConfigModal.addEventListener("click", (event) => {
 		if (event.target === elements.rumbleConfigModal) {
 			setRumbleConfigOpen(false);
@@ -680,6 +909,9 @@ function bindUi() {
 		scene.resize();
 		cameras.updateProjection();
 		hud.resizeMap();
+		if (activeRumbleConfigTab === "signal") {
+			drawRumbleSignalScope();
+		}
 		if (snapshot) {
 			readAndRender();
 		}
