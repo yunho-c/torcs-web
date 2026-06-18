@@ -89,6 +89,53 @@ kids 0
 		self.assertEqual(objects[0].surfaces[0]["flags"], 0x14)
 		self.assertEqual(convert.surface_primitive_type(objects[0].surfaces[0]["flags"]), 4)
 
+	def test_parse_ac3d_preserves_texture_layers_and_uv_sets(self):
+		content = """AC3Db
+OBJECT poly
+name "layered"
+texture "road.png" base
+texture "shadow2.png" tiled
+texture "raceline.png" skids
+texture empty_texture_no_mapping shad
+numvert 3
+0 0 0
+1 0 0
+1 1 0
+numsurf 1
+SURF 0x14
+mat 0
+refs 3
+0 0 0 0.1 0.2 0.3 0.4
+1 1 0 1.1 1.2 1.3 1.4
+2 1 1 2.1 2.2 2.3 2.4
+kids 0
+"""
+		with tempfile.TemporaryDirectory() as tmp_dir:
+			path = Path(tmp_dir) / "layered.acc"
+			path.write_text(content, encoding="latin-1")
+
+			objects = convert.parse_ac3d(path)
+
+		self.assertEqual(objects[0].texture, "road.png")
+		self.assertEqual(objects[0].texture_layers["base"], "road.png")
+		self.assertEqual(objects[0].texture_layers["tiled"], "shadow2.png")
+		self.assertEqual(objects[0].texture_layers["skids"], "raceline.png")
+		ref = objects[0].surfaces[0]["refs"][0]
+		self.assertEqual(convert.ref_uv(ref, 0), (0.0, 0.0))
+		self.assertEqual(convert.ref_uv(ref, 1), (0.1, 0.2))
+		self.assertEqual(convert.ref_uv(ref, 2), (0.3, 0.4))
+
+	def test_shadow_overlay_rgba_inverts_luminance_to_alpha(self):
+		rgba = bytes([
+			255, 255, 255, 255,
+			155, 155, 155, 255,
+		])
+
+		overlay = convert.make_shadow_overlay_rgba(rgba)
+
+		self.assertEqual(overlay[0:4], b"\x00\x00\x00\x00")
+		self.assertEqual(overlay[4:8], b"\x00\x00\x00\x64")
+
 	def test_tree_textures_use_masked_alpha(self):
 		material = {}
 
@@ -453,6 +500,7 @@ kids 3
 OBJECT poly
 name "TKMN0"
 texture "tr-road1.png" base
+texture "shadow2.png" tiled
 numvert 3
 0 0 0
 1 0 0
@@ -461,9 +509,9 @@ numsurf 1
 SURF 0x14
 mat 0
 refs 3
-0 0 0
-1 1 0
-2 0 1
+0 0 0 0.1 0.2
+1 1 0 1.1 0.2
+2 0 1 0.1 1.2
 kids 0
 OBJECT poly
 name "B0RT0"
@@ -503,14 +551,26 @@ kids 0
 			track_dir.mkdir(parents=True)
 			(track_dir / track_xml.name).write_text(content, encoding="utf-8")
 			(track_dir / "demo.acc").write_text(asset, encoding="latin-1")
-			for name in ["tr-road1.png", "armco.png", "treeg1.png", "background.png"]:
+			for name in ["tr-road1.png", "armco.png", "treeg1.png", "background.png", "shadow2.png"]:
 				convert.write_png(track_dir / name, 1, 1, b"\xff\0\0\xff")
 
 			_, entry, textures = convert.convert_track(source_root, output_dir, track_xml)
+			gltf = read_glb_json(output_dir / entry["asset"])
 
 		self.assertEqual(entry["materialClasses"], ["barrier", "road", "treeFoliage"])
 		self.assertEqual({material["class"] for material in entry["materials"]}, {"barrier", "road", "treeFoliage"})
 		self.assertIn("tracks/road/demo/tr-road1.png", textures)
+		self.assertEqual(len(entry["trackShadowOverlays"]), 1)
+		self.assertEqual(entry["trackShadowOverlays"][0]["sourceTexture"], "shadow2.png")
+		self.assertEqual(entry["trackShadowOverlays"][0]["texture"], "tracks/road/demo/shadow2-shadow-overlay.png")
+		self.assertIn("tracks/road/demo/shadow2-shadow-overlay.png", textures)
+		overlay_materials = [
+			material for material in gltf["materials"]
+			if material.get("extras", {}).get("torcsOverlayRole") == "trackShadow"
+		]
+		self.assertEqual(len(overlay_materials), 1)
+		self.assertEqual(overlay_materials[0]["extras"]["torcsOverlayLayer"], "tiled")
+		self.assertIn({"uri": "shadow2-shadow-overlay.png"}, gltf["images"])
 
 	def test_quick_mode_selects_golden_asset_pair(self):
 		with tempfile.TemporaryDirectory() as tmp_dir:

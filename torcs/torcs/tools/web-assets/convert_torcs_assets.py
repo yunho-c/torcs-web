@@ -107,6 +107,7 @@ TRACK_TREE_OBJECT_PREFIXES = ["TREE", "ARB"]
 class AcObject:
 	name: str = ""
 	texture: str = ""
+	texture_layers: dict = field(default_factory=dict)
 	vertices: list = field(default_factory=list)
 	surfaces: list = field(default_factory=list)
 
@@ -295,6 +296,40 @@ def parse_car_metadata(source_root, car_xml):
 	}
 
 
+def parse_texture_declaration(value):
+	parts = value.split()
+	if not parts:
+		return "", "base"
+	texture = parts[0].strip('"')
+	layer = parts[1].lower() if len(parts) > 1 else "base"
+	return texture, layer
+
+
+def make_surface_ref(parts):
+	vertex_index = int(parts[0])
+	uvs = []
+	for index in range(1, len(parts) - 1, 2):
+		uvs.append((float(parts[index]), float(parts[index + 1])))
+	if not uvs:
+		uvs.append((0.0, 0.0))
+	return vertex_index, tuple(uvs)
+
+
+def ref_vertex_index(ref):
+	return ref[0]
+
+
+def ref_uv(ref, layer_index=0):
+	if len(ref) >= 3 and isinstance(ref[1], float):
+		return ref[1], ref[2]
+	uvs = ref[1]
+	if layer_index < len(uvs):
+		return uvs[layer_index]
+	if uvs:
+		return uvs[0]
+	return 0.0, 0.0
+
+
 def parse_ac3d(path):
 	lines = path.read_text(encoding="latin-1").splitlines()
 	if not lines or not lines[0].startswith("AC3D"):
@@ -321,10 +356,12 @@ def parse_ac3d(path):
 		obj = stack[-1]
 		if key == "name":
 			obj.name = value.strip('"')
-		elif key == "texture" and not obj.texture:
-			tex = value.split()[0].strip('"')
+		elif key == "texture":
+			tex, layer = parse_texture_declaration(value)
 			if tex != EMPTY_TEXTURE:
-				obj.texture = tex
+				obj.texture_layers[layer] = tex
+				if layer == "base" and not obj.texture:
+					obj.texture = tex
 		elif key == "numvert":
 			count = int(value)
 			for _ in range(count):
@@ -347,10 +384,7 @@ def parse_ac3d(path):
 						for _ in range(ref_count):
 							ref = lines[index].split()
 							index += 1
-							vertex_index = int(ref[0])
-							u = float(ref[1]) if len(ref) > 1 else 0.0
-							v = float(ref[2]) if len(ref) > 2 else 0.0
-							surface["refs"].append((vertex_index, u, v))
+							surface["refs"].append(make_surface_ref(ref))
 						break
 				obj.surfaces.append(surface)
 		elif key == "kids":
@@ -390,6 +424,14 @@ def resolve_texture(source_root, asset_source_dir, texture):
 def make_material_name(texture, material_class=""):
 	texture_name = Path(texture).stem if texture else "flat"
 	return f"{texture_name}-{material_class}" if material_class else texture_name
+
+
+def make_shadow_overlay_texture_name(texture):
+	return f"{Path(texture).stem}-shadow-overlay.png"
+
+
+def is_track_shadow_overlay_texture(texture):
+	return bool(texture) and Path(texture).stem.lower().startswith("shadow")
 
 
 def uses_alpha_test(texture):
@@ -486,6 +528,10 @@ def make_primitive_key(texture, material_class):
 	return texture or "", material_class or ""
 
 
+def make_overlay_primitive_key(texture, material_class, layer, role):
+	return "overlay", texture or "", material_class or "", layer, role
+
+
 def add_accessor(gltf, buffer_views, buffer_parts, component_type, item_type, values, minimum=None, maximum=None):
 	offset = sum(len(part) for part in buffer_parts)
 	if component_type == 5126:
@@ -567,11 +613,31 @@ def triangulate_surface(refs, flags):
 	return []
 
 
-def convert_ac_to_glb(source_root, source_path, output_path, object_classifier=None):
+def add_triangle_to_primitive(target, obj, triangle, texture_layer=0, normal_offset=0.0):
+	if obj.name:
+		target["objects"].add(obj.name)
+	for ref in triangle:
+		vertex_index = ref_vertex_index(ref)
+		u, v = ref_uv(ref, texture_layer)
+		position, normal = obj.vertices[vertex_index]
+		if normal_offset:
+			position = [
+				position[0] + normal[0] * normal_offset,
+				position[1] + normal[1] * normal_offset,
+				position[2] + normal[2] * normal_offset,
+			]
+		target["indices"].append(len(target["positions"]))
+		target["positions"].append(ac_position_to_three(position))
+		target["normals"].append(ac_normal_to_three(normal))
+		target["uvs"].append([u, 1.0 - v])
+
+
+def convert_ac_to_glb(source_root, source_path, output_path, object_classifier=None, include_track_shadow_overlays=False):
 	objects = parse_ac3d(source_path)
 	primitives = {}
 	asset_source_dir = source_path.parent
 	texture_sources = {}
+	shadow_overlay_sources = {}
 
 	for obj in objects:
 		texture = obj.texture
@@ -586,22 +652,41 @@ def convert_ac_to_glb(source_root, source_path, output_path, object_classifier=N
 		target = primitives.setdefault(key, {
 			"texture": texture or "",
 			"materialClass": material_class,
+			"role": "base",
+			"layer": "base",
+			"imageUri": f"{Path(texture).stem}.png" if texture else "",
+			"sourceTexture": texture or "",
 			"positions": [],
 			"normals": [],
 			"uvs": [],
 			"indices": [],
 			"objects": set(),
 		})
-		if obj.name:
-			target["objects"].add(obj.name)
+		shadow_texture = obj.texture_layers.get("tiled", "")
+		shadow_target = None
+		if include_track_shadow_overlays and is_track_shadow_overlay_texture(shadow_texture):
+			resolved_shadow = resolve_texture(source_root, asset_source_dir, shadow_texture)
+			if resolved_shadow:
+				shadow_overlay_sources[shadow_texture] = resolved_shadow
+				shadow_key = make_overlay_primitive_key(shadow_texture, material_class, "tiled", "trackShadow")
+				shadow_target = primitives.setdefault(shadow_key, {
+					"texture": shadow_texture,
+					"materialClass": material_class,
+					"role": "trackShadow",
+					"layer": "tiled",
+					"imageUri": make_shadow_overlay_texture_name(shadow_texture),
+					"sourceTexture": shadow_texture,
+					"positions": [],
+					"normals": [],
+					"uvs": [],
+					"indices": [],
+					"objects": set(),
+				})
 		for surface in obj.surfaces:
 			for triangle in triangulate_surface(surface["refs"], surface["flags"]):
-				for vertex_index, u, v in triangle:
-					position, normal = obj.vertices[vertex_index]
-					target["indices"].append(len(target["positions"]))
-					target["positions"].append(ac_position_to_three(position))
-					target["normals"].append(ac_normal_to_three(normal))
-					target["uvs"].append([u, 1.0 - v])
+				add_triangle_to_primitive(target, obj, triangle)
+				if shadow_target:
+					add_triangle_to_primitive(shadow_target, obj, triangle, texture_layer=1, normal_offset=0.01)
 
 	gltf = {
 		"asset": {"version": "2.0", "generator": "TORCS web asset prototype"},
@@ -625,6 +710,7 @@ def convert_ac_to_glb(source_root, source_path, output_path, object_classifier=N
 			continue
 		texture = data["texture"]
 		material_class = data["materialClass"]
+		role = data["role"]
 		minimum = [min(row[i] for row in data["positions"]) for i in range(3)]
 		maximum = [max(row[i] for row in data["positions"]) for i in range(3)]
 		position_accessor = add_accessor(gltf, gltf["bufferViews"], buffer_parts, 5126, "VEC3", data["positions"], minimum, maximum)
@@ -643,18 +729,22 @@ def convert_ac_to_glb(source_root, source_path, output_path, object_classifier=N
 			"doubleSided": True,
 		}
 		material["extras"] = {
-			"torcsSourceTexture": texture,
+			"torcsSourceTexture": data["sourceTexture"],
 			"torcsObjectNames": sorted(data["objects"]),
 		}
 		if material_class:
 			material["extras"]["torcsMaterialClass"] = material_class
+		if role != "base":
+			material["name"] = f"{Path(texture).stem}-{role}"
+			material["extras"]["torcsOverlayRole"] = role
+			material["extras"]["torcsOverlayLayer"] = data["layer"]
 		if texture:
-			png_name = f"{Path(texture).stem}.png"
-			if texture not in texture_indices:
-				texture_indices[texture] = len(gltf["textures"])
+			image_uri = data["imageUri"]
+			if image_uri not in texture_indices:
+				texture_indices[image_uri] = len(gltf["textures"])
 				gltf["textures"].append({"sampler": 0, "source": len(gltf["images"])})
-				gltf["images"].append({"uri": png_name})
-			material["pbrMetallicRoughness"]["baseColorTexture"] = {"index": texture_indices[texture]}
+				gltf["images"].append({"uri": image_uri})
+			material["pbrMetallicRoughness"]["baseColorTexture"] = {"index": texture_indices[image_uri]}
 			apply_texture_alpha(material, texture)
 		gltf["materials"].append(material)
 		gltf["meshes"][0]["primitives"].append({
@@ -674,8 +764,20 @@ def convert_ac_to_glb(source_root, source_path, output_path, object_classifier=N
 		"source": str(source_path.relative_to(source_root)),
 		"asset": str(output_path),
 		"primitives": len(gltf["meshes"][0]["primitives"]),
-		"textures": sorted({data["texture"] for data in primitives.values() if data["texture"]}),
+		"textures": sorted({data["texture"] for data in primitives.values() if data["texture"] and data["role"] == "base"}),
 		"textureSources": texture_sources,
+		"shadowOverlayTextureSources": shadow_overlay_sources,
+		"trackShadowOverlays": [
+			{
+				"sourceTexture": data["sourceTexture"],
+				"layer": data["layer"],
+				"role": data["role"],
+				"primitiveCount": len(data["indices"]) // 3,
+				"objectNames": sorted(data["objects"]),
+			}
+			for _, data in sorted(primitives.items(), key=lambda item: item[0])
+			if data["positions"] and data["role"] == "trackShadow"
+		],
 		"objects": sorted({name for data in primitives.values() for name in data["objects"]}),
 		"materials": [
 			{
@@ -684,7 +786,7 @@ def convert_ac_to_glb(source_root, source_path, output_path, object_classifier=N
 				"objectNames": sorted(data["objects"]),
 			}
 			for _, data in sorted(primitives.items(), key=lambda item: item[0])
-			if data["positions"] and data["materialClass"]
+			if data["positions"] and data["materialClass"] and data["role"] == "base"
 		],
 	}
 
@@ -782,12 +884,39 @@ def write_png(path, width, height, rgba):
 		out.write(chunk(b"IEND", b""))
 
 
+def make_shadow_overlay_rgba(rgba):
+	overlay = bytearray(len(rgba))
+	for offset in range(0, len(rgba), 4):
+		luminance = int(round(
+			rgba[offset] * 0.2126 +
+			rgba[offset + 1] * 0.7152 +
+			rgba[offset + 2] * 0.0722
+		))
+		overlay[offset] = 0
+		overlay[offset + 1] = 0
+		overlay[offset + 2] = 0
+		overlay[offset + 3] = max(0, min(255, 255 - luminance))
+	return bytes(overlay)
+
+
 def convert_texture(source, output_dir):
 	output = output_dir / f"{source.stem}.png"
 	if source.suffix.lower() == ".rgb":
 		width, height, rgba = read_sgi_rgb(source)
 		write_png(output, width, height, rgba)
 	else:
+		output.parent.mkdir(parents=True, exist_ok=True)
+		output.write_bytes(source.read_bytes())
+	return output
+
+
+def convert_shadow_overlay_texture(source, output_dir):
+	output = output_dir / make_shadow_overlay_texture_name(source.name)
+	if source.suffix.lower() == ".rgb":
+		width, height, rgba = read_sgi_rgb(source)
+		write_png(output, width, height, make_shadow_overlay_rgba(rgba))
+	else:
+		output.parent.mkdir(parents=True, exist_ok=True)
 		output.write_bytes(source.read_bytes())
 	return output
 
@@ -834,10 +963,15 @@ def convert_track(source_root, output_dir, track_xml):
 		track_source_dir / track_meta["model"],
 		track_glb,
 		classify_track_object,
+		include_track_shadow_overlays=True,
 	)
 	track_texture_outputs = {
 		name: relative_to_output(convert_texture(source, track_dir), output_dir)
 		for name, source in sorted(track_result["textureSources"].items())
+	}
+	track_shadow_overlay_outputs = {
+		name: relative_to_output(convert_shadow_overlay_texture(source, track_dir), output_dir)
+		for name, source in sorted(track_result["shadowOverlayTextureSources"].items())
 	}
 	track_background_output = ""
 	track_background_source = resolve_texture(
@@ -863,12 +997,20 @@ def convert_track(source_root, output_dir, track_xml):
 		"shininess": track_meta["shininess"],
 		"lightPosition": track_meta["lightPosition"],
 		"textures": {name: track_texture_outputs[name] for name in track_result["textures"] if name in track_texture_outputs},
+		"trackShadowOverlays": [
+			{
+				**overlay,
+				"texture": track_shadow_overlay_outputs.get(overlay["sourceTexture"], ""),
+			}
+			for overlay in track_result["trackShadowOverlays"]
+		],
 		"primitiveCount": track_result["primitives"],
 		"objectNames": track_result["objects"],
 		"materialClasses": sorted({material["class"] for material in track_result["materials"]}),
 		"materials": track_result["materials"],
 	}
 	texture_outputs = set(track_texture_outputs.values())
+	texture_outputs.update(track_shadow_overlay_outputs.values())
 	if track_background_output:
 		texture_outputs.add(track_background_output)
 	return track_meta["xml"], entry, texture_outputs

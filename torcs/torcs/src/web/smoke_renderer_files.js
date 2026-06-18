@@ -1051,6 +1051,10 @@ requireText(byPath["renderer/assets.js"], "materialMask", "car material mask loa
 requireText(byPath["renderer/assets.js"], "loadDataTexture(relativePath)", "material mask data texture loading");
 requireText(byPath["renderer/assets.js"], "clearcoatMap: remasterMaterialMask", "paint clearcoat mask binding");
 requireText(byPath["renderer/assets.js"], "roughnessMap: remasterMaterialMask", "paint roughness mask binding");
+requireText(byPath["renderer/assets.js"], "torcsOverlayRole === \"trackShadow\"", "track shadow overlay material detection");
+requireText(byPath["renderer/assets.js"], "makeTrackShadowOverlayMaterial(material)", "track shadow overlay material adapter");
+requireText(byPath["renderer/assets.js"], "new THREE.MeshBasicMaterial", "unlit track shadow overlay material");
+requireText(byPath["renderer/assets.js"], "polygonOffset: true", "track shadow overlay z-fighting guard");
 requireText(byPath["renderer/assets.js"], "const source = normalizeRuntimePath(carPath)", "car asset source path annotation");
 requireText(byPath["renderer/assets.js"], "const asset = { entry: carEntry, lods, wheelAsset, shadowTexture, materialMask }", "loaded car entry source metadata");
 requireText(byPath["renderer/assets.js"], "entry.wheelAsset.states.map", "detailed wheel asset loading");

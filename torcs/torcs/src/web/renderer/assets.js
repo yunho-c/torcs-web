@@ -132,6 +132,32 @@ export class AssetManager {
 		return new THREE.MeshStandardMaterial(parameters);
 	}
 
+	isTrackShadowOverlayMaterial(material) {
+		return material && material.userData && material.userData.torcsOverlayRole === "trackShadow";
+	}
+
+	makeTrackShadowOverlayMaterial(material) {
+		this.configureMaterialTextureSampling(material);
+		const overlay = new THREE.MeshBasicMaterial({
+			name: material.name,
+			color: new THREE.Color(0x000000),
+			map: material.map || null,
+			transparent: true,
+			opacity: 1.0,
+			alphaTest: 0.01,
+			side: material.side,
+			depthWrite: false,
+			depthTest: true,
+			polygonOffset: true,
+			polygonOffsetFactor: -1,
+			polygonOffsetUnits: -1,
+			fog: material.fog,
+		});
+		overlay.userData = { ...material.userData };
+		material.dispose();
+		return overlay;
+	}
+
 	withPbrDefaults(parameters, defaults) {
 		return {
 			...parameters,
@@ -346,6 +372,9 @@ export class AssetManager {
 	}
 
 	convertMaterial(material, context = {}) {
+		if (this.isTrackShadowOverlayMaterial(material)) {
+			return this.makeTrackShadowOverlayMaterial(material);
+		}
 		if (this.renderProfile === "modern") {
 			return this.makeModernMaterial(material, context);
 		}
@@ -361,6 +390,10 @@ export class AssetManager {
 				object.material = object.material.map((material) => this.convertMaterial(material, context));
 			} else {
 				object.material = this.convertMaterial(object.material, context);
+			}
+			const materials = Array.isArray(object.material) ? object.material : [object.material];
+			if (materials.some((material) => this.isTrackShadowOverlayMaterial(material))) {
+				object.renderOrder = 2;
 			}
 		});
 	}
