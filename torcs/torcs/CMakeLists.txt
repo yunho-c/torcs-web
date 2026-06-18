@@ -210,6 +210,7 @@ if(EMSCRIPTEN)
 		"'_torcs_web_runtime_get_max_cars'"
 		"'_torcs_web_runtime_get_car_count'"
 		"'_torcs_web_runtime_get_car_name_by_index'"
+		"'_torcs_web_runtime_get_car_model_name_by_index'"
 		"'_torcs_web_runtime_get_car_driver_kind'"
 		"'_torcs_web_runtime_get_car_driver_module'"
 		"'_torcs_web_runtime_get_car_driver_robot_index'"

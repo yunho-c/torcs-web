@@ -61,6 +61,7 @@ let running = false;
 let lastTime = 0;
 let snapshot = null;
 let snapshots = [];
+let carAssets = new Map();
 let selectedCarIndex = 0;
 
 function findSnapshotByCarIndex(carIndex) {
@@ -164,9 +165,33 @@ function readAndRender(deltaTime = 0) {
 	}
 	hud.update(snapshot, snapshots, selectedCarIndex);
 	cameras.update(snapshot, input ? input.getCameraLookaround() : "");
-	scene.updateCars(snapshots, cameras.camera, selectedCarIndex);
+	scene.updateCars(snapshots, cameras.camera, selectedCarIndex, carAssets);
 	audio.update(snapshot, cameras.camera, deltaTime);
 	scene.render(cameras.camera);
+}
+
+async function warnCarVisualFallbacks(assetsByCarIndex, fallbackAsset) {
+	if (!assets || !snapshots.length) {
+		return;
+	}
+	await Promise.all(snapshots.map(async (values, index) => {
+		const carIndex = values.carIndex ?? index;
+		const modelName = values.carModelName || "";
+		const expected = await assets.resolveCarPathByModelName(modelName);
+		const asset = assetsByCarIndex.get(carIndex);
+		if (modelName && (!expected || !asset || !asset.entry || asset.entry.source !== expected)) {
+			warnOnce(
+				`car-model-visual-fallback:${carIndex}:${modelName}`,
+				"TORCS web renderer using selected car visual fallback for runtime car model",
+				{
+					carIndex,
+					modelName,
+					expected,
+					fallback: fallbackAsset && fallbackAsset.entry ? fallbackAsset.entry.source : "",
+				},
+			);
+		}
+	}));
 }
 
 function syncCurrentCarOptions() {
@@ -214,14 +239,18 @@ function animate(time) {
 
 async function loadVisualAssets() {
 	try {
-		const [track, car, effects] = await Promise.all([
+		const [track, selectedCarAsset, effects] = await Promise.all([
 			assets.loadTrack(elements.track.value),
 			assets.loadCar(elements.car.value),
 			assets.loadEffects(),
 		]);
+		carAssets = runtime && runtime.active && snapshots.length
+			? await assets.loadCarAssetsForSnapshots(snapshots, elements.car.value)
+			: new Map([[selectedCarIndex, selectedCarAsset]]);
+		await warnCarVisualFallbacks(carAssets, selectedCarAsset);
 		scene.setTrackVisual(track ? track.scene : null);
 		scene.setTrackAtmosphere(track ? track.entry : null, track ? track.backgroundTexture : null);
-		scene.setCarVisual(car);
+		scene.setCarVisualAssets(carAssets, selectedCarAsset);
 		scene.setEffectTextures(effects ? effects.textures : null);
 		if (!track) {
 			warnOnce(
@@ -233,7 +262,7 @@ async function loadVisualAssets() {
 				},
 			);
 		}
-		if (!car) {
+		if (!selectedCarAsset) {
 			warnOnce(
 				`car-visual-fallback:${elements.car.value}`,
 				"TORCS web renderer using generated car box and wheel fallback",
@@ -243,12 +272,13 @@ async function loadVisualAssets() {
 				},
 			);
 		}
-		return Boolean(track && car);
+		return Boolean(track && selectedCarAsset);
 	} catch (error) {
 		console.warn("TORCS web renderer asset load failed", error);
 		scene.setTrackVisual(null);
 		scene.setTrackAtmosphere(null, null);
-		scene.setCarVisual(null);
+		carAssets = new Map();
+		scene.setCarVisualAssets(carAssets, null);
 		scene.setEffectTextures(null);
 		return false;
 	}
@@ -296,7 +326,7 @@ async function startSession() {
 	snapshot = findSnapshotByCarIndex(selectedCarIndex) || snapshots[0] || null;
 	syncCurrentCarOptions();
 	cameras.update(snapshot, input ? input.getCameraLookaround() : "");
-	scene.updateCars(snapshots, cameras.camera, selectedCarIndex);
+	scene.updateCars(snapshots, cameras.camera, selectedCarIndex, carAssets);
 	hud.setState("ready");
 	setEnabled(true);
 	const hasAssets = await loadVisualAssets();

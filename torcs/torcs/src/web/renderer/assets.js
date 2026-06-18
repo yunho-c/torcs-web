@@ -44,10 +44,15 @@ export class AssetManager {
 		this.loader = new GLTFLoader();
 		this.textureLoader = new THREE.TextureLoader();
 		this.manifest = null;
+		this.carCache = new Map();
 	}
 
 	setRenderProfile(profile) {
-		this.renderProfile = normalizeRenderProfile(profile);
+		const nextProfile = normalizeRenderProfile(profile);
+		if (nextProfile !== this.renderProfile) {
+			this.carCache.clear();
+		}
+		this.renderProfile = nextProfile;
 	}
 
 	async loadManifest() {
@@ -373,6 +378,39 @@ export class AssetManager {
 		return this.loadTexture(relativePath, THREE.NoColorSpace);
 	}
 
+	async resolveCarPathByModelName(modelName) {
+		if (!modelName) {
+			return "";
+		}
+		const manifest = await this.loadManifest();
+		const source = `data/cars/models/${modelName}/${modelName}.xml`;
+		return manifest.cars && manifest.cars[source] ? source : "";
+	}
+
+	async loadCarForModelName(modelName, fallbackCarPath = "") {
+		const source = await this.resolveCarPathByModelName(modelName);
+		if (source) {
+			const asset = await this.loadCar(source);
+			if (asset) {
+				return asset;
+			}
+		}
+		return this.loadCar(fallbackCarPath);
+	}
+
+	async loadCarAssetsForSnapshots(snapshots = [], fallbackCarPath = "") {
+		const assets = new Map();
+		const models = new Map();
+		for (const values of snapshots || []) {
+			const carIndex = Number.isFinite(values && values.carIndex) ? values.carIndex : assets.size;
+			models.set(carIndex, values && values.carModelName ? values.carModelName : "");
+		}
+		await Promise.all(Array.from(models.entries()).map(async ([carIndex, modelName]) => {
+			assets.set(carIndex, await this.loadCarForModelName(modelName, fallbackCarPath));
+		}));
+		return assets;
+	}
+
 	async loadEffects() {
 		const manifest = await this.loadManifest();
 		const textures = {};
@@ -407,6 +445,9 @@ export class AssetManager {
 	async loadCar(carPath) {
 		const manifest = await this.loadManifest();
 		const source = normalizeRuntimePath(carPath);
+		if (this.carCache.has(source)) {
+			return this.carCache.get(source);
+		}
 		const entry = manifest.cars[source];
 		if (!entry || !entry.lods.length) {
 			return null;
@@ -434,6 +475,8 @@ export class AssetManager {
 		if (shadowPath) {
 			shadowTexture = await this.loadTexture(shadowPath);
 		}
-		return { entry: carEntry, lods, wheelAsset, shadowTexture, materialMask };
+		const asset = { entry: carEntry, lods, wheelAsset, shadowTexture, materialMask };
+		this.carCache.set(source, asset);
+		return asset;
 	}
 }

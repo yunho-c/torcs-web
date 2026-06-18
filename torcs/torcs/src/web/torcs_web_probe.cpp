@@ -2135,6 +2135,14 @@ torcs_web_runtime_get_car_name_by_index(int carIndex)
 }
 
 EMSCRIPTEN_KEEPALIVE
+const char *
+torcs_web_runtime_get_car_model_name_by_index(int carIndex)
+{
+	tCarElt *car = getRuntimeCar(carIndex);
+	return car ? car->_carName : "";
+}
+
+EMSCRIPTEN_KEEPALIVE
 int
 torcs_web_runtime_get_car_driver_kind(int carIndex)
 {

@@ -275,6 +275,9 @@ export class TorcsScene {
 		this.selectedWheelModeKey = "";
 		this.opponentCars = [];
 		this.carAsset = null;
+		this.activeCarVisualAsset = null;
+		this.fallbackCarAsset = null;
+		this.carAssets = new Map();
 		this.effectTextures = null;
 		this.footprint = null;
 		this.track = null;
@@ -334,7 +337,7 @@ export class TorcsScene {
 
 	createCarEffects(carIndex) {
 		const effects = new TorcsEffects(this.groups);
-		effects.setCarAsset(this.carAsset);
+		effects.setCarAsset(this.getCarAssetForIndex(carIndex));
 		effects.setTextures(this.effectTextures);
 		effects.setVisible(false);
 		this.carEffects[carIndex] = effects;
@@ -443,14 +446,37 @@ export class TorcsScene {
 		this.groups.background.add(this.backgroundDome);
 	}
 
+	getCarAssetForIndex(carIndex) {
+		return this.carAssets.get(carIndex) || this.fallbackCarAsset || this.carAsset || null;
+	}
+
 	setCarVisual(asset) {
-		this.carAsset = asset;
-		for (const effects of this.carEffects) {
+		this.setCarVisualAssets(new Map(), asset);
+		this.setSelectedCarVisual(asset);
+	}
+
+	setCarVisualAssets(assetsByCarIndex = new Map(), fallbackAsset = null) {
+		this.carAssets = assetsByCarIndex instanceof Map ? assetsByCarIndex : new Map();
+		this.fallbackCarAsset = fallbackAsset;
+		for (let index = 0; index < this.carEffects.length; index += 1) {
+			const effects = this.carEffects[index];
 			if (effects) {
-				effects.setCarAsset(asset);
+				effects.setCarAsset(this.getCarAssetForIndex(index));
 			}
 		}
+		for (const opponent of this.opponentCars) {
+			if (opponent) {
+				this.setOpponentVisual(opponent, this.getCarAssetForIndex(opponent.root.userData.carIndex));
+			}
+		}
+	}
+
+	setSelectedCarVisual(asset) {
+		this.carAsset = asset;
 		if (!this.car) {
+			return;
+		}
+		if (asset === this.activeCarVisualAsset) {
 			return;
 		}
 		if (this.carVisualRoot) {
@@ -460,6 +486,7 @@ export class TorcsScene {
 		this.carLods = [];
 		this.activeCarLod = null;
 		this.selectedWheelModeKey = "";
+		this.activeCarVisualAsset = asset;
 		if (asset && asset.lods && asset.lods.length) {
 			this.carVisualRoot = new THREE.Group();
 			this.carLods = asset.lods
@@ -475,12 +502,6 @@ export class TorcsScene {
 			}
 		} else if (this.carBox) {
 			this.carBox.visible = true;
-		}
-		for (const opponent of this.opponentCars) {
-			if (opponent) {
-				opponent.wheelModeKey = "";
-				this.setOpponentVisual(opponent);
-			}
 		}
 	}
 
@@ -726,6 +747,7 @@ export class TorcsScene {
 			activeLod: null,
 			wheels: [],
 			wheelModeKey: "",
+			asset: null,
 		};
 		this.opponentCars[carIndex] = opponent;
 		opponent.effects.setVisible(false);
@@ -768,7 +790,7 @@ export class TorcsScene {
 			opponent.root.remove(wheel.root);
 		}
 		opponent.wheels = [];
-		const wheelAsset = this.carAsset && this.carAsset.wheelAsset;
+		const wheelAsset = opponent.asset && opponent.asset.wheelAsset;
 		for (const index of WHEEL_ORDER) {
 			const radius = Math.max(0.05, values[SNAPSHOT.wheelRadius0 + index] || 0.32);
 			const width = Math.max(0.04, values[SNAPSHOT.wheelWidth0 + index] || 0.18);
@@ -810,11 +832,11 @@ export class TorcsScene {
 				speedThresholds: wheelAsset.speedThresholds || WHEEL_SPEED_THRESHOLDS,
 			});
 		}
-		opponent.wheelModeKey = getWheelAssetKey(this.carAsset);
+		opponent.wheelModeKey = getWheelAssetKey(opponent.asset);
 	}
 
 	ensureOpponentWheels(opponent, values) {
-		const nextKey = getWheelAssetKey(this.carAsset);
+		const nextKey = getWheelAssetKey(opponent.asset);
 		if (nextKey === opponent.wheelModeKey && opponent.wheels.length === WHEEL_ORDER.length) {
 			return;
 		}
@@ -825,19 +847,25 @@ export class TorcsScene {
 		}
 	}
 
-	setOpponentVisual(opponent) {
+	setOpponentVisual(opponent, asset = null) {
+		if (asset === opponent.asset && (asset ? opponent.visualRoot : opponent.box.visible)) {
+			return;
+		}
 		if (opponent.visualRoot) {
 			opponent.root.remove(opponent.visualRoot);
 		}
+		opponent.asset = asset;
 		opponent.visualRoot = null;
 		opponent.lods = [];
 		opponent.activeLod = null;
-		if (!this.carAsset || !this.carAsset.lods || !this.carAsset.lods.length) {
+		opponent.wheelModeKey = "";
+		opponent.effects.setCarAsset(asset);
+		if (!asset || !asset.lods || !asset.lods.length) {
 			opponent.box.visible = true;
 			return;
 		}
 		opponent.visualRoot = new THREE.Group();
-		opponent.lods = this.carAsset.lods
+		opponent.lods = asset.lods
 			.slice()
 			.sort((a, b) => b.lod.threshold - a.lod.threshold)
 			.map((item) => ({
@@ -878,14 +906,14 @@ export class TorcsScene {
 		const usingGeneratedWheels = opponent.wheels.some((wheel) => wheel.wheelType === "generated");
 		if (next.lod.wheels !== false && usingGeneratedWheels) {
 			warnOnce(
-				`generated-opponent-wheels:${carAssetWarningId(this.carAsset)}:${next.lod.model || next.lod.threshold}`,
+				`generated-opponent-wheels:${carAssetWarningId(opponent.asset)}:${next.lod.model || next.lod.threshold}`,
 				"TORCS web renderer using runtime generated wheels for opponent car LOD",
 				{
-					car: carAssetWarningId(this.carAsset),
+					car: carAssetWarningId(opponent.asset),
 					lod: next.lod.model || "",
 					threshold: next.lod.threshold,
-					wheelAsset: this.carAsset ? this.carAsset.wheelAsset : null,
-					wheelFallback: this.carAsset && this.carAsset.entry ? this.carAsset.entry.wheelFallback : null,
+					wheelAsset: opponent.asset ? opponent.asset.wheelAsset : null,
+					wheelFallback: opponent.asset && opponent.asset.entry ? opponent.asset.entry.wheelFallback : null,
 				},
 			);
 		}
@@ -940,8 +968,9 @@ export class TorcsScene {
 		}
 	}
 
-	updateOpponentCar(values, carIndex, camera = null) {
+	updateOpponentCar(values, carIndex, camera = null, asset = null) {
 		const opponent = this.opponentCars[carIndex] || this.createOpponentCar(values, carIndex);
+		this.setOpponentVisual(opponent, asset);
 		const nextDimensions = getCarDimensions(values);
 		if (nextDimensions.some((value, index) => Math.abs(value - opponent.dimensions[index]) > 0.001)) {
 			opponent.box.geometry.dispose();
@@ -957,14 +986,17 @@ export class TorcsScene {
 		opponent.effects.update(values, opponent.root, camera);
 	}
 
-	updateCars(snapshots, camera = null, selectedCarIndex = 0) {
+	updateCars(snapshots, camera = null, selectedCarIndex = 0, assetsByCarIndex = this.carAssets) {
 		if (!snapshots || !snapshots.length) {
 			return;
+		}
+		if (assetsByCarIndex instanceof Map) {
+			this.carAssets = assetsByCarIndex;
 		}
 		const selected = snapshots.find((values, index) =>
 			getSnapshotCarIndex(values, index) === selectedCarIndex) || snapshots[0];
 		const selectedIndex = getSnapshotCarIndex(selected, snapshots.indexOf(selected));
-		this.updateCar(selected, camera);
+		this.updateCar(selected, camera, this.getCarAssetForIndex(selectedIndex));
 		const activeOpponentIndexes = new Set();
 		for (let i = 0; i < snapshots.length; i += 1) {
 			const carIndex = getSnapshotCarIndex(snapshots[i], i);
@@ -972,7 +1004,7 @@ export class TorcsScene {
 				continue;
 			}
 			activeOpponentIndexes.add(carIndex);
-			this.updateOpponentCar(snapshots[i], carIndex, camera);
+			this.updateOpponentCar(snapshots[i], carIndex, camera, this.getCarAssetForIndex(carIndex));
 		}
 		for (let i = 0; i < this.opponentCars.length; i += 1) {
 			if (this.opponentCars[i]) {
@@ -985,7 +1017,7 @@ export class TorcsScene {
 		}
 	}
 
-	updateCar(values, camera = null) {
+	updateCar(values, camera = null, asset = null) {
 		if (!this.car) {
 			this.createCar(values);
 		}
@@ -1001,7 +1033,9 @@ export class TorcsScene {
 		this.car.position.copy(torcsToThree(values[SNAPSHOT.x], values[SNAPSHOT.y], values[SNAPSHOT.z]));
 		setObjectQuaternionFromTorcsPosMat(this.car, values);
 		const carIndex = getSnapshotCarIndex(values, 0);
+		this.setSelectedCarVisual(asset);
 		this.effects = this.getCarEffects(carIndex);
+		this.effects.setCarAsset(asset);
 		this.effects.setVisible(true);
 		this.ensureSelectedWheels(values);
 		this.selectCarLod(camera);

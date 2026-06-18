@@ -206,6 +206,7 @@ export class TorcsRuntime {
 			if (values) {
 				values.carIndex = i;
 				values.driverName = this.getCarName(i);
+				values.carModelName = this.getCarModelName(i);
 				values.driverKind = this.getDriverKind(i);
 				values.driverModule = this.getDriverModule(i);
 				values.driverRobotIndex = this.getDriverRobotIndex(i);
@@ -221,6 +222,13 @@ export class TorcsRuntime {
 			return "";
 		}
 		return this.call("torcs_web_runtime_get_car_name_by_index", "string", ["number"], [carIndex]);
+	}
+
+	getCarModelName(carIndex) {
+		if (!this.active) {
+			return "";
+		}
+		return this.call("torcs_web_runtime_get_car_model_name_by_index", "string", ["number"], [carIndex]);
 	}
 
 	getDriverKind(carIndex) {

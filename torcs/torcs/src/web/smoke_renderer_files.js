@@ -933,6 +933,43 @@ async function checkTrackAlignment(trackAsset) {
 	return { glbBounds, sampleBounds };
 }
 
+async function checkMultiCarModelMetadata() {
+	const createModule = require(path.join(root, "torcs_web_probe.js"));
+	const module = await createModule({
+		locateFile: (file) => path.join(root, file),
+	});
+	try {
+		const start = module.ccall(
+			"torcs_web_runtime_start_multi_with_files",
+			"number",
+			["string", "string", "number"],
+			[
+				"/torcs/data/tracks/e-track-1/e-track-1.xml",
+				"/torcs/data/cars/models/kc-2000gt/kc-2000gt.xml",
+				4,
+			],
+		);
+		if (start !== 0) {
+			fail("TORCS web renderer smoke test could not start multi-car runtime", { start });
+		}
+		const models = [];
+		const drivers = [];
+		for (let carIndex = 0; carIndex < 4; carIndex += 1) {
+			models.push(module.ccall("torcs_web_runtime_get_car_model_name_by_index", "string", ["number"], [carIndex]));
+			drivers.push(module.ccall("torcs_web_runtime_get_car_name_by_index", "string", ["number"], [carIndex]));
+		}
+		if (models[0] !== "kc-2000gt" || models[1] !== "kc-a110" || new Set(models).size < 3) {
+			fail("TORCS web renderer smoke test found malformed multi-car model metadata", { models, drivers });
+		}
+		if (drivers[1] === models[1]) {
+			fail("TORCS web renderer smoke test found model metadata collapsed into driver display name", { models, drivers });
+		}
+		return { models, drivers };
+	} finally {
+		module.ccall("torcs_web_runtime_shutdown", null, [], []);
+	}
+}
+
 const files = [
 	"../CMakeLists.txt",
 	"torcs_web_renderer.html",
@@ -988,6 +1025,9 @@ requireText(byPath["renderer/assets.js"], "async loadEffects()", "effect texture
 requireText(byPath["renderer/assets.js"], "manifest.effects && manifest.effects.textures", "effect texture manifest lookup");
 requireText(byPath["renderer/assets.js"], "shadowTexture", "car shadow texture loading");
 requireText(byPath["renderer/assets.js"], "typeof caps.getMaxAnisotropy === \"function\"", "guarded renderer anisotropy capability");
+requireText(byPath["renderer/assets.js"], "this.carCache = new Map()", "cached car visual asset storage");
+requireText(byPath["renderer/assets.js"], "resolveCarPathByModelName(modelName)", "runtime car model name manifest resolver");
+requireText(byPath["renderer/assets.js"], "loadCarAssetsForSnapshots(snapshots = [], fallbackCarPath = \"\")", "per-snapshot car visual asset loading");
 requireText(byPath["renderer/assets.js"], "texture.anisotropy = Math.max(1, this.getMaxAnisotropy())", "anisotropic texture sampling");
 requireText(byPath["renderer/assets.js"], "texture.minFilter = THREE.LinearMipmapLinearFilter", "mipmapped distant texture filtering");
 requireText(byPath["renderer/assets.js"], "new THREE.MeshLambertMaterial", "legacy matte material conversion");
@@ -1009,7 +1049,7 @@ requireText(byPath["renderer/assets.js"], "loadDataTexture(relativePath)", "mate
 requireText(byPath["renderer/assets.js"], "clearcoatMap: remasterMaterialMask", "paint clearcoat mask binding");
 requireText(byPath["renderer/assets.js"], "roughnessMap: remasterMaterialMask", "paint roughness mask binding");
 requireText(byPath["renderer/assets.js"], "const source = normalizeRuntimePath(carPath)", "car asset source path annotation");
-requireText(byPath["renderer/assets.js"], "return { entry: carEntry, lods, wheelAsset, shadowTexture, materialMask }", "loaded car entry source metadata");
+requireText(byPath["renderer/assets.js"], "const asset = { entry: carEntry, lods, wheelAsset, shadowTexture, materialMask }", "loaded car entry source metadata");
 requireText(byPath["renderer/assets.js"], "entry.wheelAsset.states.map", "detailed wheel asset loading");
 requireText(byPath["renderer/assets.js"], "case \"wheelTire\":", "modern wheel tire material class");
 requireText(byPath["renderer/assets.js"], "case \"wheelRim\":", "modern wheel rim material class");
@@ -1031,6 +1071,8 @@ requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_write_snapshot", "
 requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_start_multi_with_files", "Phase 6 multi-car runtime start export");
 requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_get_car_count", "Phase 6 car count export");
 requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_write_car_snapshot", "Phase 6 per-car snapshot export");
+requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_get_car_model_name_by_index", "runtime car model-name call");
+requireText(byPath["renderer/runtime.js"], "values.carModelName = this.getCarModelName(i)", "snapshot car model-name metadata");
 requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_get_car_driver_kind", "robot driver-kind runtime call");
 requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_get_car_driver_module", "robot driver-module runtime call");
 requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_get_car_driver_robot_index", "robot driver-index runtime call");
@@ -1043,6 +1085,7 @@ requireText(byPath["renderer/runtime.js"], "export class TorcsRuntime", "runtime
 requireText(byPath["../CMakeLists.txt"], "'_torcs_web_runtime_start_multi_with_files'", "Phase 6 multi-car Emscripten export");
 requireText(byPath["../CMakeLists.txt"], "'_torcs_web_runtime_get_car_count'", "Phase 6 car-count Emscripten export");
 requireText(byPath["../CMakeLists.txt"], "'_torcs_web_runtime_get_car_name_by_index'", "Phase 6 car-name Emscripten export");
+requireText(byPath["../CMakeLists.txt"], "'_torcs_web_runtime_get_car_model_name_by_index'", "car model-name Emscripten export");
 requireText(byPath["../CMakeLists.txt"], "'_torcs_web_runtime_get_car_driver_kind'", "robot driver-kind Emscripten export");
 requireText(byPath["../CMakeLists.txt"], "'_torcs_web_runtime_get_car_driver_module'", "robot driver-module Emscripten export");
 requireText(byPath["../CMakeLists.txt"], "'_torcs_web_runtime_get_car_driver_robot_index'", "robot driver-index Emscripten export");
@@ -1084,7 +1127,9 @@ requireText(byPath["renderer/main.js"], "elements.renderProfile.addEventListener
 requireText(byPath["renderer/main.js"], "applyRenderProfile(elements.renderProfile.value, true)", "render profile visual asset reload");
 requireText(byPath["renderer/main.js"], "runtime.readTrackSamples()", "track sample ingestion");
 requireText(byPath["renderer/main.js"], "runtime.readSnapshots()", "Phase 6 snapshot array ingestion");
-requireText(byPath["renderer/main.js"], "scene.updateCars(snapshots, cameras.camera, selectedCarIndex)", "Phase 6 selected-car scene update");
+requireText(byPath["renderer/main.js"], "scene.updateCars(snapshots, cameras.camera, selectedCarIndex, carAssets)", "Phase 6 selected-car scene update with per-car visual assets");
+requireText(byPath["renderer/main.js"], "loadCarAssetsForSnapshots(snapshots, elements.car.value)", "runtime car model visual asset loading");
+requireText(byPath["renderer/main.js"], "TORCS web renderer using selected car visual fallback for runtime car model", "per-car visual fallback warning");
 requireText(byPath["renderer/main.js"], "findSnapshotByCarIndex(selectedCarIndex)", "Phase 6 selected-car snapshot lookup");
 requireText(byPath["renderer/main.js"], "elements.currentCar.addEventListener", "Phase 6 current-car selector binding");
 requireText(byPath["renderer/main.js"], "elements.carCount.value", "Phase 6 car count startup control");
@@ -1173,10 +1218,13 @@ requireText(byPath["renderer/scene.js"], "camera.position.y + BACKGROUND_HEIGHT 
 requireText(byPath["renderer/scene.js"], "color: 0xffffff", "unlit untinted background texture");
 requireText(byPath["renderer/scene.js"], "torcsToThree(entry.lightPosition[0], entry.lightPosition[1], entry.lightPosition[2])", "track light position conversion");
 requireText(byPath["renderer/scene.js"], "setCarVisual(asset)", "converted car LOD hook");
-requireText(byPath["renderer/scene.js"], "updateCars(snapshots, camera = null, selectedCarIndex = 0)", "Phase 6 multi-car scene update");
+requireText(byPath["renderer/scene.js"], "setCarVisualAssets(assetsByCarIndex = new Map(), fallbackAsset = null)", "per-car visual asset map hook");
+requireText(byPath["renderer/scene.js"], "getCarAssetForIndex(carIndex)", "car-index visual asset lookup");
+requireText(byPath["renderer/scene.js"], "updateCars(snapshots, camera = null, selectedCarIndex = 0, assetsByCarIndex = this.carAssets)", "Phase 6 multi-car scene update");
 requireText(byPath["renderer/scene.js"], "createOpponentCar(values, carIndex)", "Phase 6 opponent car creation");
 requireText(byPath["renderer/scene.js"], "getOpponentColor(carIndex)", "Phase 6 car-zero opponent color");
 requireText(byPath["renderer/scene.js"], "getSnapshotCarIndex(values, index) === selectedCarIndex", "Phase 6 selected car primary visual");
+requireText(byPath["renderer/scene.js"], "asset.lods", "opponent uses assigned car asset LODs");
 requireText(byPath["renderer/scene.js"], "tintClone(item.scene, opponent.color)", "Phase 6 distinct opponent car visual tint");
 requireText(byPath["renderer/scene.js"], "setObjectQuaternionFromTorcsPosMat(opponent.root, values)", "Phase 6 opponent pose matrix conversion");
 requireText(byPath["renderer/scene.js"], "selectOpponentLod(opponent, camera)", "Phase 6 opponent LOD switching");
@@ -1383,8 +1431,8 @@ crashSounds.forEach((entry, index) => {
 	checkWav(entry.asset);
 });
 
-Promise.all([checkAudioModelBehavior(), checkInputControllerBehavior(), checkTrackAlignment(track.asset)])
-	.then(([audioModel, inputController, alignment]) => {
+Promise.all([checkAudioModelBehavior(), checkInputControllerBehavior(), checkTrackAlignment(track.asset), checkMultiCarModelMetadata()])
+	.then(([audioModel, inputController, alignment, multiCarModels]) => {
 		console.log(JSON.stringify({
 			rendererFiles: files.length,
 			html: "torcs_web_renderer.html",
@@ -1394,6 +1442,7 @@ Promise.all([checkAudioModelBehavior(), checkInputControllerBehavior(), checkTra
 			webAssetTracks: Object.keys(manifest.tracks).length,
 			webAssetCars: Object.keys(manifest.cars).length,
 			alignment,
+			multiCarModels,
 		}));
 	})
 	.catch((error) => fail("TORCS web renderer smoke test failed", { error: error.message }));
