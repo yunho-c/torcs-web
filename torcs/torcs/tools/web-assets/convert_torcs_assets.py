@@ -636,7 +636,7 @@ def convert_ac_to_glb(source_root, source_path, output_path, object_classifier=N
 		material = {
 			"name": make_material_name(texture, material_class),
 			"pbrMetallicRoughness": {
-				"baseColorFactor": [0.72, 0.72, 0.72, 1.0],
+				"baseColorFactor": [1.0, 1.0, 1.0, 1.0],
 				"metallicFactor": 0.0,
 				"roughnessFactor": 0.9,
 			},
