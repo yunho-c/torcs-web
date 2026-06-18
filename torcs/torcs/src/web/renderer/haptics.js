@@ -1,4 +1,4 @@
-import { Dualsense, TriggerEffect, findDualsenseAudioDevices } from "dualsense-ts";
+import { Dualsense, TriggerEffect, AudioOutput, findDualsenseAudioDevices } from "dualsense-ts";
 import { SNAPSHOT } from "./runtime.js";
 
 const WHEEL_COUNT = 4;
@@ -428,6 +428,7 @@ export class DualSenseHaptics {
 			controllerRequested: false,
 			controllerConnectionActive: false,
 			controllerWireless: false,
+			audioRoutingConfigured: false,
 			audioEnumeration: "not-started",
 			audioOutputCount: 0,
 			audioInputCount: 0,
@@ -545,6 +546,41 @@ export class DualSenseHaptics {
 		}
 	}
 
+	configureControllerAudio() {
+		if (!this.controller || !this.controller.audio) {
+			return;
+		}
+		try {
+			this.controller.audio.setOutput(AudioOutput.Speaker);
+			this.controller.audio.setSpeakerVolume(1);
+			this.controller.audio.setHeadphoneVolume(0);
+			this.controller.audio.muteSpeaker(false);
+			this.controller.audio.muteHeadphone(true);
+			if (this.controller.powerSave) {
+				this.controller.powerSave.audio = true;
+				this.controller.powerSave.haptics = true;
+				this.controller.powerSave.hapticsMuted = false;
+			}
+			this.setDiagnostic({ audioRoutingConfigured: true });
+		} catch (error) {
+			this.setDiagnostic({
+				audioRoutingConfigured: false,
+				sinkError: error && error.message ? error.message : String(error),
+			});
+		}
+	}
+
+	async waitForControllerConnection(timeoutMs = 1800) {
+		const start = performance.now();
+		while (performance.now() - start < timeoutMs) {
+			if (this.controller && this.controller.connection && this.controller.connection.active) {
+				return true;
+			}
+			await new Promise((resolve) => setTimeout(resolve, 30));
+		}
+		return Boolean(this.controller && this.controller.connection && this.controller.connection.active);
+	}
+
 	async requestController() {
 		if (!this.controller) {
 			this.controller = new Dualsense();
@@ -571,8 +607,14 @@ export class DualSenseHaptics {
 		}
 		const provider = this.controller.hid && this.controller.hid.provider;
 		if (provider && typeof provider.getRequest === "function") {
-			await provider.getRequest();
+			const requestDevice = provider.getRequest();
+			if (typeof requestDevice === "function") {
+				await requestDevice();
+			}
+		} else if (provider && typeof provider.connect === "function") {
+			await Promise.resolve(provider.connect());
 		}
+		await this.waitForControllerConnection();
 		this.setDiagnostic({
 			controllerRequested: true,
 			controllerConnectionActive: Boolean(this.controller.connection && this.controller.connection.active),
@@ -699,6 +741,7 @@ export class DualSenseHaptics {
 			this.context = await this.createAudioContext();
 			this.fallbackRumble = !this.context;
 			if (this.context) {
+				this.configureControllerAudio();
 				if (this.context.state !== "running") {
 					await this.context.resume();
 				}

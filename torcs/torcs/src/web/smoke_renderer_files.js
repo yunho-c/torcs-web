@@ -264,10 +264,13 @@ async function importHapticsModuleForSmoke() {
 	fs.mkdirSync(rendererDir, { recursive: true });
 	try {
 		const hapticsSource = byPath["renderer/haptics.js"].content.replace(
-			"import { Dualsense, TriggerEffect, findDualsenseAudioDevices } from \"dualsense-ts\";",
+			"import { Dualsense, TriggerEffect, AudioOutput, findDualsenseAudioDevices } from \"dualsense-ts\";",
 			`const TriggerEffect = {
 \tFeedback: "feedback",
 \tVibration: "vibration",
+};
+const AudioOutput = {
+\tSpeaker: 0x30,
 };
 class Dualsense {}
 async function findDualsenseAudioDevices() {
@@ -1318,6 +1321,8 @@ requireText(byPath["renderer/haptics.js"], "findDualsenseAudioDevices", "DualSen
 requireText(byPath["renderer/haptics.js"], "getDiagnostics()", "DualSense haptics diagnostics getter");
 requireText(byPath["renderer/haptics.js"], "inspectMediaDevices()", "DualSense haptics raw media-device diagnostics");
 requireText(byPath["renderer/haptics.js"], "requestAudioDeviceLabelAccess()", "DualSense haptics audio label permission helper");
+requireText(byPath["renderer/haptics.js"], "configureControllerAudio()", "DualSense haptics controller audio routing");
+requireText(byPath["renderer/haptics.js"], "requestDevice()", "DualSense haptics invokes WebHID request callback");
 requireText(byPath["renderer/haptics.js"], "fallbackReason", "DualSense haptics fallback reason");
 requireText(byPath["renderer/haptics.js"], "audio-device-labels-redacted", "DualSense haptics redacted-label diagnostic");
 requireText(byPath["renderer/haptics.js"], "No DualSense USB audio output was found", "DualSense haptics no-audio-output diagnostic");
