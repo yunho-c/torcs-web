@@ -1317,17 +1317,22 @@ requireText(byPath["renderer/audio.js"], "SNAPSHOT.wheelSurfaceStyle0", "curb st
 
 requireText(byPath["renderer/haptics.js"], "export class DualSenseHaptics", "DualSense haptics runtime export");
 requireText(byPath["renderer/haptics.js"], "export class DualSenseTelemetryModel", "DualSense telemetry model export");
-requireText(byPath["renderer/haptics.js"], "findDualsenseAudioDevices", "DualSense USB audio sink discovery");
+requireText(byPath["renderer/haptics.js"], "findDualsenseAudioDevices", "DualSense speaker PCM debug discovery");
 requireText(byPath["renderer/haptics.js"], "getDiagnostics()", "DualSense haptics diagnostics getter");
 requireText(byPath["renderer/haptics.js"], "inspectMediaDevices()", "DualSense haptics raw media-device diagnostics");
 requireText(byPath["renderer/haptics.js"], "requestAudioDeviceLabelAccess()", "DualSense haptics audio label permission helper");
-requireText(byPath["renderer/haptics.js"], "configureControllerAudio()", "DualSense haptics controller audio routing");
+requireText(byPath["renderer/haptics.js"], "class HidRumbleSynth", "DualSense HID rumble synthesis");
+requireText(byPath["renderer/haptics.js"], "hapticTransport", "DualSense haptics transport diagnostic");
+requireText(byPath["renderer/haptics.js"], "hid-rumble", "DualSense HID rumble primary transport");
+requireText(byPath["renderer/haptics.js"], "configureControllerHaptics()", "DualSense haptics power-save routing");
+requireText(byPath["renderer/haptics.js"], "configureControllerAudio()", "DualSense PCM debug controller audio routing");
+requireText(byPath["renderer/haptics.js"], "enablePcmDebug()", "DualSense PCM debug opt-in method");
 requireText(byPath["renderer/haptics.js"], "requestDevice()", "DualSense haptics invokes WebHID request callback");
 requireText(byPath["renderer/haptics.js"], "fallbackReason", "DualSense haptics fallback reason");
 requireText(byPath["renderer/haptics.js"], "audio-device-labels-redacted", "DualSense haptics redacted-label diagnostic");
-requireText(byPath["renderer/haptics.js"], "No DualSense USB audio output was found", "DualSense haptics no-audio-output diagnostic");
+requireText(byPath["renderer/haptics.js"], "No DualSense USB speaker PCM debug output was found", "DualSense PCM debug no-audio-output diagnostic");
 requireText(byPath["renderer/haptics.js"], "TriggerEffect.Vibration", "adaptive trigger ABS vibration");
-requireText(byPath["renderer/haptics.js"], "controller.left.rumble", "fallback left rumble output");
+requireText(byPath["renderer/haptics.js"], "controller.left.rumble", "primary left rumble output");
 requireText(byPath["renderer/haptics.js"], "wheelOtherSurfaceContribution0", "mixed-surface haptic routing");
 
 requireText(byPath["renderer/scene.js"], "import * as THREE from \"three/webgpu\"", "Three.js WebGPU module import");

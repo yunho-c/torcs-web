@@ -12,6 +12,7 @@ const TR_CURB = 1;
 const RM_CAR_STATE_NO_SIMU = 0x000000FF;
 const DEFAULT_CYLINDERS = 4;
 const HAPTIC_GAIN_RAMP = 0.025;
+const TWO_PI = Math.PI * 2;
 const FALLBACK_REASONS = {
 	noAudioContext: "no-audio-context",
 	enumerationFailed: "audio-device-enumeration-failed",
@@ -20,6 +21,11 @@ const FALLBACK_REASONS = {
 	sinkFailed: "audio-sink-failed",
 };
 const DUALSENSE_AUDIO_LABELS = ["wireless controller", "dualsense"];
+const HAPTIC_TRANSPORT = {
+	hidRumble: "hid-rumble",
+	pcmDebug: "pcm-debug",
+	unavailable: "unavailable",
+};
 
 function clamp(value, min, max) {
 	return Math.min(max, Math.max(min, value));
@@ -406,6 +412,65 @@ export class DualSenseTelemetryModel {
 	}
 }
 
+class HidRumbleSynth {
+	constructor() {
+		this.time = 0;
+		this.gearPulse = 0;
+		this.collisionPulse = 0;
+		this.noiseSeed = 0x6d2b79f5;
+	}
+
+	reset() {
+		this.time = 0;
+		this.gearPulse = 0;
+		this.collisionPulse = 0;
+		this.noiseSeed = 0x6d2b79f5;
+	}
+
+	nextNoise() {
+		this.noiseSeed = (Math.imul(this.noiseSeed, 1664525) + 1013904223) >>> 0;
+		return this.noiseSeed / 0xffffffff;
+	}
+
+	update(model, intensity = 1, deltaTime = 1 / 30) {
+		const dt = clamp(finite(deltaTime, 1 / 30), 1 / 120, 1 / 15);
+		this.time += dt;
+		if (model.transients.gear) {
+			this.gearPulse = 1;
+		}
+		if (model.transients.collision) {
+			this.collisionPulse = 1;
+		}
+
+		const engineRate = 7 + clamp(model.engine.frequency / 22, 0, 9);
+		const engineMod = 0.68 + 0.32 * (0.5 + 0.5 * Math.sin(TWO_PI * engineRate * this.time));
+		const slipPulse = 0.62 + 0.38 * Math.abs(Math.sin(TWO_PI * 13.5 * this.time));
+		const absPulse = model.triggers && model.triggers.absPulse ?
+			0.5 + 0.5 * Math.abs(Math.sin(TWO_PI * 15.5 * this.time)) :
+			0;
+		const leftNoise = 0.45 + 0.55 * this.nextNoise();
+		const rightNoise = 0.45 + 0.55 * this.nextNoise();
+		const centerBurst = this.gearPulse * 0.3 + this.collisionPulse * 0.85 + absPulse * 0.24;
+		const engine = model.engine.amplitude * 1.7 * engineMod;
+		const left = engine +
+			model.left.slip * 0.58 * slipPulse +
+			model.left.texture * 0.54 * leftNoise +
+			centerBurst;
+		const right = engine +
+			model.right.slip * 0.58 * slipPulse +
+			model.right.texture * 0.54 * rightNoise +
+			centerBurst;
+
+		this.gearPulse *= Math.exp(-dt / 0.085);
+		this.collisionPulse *= Math.exp(-dt / 0.16);
+
+		return {
+			left: clamp(left * intensity, 0, 1),
+			right: clamp(right * intensity, 0, 1),
+		};
+	}
+}
+
 export class DualSenseHaptics {
 	constructor(onStatus = () => {}) {
 		this.onStatus = onStatus;
@@ -413,8 +478,9 @@ export class DualSenseHaptics {
 		this.context = null;
 		this.graph = null;
 		this.model = new DualSenseTelemetryModel();
+		this.rumbleSynth = new HidRumbleSynth();
 		this.enabled = false;
-		this.fallbackRumble = false;
+		this.pcmDebugEnabled = false;
 		this.status = "locked";
 		this.intensity = 0.65;
 		this.lastRumbleUpdate = 0;
@@ -429,6 +495,9 @@ export class DualSenseHaptics {
 			controllerConnectionActive: false,
 			controllerWireless: false,
 			audioRoutingConfigured: false,
+			hapticTransport: HAPTIC_TRANSPORT.unavailable,
+			pcmDebugAvailable: false,
+			pcmDebugEnabled: false,
 			audioEnumeration: "not-started",
 			audioOutputCount: 0,
 			audioInputCount: 0,
@@ -458,6 +527,7 @@ export class DualSenseHaptics {
 			...this.diagnostics,
 			controllerConnectionActive: Boolean(this.controller && this.controller.connection && this.controller.connection.active),
 			controllerWireless: Boolean(this.controller && this.controller.wireless),
+			pcmDebugEnabled: this.pcmDebugEnabled,
 			status: this.status,
 		};
 	}
@@ -570,6 +640,23 @@ export class DualSenseHaptics {
 		}
 	}
 
+	configureControllerHaptics() {
+		if (!this.controller || !this.controller.powerSave) {
+			return;
+		}
+		try {
+			this.controller.powerSave.haptics = true;
+			this.controller.powerSave.hapticsMuted = false;
+			this.setDiagnostic({
+				hapticTransport: HAPTIC_TRANSPORT.hidRumble,
+			});
+		} catch (error) {
+			this.setDiagnostic({
+				sinkError: error && error.message ? error.message : String(error),
+			});
+		}
+	}
+
 	async waitForControllerConnection(timeoutMs = 1800) {
 		const start = performance.now();
 		while (performance.now() - start < timeoutMs) {
@@ -595,10 +682,9 @@ export class DualSenseHaptics {
 							summary: "DualSense disconnected; waiting for reconnection",
 						});
 					} else if (active && this.enabled) {
-						this.setStatus(this.fallbackRumble ? "fallback" : "active", {
-							summary: this.fallbackRumble ?
-								this.diagnostics.summary :
-								"DualSense stereo audio haptics active",
+						this.setStatus("active", {
+							hapticTransport: HAPTIC_TRANSPORT.hidRumble,
+							summary: "DualSense HID rumble haptics active",
 						});
 						this.applyTriggerFeedback(this.model.makeSilentModel());
 					}
@@ -615,6 +701,9 @@ export class DualSenseHaptics {
 			await Promise.resolve(provider.connect());
 		}
 		await this.waitForControllerConnection();
+		if (!this.controller.connection || !this.controller.connection.active) {
+			throw new Error("DualSense HID connection was not activated");
+		}
 		this.setDiagnostic({
 			controllerRequested: true,
 			controllerConnectionActive: Boolean(this.controller.connection && this.controller.connection.active),
@@ -628,7 +717,7 @@ export class DualSenseHaptics {
 		if (!AudioContextCtor) {
 			this.setDiagnostic({
 				fallbackReason: FALLBACK_REASONS.noAudioContext,
-				summary: "Web Audio is unavailable; using HID rumble fallback",
+				summary: "Web Audio is unavailable for DualSense speaker PCM debug",
 			});
 			return null;
 		}
@@ -644,6 +733,7 @@ export class DualSenseHaptics {
 				audioEnumeration: "ok",
 				audioOutputCount: outputs.length,
 				audioInputCount: inputs.length,
+				pcmDebugAvailable: outputs.length > 0,
 				audioOutputs: outputs.map((output) => ({
 					label: output.label || "",
 					deviceId: output.deviceId ? "[available]" : "",
@@ -656,7 +746,7 @@ export class DualSenseHaptics {
 				audioEnumeration: "error",
 				fallbackReason: FALLBACK_REASONS.enumerationFailed,
 				sinkError: error && error.message ? error.message : String(error),
-				summary: "DualSense audio device enumeration failed; using HID rumble fallback",
+				summary: "DualSense speaker PCM debug device enumeration failed",
 			});
 		}
 		const sinkId = outputs.length ? outputs[0].deviceId : "";
@@ -664,7 +754,7 @@ export class DualSenseHaptics {
 			if (this.diagnostics.mediaLabelsRedacted) {
 				this.setDiagnostic({
 					fallbackReason: FALLBACK_REASONS.audioLabelsRedacted,
-					summary: "Audio output labels are hidden; run window.torcsHaptics.requestAudioDeviceLabelAccess() or grant microphone permission, then click Haptics again",
+					summary: "Audio output labels are hidden; run window.torcsHaptics.requestAudioDeviceLabelAccess() before enabling PCM debug",
 				});
 				return null;
 			}
@@ -673,13 +763,13 @@ export class DualSenseHaptics {
 			if (possibleDualSenseOutput) {
 				this.setDiagnostic({
 					fallbackReason: FALLBACK_REASONS.noDualSenseAudioOutput,
-					summary: "A DualSense-like audio output was visible but dualsense-ts did not return it; inspect mediaAudioOutputs",
+					summary: "A DualSense-like audio output was visible but dualsense-ts did not return it for PCM debug; inspect mediaAudioOutputs",
 				});
 				return null;
 			}
 			this.setDiagnostic({
 				fallbackReason: FALLBACK_REASONS.noDualSenseAudioOutput,
-				summary: "No DualSense USB audio output was found; connect the controller over USB and confirm the OS exposes a Wireless Controller audio output",
+				summary: "No DualSense USB speaker PCM debug output was found",
 			});
 			return null;
 		}
@@ -692,7 +782,8 @@ export class DualSenseHaptics {
 				this.setDiagnostic({
 					sinkStrategy: "constructor-sinkId",
 					fallbackReason: "",
-					summary: "DualSense stereo audio haptics active",
+					pcmDebugAvailable: true,
+					summary: "DualSense speaker PCM debug active",
 				});
 				return context;
 			} catch (constructorError) {
@@ -702,7 +793,7 @@ export class DualSenseHaptics {
 						fallbackReason: FALLBACK_REASONS.sinkFailed,
 						sinkStrategy: "unavailable",
 						sinkError: constructorError && constructorError.message ? constructorError.message : String(constructorError),
-						summary: "Browser could not route Web Audio to the DualSense output; using HID rumble fallback",
+						summary: "Browser could not route Web Audio to the DualSense speaker PCM debug output",
 					});
 					await context.close();
 					return null;
@@ -712,7 +803,8 @@ export class DualSenseHaptics {
 					this.setDiagnostic({
 						sinkStrategy: "setSinkId",
 						fallbackReason: "",
-						summary: "DualSense stereo audio haptics active",
+						pcmDebugAvailable: true,
+						summary: "DualSense speaker PCM debug active",
 					});
 					return context;
 				} catch (setSinkError) {
@@ -720,7 +812,7 @@ export class DualSenseHaptics {
 						fallbackReason: FALLBACK_REASONS.sinkFailed,
 						sinkStrategy: "setSinkId-failed",
 						sinkError: setSinkError && setSinkError.message ? setSinkError.message : String(setSinkError),
-						summary: "Browser refused the DualSense audio sink; using HID rumble fallback",
+						summary: "Browser refused the DualSense speaker PCM debug output",
 					});
 					await context.close();
 					return null;
@@ -730,32 +822,66 @@ export class DualSenseHaptics {
 		return null;
 	}
 
+	async enablePcmDebug() {
+		if (!this.controller || !this.controller.connection || !this.controller.connection.active) {
+			await this.requestController();
+		}
+		if (!this.context) {
+			this.context = await this.createAudioContext();
+		}
+		if (!this.context) {
+			this.pcmDebugEnabled = false;
+			this.setDiagnostic({
+				pcmDebugEnabled: false,
+			});
+			return false;
+		}
+		this.configureControllerAudio();
+		if (this.context.state !== "running") {
+			await this.context.resume();
+		}
+		if (!this.graph) {
+			this.graph = new HapticSynthGraph(this.context);
+		}
+		this.graph.setIntensity(this.intensity);
+		this.pcmDebugEnabled = true;
+		this.setDiagnostic({
+			pcmDebugEnabled: true,
+			pcmDebugAvailable: true,
+			summary: "DualSense speaker PCM debug active",
+		});
+		this.logDiagnostics("TORCS DualSense PCM debug enabled");
+		return true;
+	}
+
+	disablePcmDebug() {
+		this.pcmDebugEnabled = false;
+		this.disposeGraph();
+		this.setDiagnostic({
+			pcmDebugEnabled: false,
+			summary: this.enabled ? "DualSense HID rumble haptics active" : "DualSense speaker PCM debug disabled",
+		});
+	}
+
 	async enable() {
 		this.setStatus("loading", {
 			fallbackReason: "",
 			sinkError: "",
-			summary: "Requesting DualSense HID and audio access",
+			hapticTransport: HAPTIC_TRANSPORT.unavailable,
+			summary: "Requesting DualSense HID access",
 		});
 		try {
 			await this.requestController();
-			this.context = await this.createAudioContext();
-			this.fallbackRumble = !this.context;
-			if (this.context) {
-				this.configureControllerAudio();
-				if (this.context.state !== "running") {
-					await this.context.resume();
-				}
-				this.graph = new HapticSynthGraph(this.context);
-				this.graph.setIntensity(this.intensity);
-			}
 			this.enabled = true;
 			this.model.reset();
+			this.rumbleSynth.reset();
+			this.configureControllerHaptics();
 			this.setControllerLight(true);
 			this.applyTriggerFeedback(this.model.makeSilentModel());
-			this.setStatus(this.fallbackRumble ? "fallback" : "active", {
-				summary: this.fallbackRumble ?
-					this.diagnostics.summary :
-					"DualSense stereo audio haptics active",
+			this.setStatus("active", {
+				fallbackReason: "",
+				hapticTransport: HAPTIC_TRANSPORT.hidRumble,
+				summary: "DualSense HID rumble haptics active",
 			});
 			this.logDiagnostics();
 			return true;
@@ -776,7 +902,9 @@ export class DualSenseHaptics {
 		this.stopControllerOutputs();
 		this.disposeGraph();
 		this.model.reset();
+		this.rumbleSynth.reset();
 		this.setStatus("off", {
+			hapticTransport: HAPTIC_TRANSPORT.unavailable,
 			summary: "DualSense haptics disabled",
 		});
 	}
@@ -786,12 +914,14 @@ export class DualSenseHaptics {
 			return;
 		}
 		this.model.reset();
+		this.rumbleSynth.reset();
 		this.stopControllerOutputs();
 		this.applyTriggerFeedback(this.model.makeSilentModel());
 	}
 
 	resetDynamics() {
 		this.model.reset();
+		this.rumbleSynth.reset();
 		this.lastTriggerSignature = "";
 	}
 
@@ -804,6 +934,7 @@ export class DualSenseHaptics {
 			this.context.close().catch(() => {});
 			this.context = null;
 		}
+		this.pcmDebugEnabled = false;
 	}
 
 	setControllerLight(active) {
@@ -855,25 +986,25 @@ export class DualSenseHaptics {
 	}
 
 	updateRumble(model) {
-		if (!this.controller || !model || !this.fallbackRumble) {
+		if (!this.controller || !model || !this.enabled) {
 			return;
 		}
 		const now = performance.now();
 		if (now - this.lastRumbleUpdate < 33) {
 			return;
 		}
+		const rumbleDelta = this.lastRumbleUpdate > 0 ? (now - this.lastRumbleUpdate) / 1000 : model.deltaTime;
 		this.lastRumbleUpdate = now;
 		try {
-			const left = clamp(model.rumble.left * this.intensity, 0, 1);
-			const right = clamp(model.rumble.right * this.intensity, 0, 1);
+			const rumble = this.rumbleSynth.update(model, this.intensity, rumbleDelta);
 			if (this.controller.left && typeof this.controller.left.rumble === "function") {
-				this.controller.left.rumble(left);
+				this.controller.left.rumble(rumble.left);
 			}
 			if (this.controller.right && typeof this.controller.right.rumble === "function") {
-				this.controller.right.rumble(right);
+				this.controller.right.rumble(rumble.right);
 			}
 		} catch (error) {
-			console.warn("TORCS DualSense haptics rumble fallback failed", error);
+			console.warn("TORCS DualSense haptics rumble synthesis failed", error);
 		}
 	}
 
@@ -882,7 +1013,7 @@ export class DualSenseHaptics {
 			return;
 		}
 		const model = this.model.update(values, deltaTime);
-		if (this.graph) {
+		if (this.pcmDebugEnabled && this.graph) {
 			this.graph.update(model);
 			if (model.transients.gear) {
 				this.graph.playTransient({ left: 1, right: 1, gain: 0.58, duration: 0.038 });
