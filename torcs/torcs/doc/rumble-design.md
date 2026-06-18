@@ -46,6 +46,10 @@ flowchart TD
     Collision --> Synth
     Abs --> Synth
 
+    Config[Rumble config popup] --> Synth
+    Config --> Storage[localStorage preset]
+    Storage --> Config
+
     Synth --> Mix[Clamp and apply Force slider]
     Mix --> Left[controller.left.rumble]
     Mix --> Right[controller.right.rumble]
@@ -55,6 +59,44 @@ flowchart TD
     TriggerScale --> L2[L2 brake feedback/vibration]
     TriggerScale --> R2[R2 throttle feedback]
 ```
+
+## Rumble Configuration Popup
+
+The `Config` button beside `Haptics` opens a runtime tuning popup for
+experiential testing. It is intentionally source-oriented rather than
+device-oriented: every row maps to one contribution that appears in the mix.
+
+The popup provides:
+
+- `On`: enables or disables one source.
+- `Solo`: mutes every other source so the selected source can be evaluated in
+  isolation.
+- `Gain`: scales that source before final clamping and before the global
+  `Force` slider.
+- Source-specific sliders, such as pulse rate, decay, texture noise, and engine
+  modulation depth/rate.
+- `Copy JSON`, `Paste JSON`, and `Reset Defaults` for quick A/B testing and
+  sharing settings.
+
+Settings are sanitized and persisted in browser `localStorage` under:
+
+```text
+torcs-web:dualsense-rumble-config:v1
+```
+
+The active configuration is also available through `window.torcsHaptics`:
+
+```js
+window.torcsHaptics.getRumbleConfig()
+window.torcsHaptics.setRumbleConfig({ slip: { gain: 1.25 } })
+window.torcsHaptics.importRumbleConfig(json)
+window.torcsHaptics.resetRumbleConfig()
+```
+
+Diagnostics include a compact `rumbleConfig` summary and the last
+`rumbleOutput`, including per-source contribution values. This makes it
+possible to tell whether a source is mathematically active even when the
+physical controller feel is subtle.
 
 ## Source Contributions
 
@@ -80,6 +122,10 @@ engine = engineAmplitude * 1.7 * engineMod
 This makes higher RPM/load feel more active while keeping the signal inside the
 low-rate HID rumble bandwidth.
 
+The config popup exposes engine `gain`, modulation depth, and modulation rate
+scale. Turning modulation depth down makes the engine a steadier baseline;
+turning rate scale up makes RPM changes feel busier.
+
 ### Tire Slip
 
 Tire slip is the main traction warning. Each wheel contributes the maximum of:
@@ -100,6 +146,10 @@ The rumble synth applies a shudder envelope:
 slipPulse = 0.62 + 0.38 * abs(sin(13.5 Hz phase))
 side += sideSlip * 0.58 * slipPulse
 ```
+
+The config popup exposes slip `gain` and pulse rate. Raising pulse rate makes
+traction loss buzzier; lowering it makes the slip warning more like a slow
+shudder.
 
 ### Road Texture, Kerbs, and Offroad
 
@@ -126,6 +176,9 @@ side += sideTexture * 0.54 * sideNoise
 The noise is intentionally control-rate and seeded, giving rough surfaces a
 grainy feel without using speaker audio.
 
+The config popup exposes texture `gain` and noise depth. Lower noise keeps
+surface feel steadier; higher noise makes kerbs and dirt more granular.
+
 ### Gear Shifts
 
 Gear changes are edge-triggered from `SNAPSHOT.gearChangeEvent`. When the event
@@ -139,6 +192,9 @@ gearPulse *= exp(-dt / 0.085)
 
 The result is a short mechanical thump on both grips.
 
+The config popup exposes gear `gain` and decay. Decay controls how quickly the
+thump disappears after the event edge.
+
 ### Collisions
 
 Collisions are edge-triggered from `SNAPSHOT.collisionEvent`. A changed nonzero
@@ -150,6 +206,9 @@ collisionPulse *= exp(-dt / 0.16)
 ```
 
 This creates a stronger, longer centered impact than a gear shift.
+
+The config popup exposes collision `gain` and decay for separating quick taps
+from longer crash envelopes during testing.
 
 ### ABS and Braking
 
@@ -174,6 +233,9 @@ The L2 trigger vibration frequency is also based on front slip:
 ```text
 frequency = 32 + round(18 * frontSlip)
 ```
+
+The config popup exposes ABS rumble `gain` and pulse rate. The L2 trigger
+strength remains controlled by the separate `Triggers` slider.
 
 ## Adaptive Trigger Controls
 

@@ -387,7 +387,7 @@ function assertHaptics(condition, label, details = {}) {
 }
 
 async function checkHapticsModelBehavior() {
-	const { DualSenseTelemetryModel, SNAPSHOT } = await importHapticsModuleForSmoke();
+	const { DualSenseHaptics, DualSenseTelemetryModel, SNAPSHOT } = await importHapticsModuleForSmoke();
 	const lowThrottle = new DualSenseTelemetryModel().update(makeAudioSnapshot(SNAPSHOT, {
 		controlAccel: 0.15,
 		engineRpm: 4200,
@@ -438,10 +438,39 @@ async function checkHapticsModelBehavior() {
 		trigger: absModel.triggers.brake,
 	});
 
+	const haptics = new DualSenseHaptics();
+	haptics.setRumbleConfig({
+		soloSource: "slip",
+		engine: { enabled: false, gain: 0.25 },
+		slip: { gain: 1.4, pulseRate: 18 },
+	});
+	let config = haptics.getRumbleConfig();
+	assertHaptics(config.soloSource === "slip", "rumble config supports source soloing", { config });
+	assertHaptics(config.engine.enabled === false && config.engine.gain === 0.25, "rumble config applies per-source toggles and gains", {
+		engine: config.engine,
+	});
+	assertHaptics(config.slip.gain === 1.4 && config.slip.pulseRate === 18, "rumble config applies source-specific controls", {
+		slip: config.slip,
+	});
+	haptics.importRumbleConfig(JSON.stringify({ soloSource: "collision", collision: { gain: 1.8, decay: 0.22 } }));
+	config = haptics.getRumbleConfig();
+	assertHaptics(config.soloSource === "collision" && config.collision.gain === 1.8 && config.collision.decay === 0.22,
+		"rumble config imports sanitized JSON", {
+			collision: config.collision,
+			soloSource: config.soloSource,
+		});
+	haptics.resetRumbleConfig();
+	config = haptics.getRumbleConfig();
+	assertHaptics(config.soloSource === "" && config.engine.enabled === true && config.engine.gain === 1,
+		"rumble config resets to defaults", {
+			config,
+		});
+
 	return {
 		engineHz: highThrottle.engine.frequency,
 		leftTexture: leftDirt.left.texture,
 		absTrigger: absModel.triggers.brake.effect,
+		rumbleSolo: config.soloSource,
 	};
 }
 
@@ -1111,6 +1140,13 @@ requireText(byPath["torcs_web_renderer.html"], "id=\"haptics\"", "DualSense hapt
 requireText(byPath["torcs_web_renderer.html"], "id=\"haptics-intensity\"", "DualSense haptics intensity slider");
 requireText(byPath["torcs_web_renderer.html"], "id=\"haptics-trigger-strength\"", "DualSense adaptive trigger strength slider");
 requireText(byPath["torcs_web_renderer.html"], "id=\"haptics-state\"", "DualSense haptics status readout");
+requireText(byPath["torcs_web_renderer.html"], "id=\"rumble-config-open\"", "DualSense rumble config button");
+requireText(byPath["torcs_web_renderer.html"], "id=\"rumble-config-modal\"", "DualSense rumble config modal");
+requireText(byPath["torcs_web_renderer.html"], "id=\"rumble-config-body\"", "DualSense rumble config source body");
+requireText(byPath["torcs_web_renderer.html"], "id=\"rumble-config-json\"", "DualSense rumble config JSON textarea");
+requireText(byPath["torcs_web_renderer.html"], "id=\"rumble-config-reset\"", "DualSense rumble config reset button");
+requireText(byPath["torcs_web_renderer.html"], "id=\"rumble-config-copy\"", "DualSense rumble config copy button");
+requireText(byPath["torcs_web_renderer.html"], "id=\"rumble-config-paste\"", "DualSense rumble config paste button");
 requireText(byPath["torcs_web_renderer.html"], "https://esm.sh/dualsense-ts@6.15.0?bundle", "pinned dualsense-ts import map");
 requireText(byPath["torcs_web_renderer.html"], "id=\"track-map\"", "Phase 5 track map canvas");
 requireText(byPath["torcs_web_renderer.html"], "id=\"car-count\"", "Phase 6 car count control");
@@ -1267,6 +1303,12 @@ requireText(byPath["renderer/main.js"], "audio.update(snapshot, cameras.camera, 
 requireText(byPath["renderer/main.js"], "haptics.update(snapshot, deltaTime)", "snapshot-driven DualSense haptics update");
 requireText(byPath["renderer/main.js"], "audio.enable(elements.car.value)", "user-gesture audio unlock");
 requireText(byPath["renderer/main.js"], "haptics.enable()", "user-gesture haptics unlock");
+requireText(byPath["renderer/main.js"], "RUMBLE_CONFIG_SOURCES", "DualSense rumble config source definitions");
+requireText(byPath["renderer/main.js"], "buildRumbleConfigUi()", "DualSense rumble config UI builder");
+requireText(byPath["renderer/main.js"], "setRumbleConfigOpen", "DualSense rumble config modal visibility");
+requireText(byPath["renderer/main.js"], "haptics.setRumbleConfig", "DualSense rumble config change handler");
+requireText(byPath["renderer/main.js"], "haptics.importRumbleConfig", "DualSense rumble config JSON import handler");
+requireText(byPath["renderer/main.js"], "navigator.clipboard", "DualSense rumble config clipboard integration");
 requireText(byPath["renderer/main.js"], "hud.setTrack(trackSamples)", "Phase 5 HUD track-map handoff");
 requireText(byPath["renderer/main.js"], "input.update(deltaTime, snapshot)", "TORCS-faithful per-frame input polling");
 requireText(byPath["renderer/main.js"], "input ? input.getCameraLookaround() : \"\"", "temporary camera lookaround handoff");
@@ -1337,6 +1379,15 @@ requireText(byPath["renderer/haptics.js"], "No DualSense USB speaker PCM debug o
 requireText(byPath["renderer/haptics.js"], "TriggerEffect.Vibration", "adaptive trigger ABS vibration");
 requireText(byPath["renderer/haptics.js"], "controller.left.rumble", "primary left rumble output");
 requireText(byPath["renderer/haptics.js"], "wheelOtherSurfaceContribution0", "mixed-surface haptic routing");
+requireText(byPath["renderer/haptics.js"], "RUMBLE_CONFIG_STORAGE_KEY", "DualSense rumble config local storage key");
+requireText(byPath["renderer/haptics.js"], "torcs-web:dualsense-rumble-config:v1", "DualSense rumble config local storage value");
+requireText(byPath["renderer/haptics.js"], "DEFAULT_RUMBLE_CONFIG", "DualSense rumble config defaults");
+requireText(byPath["renderer/haptics.js"], "getRumbleConfig()", "DualSense rumble config getter");
+requireText(byPath["renderer/haptics.js"], "setRumbleConfig", "DualSense rumble config setter");
+requireText(byPath["renderer/haptics.js"], "importRumbleConfig", "DualSense rumble config JSON import");
+requireText(byPath["renderer/haptics.js"], "resetRumbleConfig", "DualSense rumble config reset");
+requireText(byPath["renderer/haptics.js"], "soloSource", "DualSense rumble config source soloing");
+requireText(byPath["renderer/haptics.js"], "contributions", "DualSense rumble contribution diagnostics");
 requireText(byPath["renderer/main.js"], "hapticsTriggerStrength", "DualSense adaptive trigger strength UI wiring");
 requireText(byPath["renderer/main.js"], "haptics.setTriggerStrength", "DualSense adaptive trigger strength event handling");
 

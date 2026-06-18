@@ -26,6 +26,16 @@ const HAPTIC_TRANSPORT = {
 	pcmDebug: "pcm-debug",
 	unavailable: "unavailable",
 };
+const RUMBLE_CONFIG_STORAGE_KEY = "torcs-web:dualsense-rumble-config:v1";
+const DEFAULT_RUMBLE_CONFIG = Object.freeze({
+	soloSource: "",
+	engine: { enabled: true, gain: 1, modulationDepth: 1, rateScale: 1 },
+	slip: { enabled: true, gain: 1, pulseRate: 13.5 },
+	texture: { enabled: true, gain: 1, noise: 1 },
+	gear: { enabled: true, gain: 1, decay: 0.085 },
+	collision: { enabled: true, gain: 1, decay: 0.16 },
+	abs: { enabled: true, gain: 1, pulseRate: 15.5 },
+});
 
 function clamp(value, min, max) {
 	return Math.min(max, Math.max(min, value));
@@ -64,6 +74,69 @@ function createNoiseBuffer(context) {
 function looksLikeDualSenseLabel(label) {
 	const lower = String(label || "").toLowerCase();
 	return DUALSENSE_AUDIO_LABELS.some((pattern) => lower.includes(pattern));
+}
+
+function cloneConfig(config = DEFAULT_RUMBLE_CONFIG) {
+	return JSON.parse(JSON.stringify(config));
+}
+
+function sanitizeBoolean(value, fallback) {
+	return typeof value === "boolean" ? value : fallback;
+}
+
+function sanitizeNumber(value, fallback, min, max) {
+	return clamp(finite(Number(value), fallback), min, max);
+}
+
+function sanitizeRumbleConfig(input = {}, base = DEFAULT_RUMBLE_CONFIG) {
+	const sourceNames = Object.keys(DEFAULT_RUMBLE_CONFIG).filter((key) => key !== "soloSource");
+	const config = cloneConfig(base);
+	const sourceInput = input && typeof input === "object" ? input : {};
+	config.soloSource = sourceNames.includes(sourceInput.soloSource) ? sourceInput.soloSource : "";
+	config.engine.enabled = sanitizeBoolean(sourceInput.engine?.enabled, config.engine.enabled);
+	config.engine.gain = sanitizeNumber(sourceInput.engine?.gain, config.engine.gain, 0, 2);
+	config.engine.modulationDepth = sanitizeNumber(sourceInput.engine?.modulationDepth, config.engine.modulationDepth, 0, 2);
+	config.engine.rateScale = sanitizeNumber(sourceInput.engine?.rateScale, config.engine.rateScale, 0.25, 2);
+	config.slip.enabled = sanitizeBoolean(sourceInput.slip?.enabled, config.slip.enabled);
+	config.slip.gain = sanitizeNumber(sourceInput.slip?.gain, config.slip.gain, 0, 2);
+	config.slip.pulseRate = sanitizeNumber(sourceInput.slip?.pulseRate, config.slip.pulseRate, 1, 30);
+	config.texture.enabled = sanitizeBoolean(sourceInput.texture?.enabled, config.texture.enabled);
+	config.texture.gain = sanitizeNumber(sourceInput.texture?.gain, config.texture.gain, 0, 2);
+	config.texture.noise = sanitizeNumber(sourceInput.texture?.noise, config.texture.noise, 0, 2);
+	config.gear.enabled = sanitizeBoolean(sourceInput.gear?.enabled, config.gear.enabled);
+	config.gear.gain = sanitizeNumber(sourceInput.gear?.gain, config.gear.gain, 0, 2);
+	config.gear.decay = sanitizeNumber(sourceInput.gear?.decay, config.gear.decay, 0.02, 0.5);
+	config.collision.enabled = sanitizeBoolean(sourceInput.collision?.enabled, config.collision.enabled);
+	config.collision.gain = sanitizeNumber(sourceInput.collision?.gain, config.collision.gain, 0, 2);
+	config.collision.decay = sanitizeNumber(sourceInput.collision?.decay, config.collision.decay, 0.04, 0.8);
+	config.abs.enabled = sanitizeBoolean(sourceInput.abs?.enabled, config.abs.enabled);
+	config.abs.gain = sanitizeNumber(sourceInput.abs?.gain, config.abs.gain, 0, 2);
+	config.abs.pulseRate = sanitizeNumber(sourceInput.abs?.pulseRate, config.abs.pulseRate, 1, 30);
+	return config;
+}
+
+function loadStoredRumbleConfig() {
+	if (typeof window === "undefined" || !window.localStorage) {
+		return cloneConfig();
+	}
+	try {
+		const raw = window.localStorage.getItem(RUMBLE_CONFIG_STORAGE_KEY);
+		return raw ? sanitizeRumbleConfig(JSON.parse(raw)) : cloneConfig();
+	} catch (error) {
+		console.warn("TORCS DualSense haptics could not load rumble config", error);
+		return cloneConfig();
+	}
+}
+
+function saveStoredRumbleConfig(config) {
+	if (typeof window === "undefined" || !window.localStorage) {
+		return;
+	}
+	try {
+		window.localStorage.setItem(RUMBLE_CONFIG_STORAGE_KEY, JSON.stringify(config));
+	} catch (error) {
+		console.warn("TORCS DualSense haptics could not save rumble config", error);
+	}
 }
 
 function makeOutputPair(context, merger, leftLevel = 0.5, rightLevel = 0.5) {
@@ -432,7 +505,11 @@ class HidRumbleSynth {
 		return this.noiseSeed / 0xffffffff;
 	}
 
-	update(model, intensity = 1, deltaTime = 1 / 30) {
+	isSourceActive(config, source) {
+		return Boolean(config[source]?.enabled) && (!config.soloSource || config.soloSource === source);
+	}
+
+	update(model, intensity = 1, deltaTime = 1 / 30, config = DEFAULT_RUMBLE_CONFIG) {
 		const dt = clamp(finite(deltaTime, 1 / 30), 1 / 120, 1 / 15);
 		this.time += dt;
 		if (model.transients.gear) {
@@ -442,31 +519,44 @@ class HidRumbleSynth {
 			this.collisionPulse = 1;
 		}
 
-		const engineRate = 7 + clamp(model.engine.frequency / 22, 0, 9);
-		const engineMod = 0.68 + 0.32 * (0.5 + 0.5 * Math.sin(TWO_PI * engineRate * this.time));
-		const slipPulse = 0.62 + 0.38 * Math.abs(Math.sin(TWO_PI * 13.5 * this.time));
+		const active = {
+			engine: this.isSourceActive(config, "engine"),
+			slip: this.isSourceActive(config, "slip"),
+			texture: this.isSourceActive(config, "texture"),
+			gear: this.isSourceActive(config, "gear"),
+			collision: this.isSourceActive(config, "collision"),
+			abs: this.isSourceActive(config, "abs"),
+		};
+		const engineRate = (7 + clamp(model.engine.frequency / 22, 0, 9)) * config.engine.rateScale;
+		const rawEngineMod = 0.5 + 0.5 * Math.sin(TWO_PI * engineRate * this.time);
+		const engineMod = clamp(1 - config.engine.modulationDepth * 0.32 + config.engine.modulationDepth * 0.32 * rawEngineMod, 0, 1.35);
+		const slipPulse = 0.62 + 0.38 * Math.abs(Math.sin(TWO_PI * config.slip.pulseRate * this.time));
 		const absPulse = model.triggers && model.triggers.absPulse ?
-			0.5 + 0.5 * Math.abs(Math.sin(TWO_PI * 15.5 * this.time)) :
+			0.5 + 0.5 * Math.abs(Math.sin(TWO_PI * config.abs.pulseRate * this.time)) :
 			0;
-		const leftNoise = 0.45 + 0.55 * this.nextNoise();
-		const rightNoise = 0.45 + 0.55 * this.nextNoise();
-		const centerBurst = this.gearPulse * 0.3 + this.collisionPulse * 0.85 + absPulse * 0.24;
-		const engine = model.engine.amplitude * 1.7 * engineMod;
-		const left = engine +
-			model.left.slip * 0.58 * slipPulse +
-			model.left.texture * 0.54 * leftNoise +
-			centerBurst;
-		const right = engine +
-			model.right.slip * 0.58 * slipPulse +
-			model.right.texture * 0.54 * rightNoise +
-			centerBurst;
+		const leftNoise = clamp(1 - config.texture.noise * 0.55 + config.texture.noise * 0.55 * this.nextNoise(), 0, 1.7);
+		const rightNoise = clamp(1 - config.texture.noise * 0.55 + config.texture.noise * 0.55 * this.nextNoise(), 0, 1.7);
+		const contributions = {
+			engine: active.engine ? model.engine.amplitude * 1.7 * engineMod * config.engine.gain : 0,
+			leftSlip: active.slip ? model.left.slip * 0.58 * slipPulse * config.slip.gain : 0,
+			rightSlip: active.slip ? model.right.slip * 0.58 * slipPulse * config.slip.gain : 0,
+			leftTexture: active.texture ? model.left.texture * 0.54 * leftNoise * config.texture.gain : 0,
+			rightTexture: active.texture ? model.right.texture * 0.54 * rightNoise * config.texture.gain : 0,
+			gear: active.gear ? this.gearPulse * 0.3 * config.gear.gain : 0,
+			collision: active.collision ? this.collisionPulse * 0.85 * config.collision.gain : 0,
+			abs: active.abs ? absPulse * 0.24 * config.abs.gain : 0,
+		};
+		const centerBurst = contributions.gear + contributions.collision + contributions.abs;
+		const left = contributions.engine + contributions.leftSlip + contributions.leftTexture + centerBurst;
+		const right = contributions.engine + contributions.rightSlip + contributions.rightTexture + centerBurst;
 
-		this.gearPulse *= Math.exp(-dt / 0.085);
-		this.collisionPulse *= Math.exp(-dt / 0.16);
+		this.gearPulse *= Math.exp(-dt / config.gear.decay);
+		this.collisionPulse *= Math.exp(-dt / config.collision.decay);
 
 		return {
 			left: clamp(left * intensity, 0, 1),
 			right: clamp(right * intensity, 0, 1),
+			contributions,
 		};
 	}
 }
@@ -479,6 +569,8 @@ export class DualSenseHaptics {
 		this.graph = null;
 		this.model = new DualSenseTelemetryModel();
 		this.rumbleSynth = new HidRumbleSynth();
+		this.rumbleConfig = loadStoredRumbleConfig();
+		this.lastRumbleOutput = { left: 0, right: 0, contributions: {} };
 		this.enabled = false;
 		this.pcmDebugEnabled = false;
 		this.status = "locked";
@@ -501,6 +593,8 @@ export class DualSenseHaptics {
 			pcmDebugAvailable: false,
 			pcmDebugEnabled: false,
 			triggerStrength: this.triggerStrength,
+			rumbleConfig: this.getRumbleConfigSummary(),
+			rumbleOutput: this.lastRumbleOutput,
 			audioEnumeration: "not-started",
 			audioOutputCount: 0,
 			audioInputCount: 0,
@@ -531,6 +625,8 @@ export class DualSenseHaptics {
 			controllerConnectionActive: Boolean(this.controller && this.controller.connection && this.controller.connection.active),
 			controllerWireless: Boolean(this.controller && this.controller.wireless),
 			pcmDebugEnabled: this.pcmDebugEnabled,
+			rumbleConfig: this.getRumbleConfigSummary(),
+			rumbleOutput: this.lastRumbleOutput,
 			status: this.status,
 		};
 	}
@@ -626,6 +722,70 @@ export class DualSenseHaptics {
 		if (this.enabled) {
 			this.applyTriggerFeedback(this.lastTriggerModel || this.model.makeSilentModel());
 		}
+	}
+
+	getRumbleConfig() {
+		return cloneConfig(this.rumbleConfig);
+	}
+
+	getRumbleConfigSummary() {
+		const summary = {
+			soloSource: this.rumbleConfig?.soloSource || "",
+			sources: {},
+		};
+		for (const source of Object.keys(DEFAULT_RUMBLE_CONFIG)) {
+			if (source === "soloSource") {
+				continue;
+			}
+			summary.sources[source] = {
+				enabled: Boolean(this.rumbleConfig[source]?.enabled),
+				gain: this.rumbleConfig[source]?.gain ?? 0,
+			};
+		}
+		return summary;
+	}
+
+	setRumbleConfig(partialConfig = {}) {
+		const merged = cloneConfig(this.rumbleConfig);
+		if (partialConfig && typeof partialConfig === "object") {
+			if (Object.prototype.hasOwnProperty.call(partialConfig, "soloSource")) {
+				merged.soloSource = partialConfig.soloSource;
+			}
+			for (const source of Object.keys(DEFAULT_RUMBLE_CONFIG)) {
+				if (source === "soloSource" || !partialConfig[source]) {
+					continue;
+				}
+				merged[source] = {
+					...merged[source],
+					...partialConfig[source],
+				};
+			}
+		}
+		this.rumbleConfig = sanitizeRumbleConfig(merged);
+		saveStoredRumbleConfig(this.rumbleConfig);
+		this.setDiagnostic({
+			rumbleConfig: this.getRumbleConfigSummary(),
+		});
+		return this.getRumbleConfig();
+	}
+
+	importRumbleConfig(jsonOrConfig) {
+		const parsed = typeof jsonOrConfig === "string" ? JSON.parse(jsonOrConfig) : jsonOrConfig;
+		this.rumbleConfig = sanitizeRumbleConfig(parsed);
+		saveStoredRumbleConfig(this.rumbleConfig);
+		this.setDiagnostic({
+			rumbleConfig: this.getRumbleConfigSummary(),
+		});
+		return this.getRumbleConfig();
+	}
+
+	resetRumbleConfig() {
+		this.rumbleConfig = cloneConfig();
+		saveStoredRumbleConfig(this.rumbleConfig);
+		this.setDiagnostic({
+			rumbleConfig: this.getRumbleConfigSummary(),
+		});
+		return this.getRumbleConfig();
 	}
 
 	configureControllerAudio() {
@@ -915,6 +1075,7 @@ export class DualSenseHaptics {
 		this.disposeGraph();
 		this.model.reset();
 		this.rumbleSynth.reset();
+		this.lastRumbleOutput = { left: 0, right: 0, contributions: {} };
 		this.lastTriggerModel = null;
 		this.setStatus("off", {
 			hapticTransport: HAPTIC_TRANSPORT.unavailable,
@@ -928,6 +1089,7 @@ export class DualSenseHaptics {
 		}
 		this.model.reset();
 		this.rumbleSynth.reset();
+		this.lastRumbleOutput = { left: 0, right: 0, contributions: {} };
 		this.lastTriggerModel = null;
 		this.stopControllerOutputs();
 		this.applyTriggerFeedback(this.model.makeSilentModel());
@@ -936,6 +1098,7 @@ export class DualSenseHaptics {
 	resetDynamics() {
 		this.model.reset();
 		this.rumbleSynth.reset();
+		this.lastRumbleOutput = { left: 0, right: 0, contributions: {} };
 		this.lastTriggerModel = null;
 		this.lastTriggerSignature = "";
 	}
@@ -1034,7 +1197,8 @@ export class DualSenseHaptics {
 		const rumbleDelta = this.lastRumbleUpdate > 0 ? (now - this.lastRumbleUpdate) / 1000 : model.deltaTime;
 		this.lastRumbleUpdate = now;
 		try {
-			const rumble = this.rumbleSynth.update(model, this.intensity, rumbleDelta);
+			const rumble = this.rumbleSynth.update(model, this.intensity, rumbleDelta, this.rumbleConfig);
+			this.lastRumbleOutput = rumble;
 			if (this.controller.left && typeof this.controller.left.rumble === "function") {
 				this.controller.left.rumble(rumble.left);
 			}

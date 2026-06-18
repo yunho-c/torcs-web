@@ -111,10 +111,10 @@
 			.audio-row {
 				grid-template-columns: auto 1fr minmax(86px, auto);
 				align-items: end;
-		}
+			}
 
 			.haptics-row {
-				grid-template-columns: auto 1fr minmax(86px, auto);
+				grid-template-columns: auto auto minmax(72px, 1fr) minmax(72px, 1fr) minmax(86px, auto);
 				align-items: end;
 			}
 
@@ -194,6 +194,106 @@
 			color: var(--green);
 			text-transform: uppercase;
 			font-size: 0.72rem;
+		}
+
+		.modal {
+			position: fixed;
+			inset: 0;
+			z-index: 10;
+			display: none;
+			align-items: center;
+			justify-content: center;
+			padding: 18px;
+			background: rgba(4, 6, 5, 0.72);
+			pointer-events: auto;
+		}
+
+		.modal.open {
+			display: flex;
+		}
+
+		.rumble-config {
+			width: min(760px, calc(100vw - 36px));
+			max-height: min(720px, calc(100vh - 36px));
+			display: grid;
+			grid-template-rows: auto minmax(0, 1fr) auto;
+			border: 1px solid var(--line);
+			background: var(--panel);
+			backdrop-filter: blur(10px);
+		}
+
+		.rumble-config header,
+		.rumble-config footer {
+			display: flex;
+			gap: 8px;
+			align-items: center;
+			justify-content: space-between;
+			padding: 10px;
+			border-bottom: 1px solid var(--line);
+		}
+
+		.rumble-config footer {
+			border-top: 1px solid var(--line);
+			border-bottom: 0;
+			justify-content: flex-end;
+			flex-wrap: wrap;
+		}
+
+		.rumble-config h2 {
+			margin: 0;
+			font-size: 0.95rem;
+			text-transform: uppercase;
+		}
+
+		.rumble-config-body {
+			display: grid;
+			gap: 8px;
+			padding: 10px;
+			overflow: auto;
+		}
+
+		.rumble-source-row {
+			display: grid;
+			grid-template-columns: 112px 72px minmax(90px, 1fr) minmax(150px, 2fr);
+			gap: 8px;
+			align-items: center;
+			padding: 8px;
+			border: 1px solid var(--line);
+			background: var(--panel-strong);
+		}
+
+		.rumble-source-name {
+			color: var(--ink);
+			text-transform: uppercase;
+		}
+
+		.rumble-source-toggles,
+		.rumble-source-controls {
+			display: flex;
+			gap: 8px;
+			align-items: center;
+			flex-wrap: wrap;
+		}
+
+		.rumble-source-controls label {
+			min-width: 118px;
+			flex: 1 1 118px;
+		}
+
+		.rumble-source-toggles button[data-active="true"] {
+			border-color: var(--green);
+			color: var(--green);
+		}
+
+		.rumble-json {
+			width: 100%;
+			min-height: 84px;
+			resize: vertical;
+			padding: 8px;
+			border: 1px solid var(--line);
+			background: #0b0e0c;
+			color: var(--ink);
+			font: inherit;
 		}
 
 		.hud {
@@ -337,6 +437,10 @@
 			.metric:nth-child(4n) {
 				border-right: 0;
 			}
+
+			.rumble-source-row {
+				grid-template-columns: 1fr;
+			}
 		}
 	</style>
 </head>
@@ -415,6 +519,7 @@
 		</div>
 		<div class="row haptics-row">
 			<button id="haptics" type="button">Haptics</button>
+			<button id="rumble-config-open" type="button">Config</button>
 			<label>Force
 				<input id="haptics-intensity" type="range" min="0" max="1" step="0.01" value="0.65">
 			</label>
@@ -436,6 +541,22 @@
 			<input id="clutch" type="range" min="0" max="1" step="0.01" value="0">
 		</label>
 	</form>
+
+	<div class="modal" id="rumble-config-modal" aria-hidden="true">
+		<section class="rumble-config" role="dialog" aria-modal="true" aria-labelledby="rumble-config-title">
+			<header>
+				<h2 id="rumble-config-title">Rumble Config</h2>
+				<button id="rumble-config-close" type="button">Close</button>
+			</header>
+			<div class="rumble-config-body" id="rumble-config-body"></div>
+			<footer>
+				<textarea class="rumble-json" id="rumble-config-json" spellcheck="false"></textarea>
+				<button id="rumble-config-reset" type="button">Reset Defaults</button>
+				<button id="rumble-config-copy" type="button">Copy JSON</button>
+				<button id="rumble-config-paste" type="button">Paste JSON</button>
+			</footer>
+		</section>
+	</div>
 
 	<div class="map-panel">
 		<span>Track Map</span>

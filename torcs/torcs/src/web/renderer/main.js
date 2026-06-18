@@ -19,9 +19,17 @@ const elements = {
 	volume: document.getElementById("volume"),
 		audioState: document.getElementById("audio-state"),
 		haptics: document.getElementById("haptics"),
+		rumbleConfigOpen: document.getElementById("rumble-config-open"),
 		hapticsIntensity: document.getElementById("haptics-intensity"),
 		hapticsTriggerStrength: document.getElementById("haptics-trigger-strength"),
 		hapticsState: document.getElementById("haptics-state"),
+		rumbleConfigModal: document.getElementById("rumble-config-modal"),
+		rumbleConfigClose: document.getElementById("rumble-config-close"),
+		rumbleConfigBody: document.getElementById("rumble-config-body"),
+		rumbleConfigJson: document.getElementById("rumble-config-json"),
+		rumbleConfigReset: document.getElementById("rumble-config-reset"),
+		rumbleConfigCopy: document.getElementById("rumble-config-copy"),
+		rumbleConfigPaste: document.getElementById("rumble-config-paste"),
 		camera: document.getElementById("camera"),
 		renderProfile: document.getElementById("render-profile"),
 		lightIntensity: document.getElementById("light-intensity"),
@@ -74,6 +82,58 @@ let snapshots = [];
 let carAssets = new Map();
 let selectedCarIndex = 0;
 
+const RUMBLE_CONFIG_SOURCES = [
+	{
+		id: "engine",
+		label: "Engine",
+		controls: [
+			["gain", "Gain", 0, 2, 0.01],
+			["modulationDepth", "Mod", 0, 2, 0.01],
+			["rateScale", "Rate", 0.25, 2, 0.01],
+		],
+	},
+	{
+		id: "slip",
+		label: "Slip",
+		controls: [
+			["gain", "Gain", 0, 2, 0.01],
+			["pulseRate", "Rate", 1, 30, 0.1],
+		],
+	},
+	{
+		id: "texture",
+		label: "Texture",
+		controls: [
+			["gain", "Gain", 0, 2, 0.01],
+			["noise", "Noise", 0, 2, 0.01],
+		],
+	},
+	{
+		id: "gear",
+		label: "Gear",
+		controls: [
+			["gain", "Gain", 0, 2, 0.01],
+			["decay", "Decay", 0.02, 0.5, 0.005],
+		],
+	},
+	{
+		id: "collision",
+		label: "Collision",
+		controls: [
+			["gain", "Gain", 0, 2, 0.01],
+			["decay", "Decay", 0.04, 0.8, 0.005],
+		],
+	},
+	{
+		id: "abs",
+		label: "ABS",
+		controls: [
+			["gain", "Gain", 0, 2, 0.01],
+			["pulseRate", "Rate", 1, 30, 0.1],
+		],
+	},
+];
+
 function findSnapshotByCarIndex(carIndex) {
 	return snapshots.find((values, index) => (values.carIndex ?? index) === carIndex) || null;
 }
@@ -97,6 +157,131 @@ function formatLightIntensity(value) {
 	return value.toFixed(2);
 }
 
+function formatRumbleConfigJson(config = haptics?.getRumbleConfig?.()) {
+	return JSON.stringify(config || {}, null, 2);
+}
+
+function updateRumbleConfigJson() {
+	if (!elements.rumbleConfigJson || !haptics) {
+		return;
+	}
+	elements.rumbleConfigJson.value = formatRumbleConfigJson();
+}
+
+function applyRumbleConfigChange(sourceId, updates) {
+	if (!haptics) {
+		return;
+	}
+	haptics.setRumbleConfig({ [sourceId]: updates });
+	updateRumbleConfigUi();
+}
+
+function updateRumbleConfigUi() {
+	if (!elements.rumbleConfigBody || !haptics) {
+		return;
+	}
+	const config = haptics.getRumbleConfig();
+	for (const source of RUMBLE_CONFIG_SOURCES) {
+		const row = elements.rumbleConfigBody.querySelector(`[data-rumble-source="${source.id}"]`);
+		if (!row || !config[source.id]) {
+			continue;
+		}
+		const enabled = row.querySelector(`[data-rumble-enabled="${source.id}"]`);
+		const solo = row.querySelector(`[data-rumble-solo="${source.id}"]`);
+		if (enabled) {
+			enabled.checked = Boolean(config[source.id].enabled);
+		}
+		if (solo) {
+			solo.textContent = config.soloSource === source.id ? "Soloed" : "Solo";
+			solo.dataset.active = config.soloSource === source.id ? "true" : "false";
+		}
+		for (const [key] of source.controls) {
+			const input = row.querySelector(`[data-rumble-control="${source.id}.${key}"]`);
+			const value = row.querySelector(`[data-rumble-value="${source.id}.${key}"]`);
+			if (input) {
+				input.value = String(config[source.id][key]);
+			}
+			if (value) {
+				value.textContent = Number(config[source.id][key]).toFixed(key === "decay" ? 3 : 2);
+			}
+		}
+	}
+	updateRumbleConfigJson();
+}
+
+function buildRumbleConfigUi() {
+	if (!elements.rumbleConfigBody || !haptics) {
+		return;
+	}
+	elements.rumbleConfigBody.textContent = "";
+	for (const source of RUMBLE_CONFIG_SOURCES) {
+		const row = document.createElement("div");
+		row.className = "rumble-source-row";
+		row.dataset.rumbleSource = source.id;
+
+		const name = document.createElement("div");
+		name.className = "rumble-source-name";
+		name.textContent = source.label;
+		row.append(name);
+
+		const toggles = document.createElement("div");
+		toggles.className = "rumble-source-toggles";
+		const enabledLabel = document.createElement("label");
+		const enabled = document.createElement("input");
+		enabled.type = "checkbox";
+		enabled.dataset.rumbleEnabled = source.id;
+		enabled.addEventListener("change", () => applyRumbleConfigChange(source.id, { enabled: enabled.checked }));
+		enabledLabel.append(enabled, " On");
+		const solo = document.createElement("button");
+		solo.type = "button";
+		solo.dataset.rumbleSolo = source.id;
+		solo.addEventListener("click", () => {
+			const config = haptics.getRumbleConfig();
+			haptics.setRumbleConfig({ soloSource: config.soloSource === source.id ? "" : source.id });
+			updateRumbleConfigUi();
+		});
+		toggles.append(enabledLabel, solo);
+		row.append(toggles);
+
+		const gain = document.createElement("div");
+		gain.className = "rumble-source-controls";
+		const extra = document.createElement("div");
+		extra.className = "rumble-source-controls";
+		source.controls.forEach(([key, label, min, max, step], index) => {
+			const controlLabel = document.createElement("label");
+			controlLabel.textContent = label;
+			const input = document.createElement("input");
+			input.type = "range";
+			input.min = String(min);
+			input.max = String(max);
+			input.step = String(step);
+			input.dataset.rumbleControl = `${source.id}.${key}`;
+			const value = document.createElement("span");
+			value.className = "inline-value";
+			value.dataset.rumbleValue = `${source.id}.${key}`;
+			input.addEventListener("input", () => {
+				applyRumbleConfigChange(source.id, { [key]: Number(input.value) });
+			});
+			controlLabel.append(input, value);
+			(index === 0 ? gain : extra).append(controlLabel);
+		});
+		row.append(gain, extra);
+		elements.rumbleConfigBody.append(row);
+	}
+	updateRumbleConfigUi();
+}
+
+function setRumbleConfigOpen(open) {
+	if (!elements.rumbleConfigModal) {
+		return;
+	}
+	elements.rumbleConfigModal.classList.toggle("open", open);
+	elements.rumbleConfigModal.setAttribute("aria-hidden", open ? "false" : "true");
+	if (open) {
+		updateRumbleConfigUi();
+	}
+}
+
 function setEnabled(enabled) {
 	elements.start.disabled = !runtime;
 	elements.run.disabled = !enabled;
@@ -104,6 +289,7 @@ function setEnabled(enabled) {
 	elements.reset.disabled = !runtime;
 	elements.audio.disabled = !runtime;
 	elements.haptics.disabled = !runtime;
+	elements.rumbleConfigOpen.disabled = !runtime;
 }
 
 function applyControls(controls = input.getControls()) {
@@ -422,6 +608,53 @@ function bindUi() {
 	elements.hapticsTriggerStrength.addEventListener("input", () => {
 		haptics.setTriggerStrength(Number(elements.hapticsTriggerStrength.value));
 	});
+	elements.rumbleConfigOpen.addEventListener("click", () => setRumbleConfigOpen(true));
+	elements.rumbleConfigClose.addEventListener("click", () => setRumbleConfigOpen(false));
+	elements.rumbleConfigModal.addEventListener("click", (event) => {
+		if (event.target === elements.rumbleConfigModal) {
+			setRumbleConfigOpen(false);
+		}
+	});
+	elements.rumbleConfigReset.addEventListener("click", () => {
+		haptics.resetRumbleConfig();
+		updateRumbleConfigUi();
+	});
+	elements.rumbleConfigCopy.addEventListener("click", async () => {
+		const json = formatRumbleConfigJson();
+		elements.rumbleConfigJson.value = json;
+		try {
+			if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+				await navigator.clipboard.writeText(json);
+			}
+		} catch (error) {
+			console.warn("TORCS web DualSense rumble config copy failed", error);
+		}
+	});
+	elements.rumbleConfigPaste.addEventListener("click", async () => {
+		let json = elements.rumbleConfigJson.value;
+		if (navigator.clipboard && typeof navigator.clipboard.readText === "function") {
+			try {
+				const clipboardJson = await navigator.clipboard.readText();
+				if (clipboardJson.trim()) {
+					json = clipboardJson;
+					elements.rumbleConfigJson.value = json;
+				}
+			} catch (error) {
+				console.warn("TORCS web DualSense rumble config clipboard read failed; using textarea JSON", error);
+			}
+		}
+		try {
+			haptics.importRumbleConfig(json);
+			updateRumbleConfigUi();
+		} catch (error) {
+			console.warn("TORCS web DualSense rumble config paste failed", error);
+		}
+	});
+	window.addEventListener("keydown", (event) => {
+		if (event.key === "Escape") {
+			setRumbleConfigOpen(false);
+		}
+	});
 	elements.camera.addEventListener("change", () => {
 		cameras.setMode(elements.camera.value);
 		if (snapshot) {
@@ -476,6 +709,7 @@ async function main() {
 		window.torcsHaptics = haptics;
 		haptics.setIntensity(Number(elements.hapticsIntensity.value));
 		haptics.setTriggerStrength(Number(elements.hapticsTriggerStrength.value));
+		buildRumbleConfigUi();
 		input = new InputController({
 			steer: elements.steer,
 			accel: elements.accel,
