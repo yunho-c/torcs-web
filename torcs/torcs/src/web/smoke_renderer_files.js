@@ -1244,7 +1244,8 @@ requireText(byPath["renderer/scene.js"], "getOpponentColor(carIndex)", "Phase 6 
 requireText(byPath["renderer/scene.js"], "getSnapshotCarIndex(values, index) === selectedCarIndex", "Phase 6 selected car primary visual");
 requireText(byPath["renderer/scene.js"], "asset.lods", "opponent uses assigned car asset LODs");
 requireText(byPath["renderer/scene.js"], "tintClone(item.scene, opponent.color)", "Phase 6 distinct opponent car visual tint");
-requireText(byPath["renderer/scene.js"], "setObjectQuaternionFromTorcsPosMat(opponent.root, values)", "Phase 6 opponent pose matrix conversion");
+requireText(byPath["renderer/scene.js"], "getTorcsPosePosition(values, object.position)", "native car pose matrix translation");
+requireText(byPath["renderer/scene.js"], "setObjectPoseFromTorcsPosMat(opponent.root, values)", "Phase 6 opponent pose matrix conversion");
 requireText(byPath["renderer/scene.js"], "selectOpponentLod(opponent, camera)", "Phase 6 opponent LOD switching");
 requireText(byPath["renderer/scene.js"], "this.carEffects = []", "Phase 6 per-car effect state registry");
 requireText(byPath["renderer/scene.js"], "getCarEffects(carIndex)", "Phase 6 car-index effect lookup");
@@ -1261,7 +1262,7 @@ requireText(byPath["renderer/scene.js"], "wheel.scale.scale.set(radius * 2, radi
 requireText(byPath["renderer/scene.js"], "RIGHT_WHEELS.has(index)", "right-side detailed wheel flip");
 requireText(byPath["renderer/scene.js"], "TORCS web renderer using runtime generated wheels for car LOD", "selected car generated wheel warning");
 requireText(byPath["renderer/scene.js"], "TORCS web renderer using runtime generated wheels for opponent car LOD", "opponent generated wheel warning");
-requireText(byPath["renderer/scene.js"], "setObjectQuaternionFromTorcsPosMat(this.car, values)", "car body pose matrix conversion");
+requireText(byPath["renderer/scene.js"], "setObjectPoseFromTorcsPosMat(this.car, values)", "car body pose matrix conversion");
 requireText(byPath["renderer/scene.js"], "CAR_ROTATION_MATRIX.multiplyMatrices(TORCS_TO_THREE_BASIS, TORCS_POS_MATRIX)", "TORCS-to-Three body basis conversion");
 requireText(byPath["renderer/scene.js"], "wheelBrakeTemp0", "brake heat wheel feedback");
 requireText(byPath["renderer/scene.js"], "wheel.camber.rotation.x", "wheel camber transform node");

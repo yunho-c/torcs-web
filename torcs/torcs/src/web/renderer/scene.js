@@ -58,7 +58,21 @@ function getTorcsPoseQuaternion(values, target) {
 	return target.setFromRotationMatrix(CAR_ROTATION_MATRIX);
 }
 
+function getTorcsPosePosition(values, target = new THREE.Vector3()) {
+	const offset = SNAPSHOT.posMat0;
+	return target.set(
+		values[offset + 12],
+		values[offset + 14],
+		-values[offset + 13],
+	);
+}
+
 function setObjectQuaternionFromTorcsPosMat(object, values) {
+	getTorcsPoseQuaternion(values, object.quaternion);
+}
+
+function setObjectPoseFromTorcsPosMat(object, values) {
+	getTorcsPosePosition(values, object.position);
 	getTorcsPoseQuaternion(values, object.quaternion);
 }
 
@@ -992,8 +1006,7 @@ export class TorcsScene {
 			opponent.box.geometry = new THREE.BoxGeometry(...nextDimensions);
 			opponent.dimensions = nextDimensions;
 		}
-		opponent.root.position.copy(torcsToThree(values[SNAPSHOT.x], values[SNAPSHOT.y], values[SNAPSHOT.z]));
-		setObjectQuaternionFromTorcsPosMat(opponent.root, values);
+		setObjectPoseFromTorcsPosMat(opponent.root, values);
 		this.ensureOpponentWheels(opponent, values);
 		this.selectOpponentLod(opponent, camera);
 		this.updateOpponentWheels(opponent, values);
@@ -1045,8 +1058,7 @@ export class TorcsScene {
 			this.carDimensions = nextDimensions;
 		}
 
-		this.car.position.copy(torcsToThree(values[SNAPSHOT.x], values[SNAPSHOT.y], values[SNAPSHOT.z]));
-		setObjectQuaternionFromTorcsPosMat(this.car, values);
+		setObjectPoseFromTorcsPosMat(this.car, values);
 		const carIndex = getSnapshotCarIndex(values, 0);
 		this.setSelectedCarVisual(asset);
 		this.effects = this.getCarEffects(carIndex);
