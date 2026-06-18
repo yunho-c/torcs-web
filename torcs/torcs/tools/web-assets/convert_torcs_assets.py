@@ -84,6 +84,9 @@ CAR_INTERIOR_PATTERNS = [
 ]
 CAR_DRIVER_PATTERNS = ["DRIVER", "GIRTHS"]
 CAR_LIGHT_TYPES = {"head1", "head2", "rear", "brake", "brake2"}
+WHEEL_TIRE_PATTERNS = ["TIRE", "TYRE", "DRIVINGCOLL"]
+WHEEL_RIM_PATTERNS = ["RIM", "WIRIM", "WI_"]
+WHEEL_BRAKE_PATTERNS = ["BRAKE", "BRK", "DISC", "DISK", "CALIPER"]
 TRACK_ROAD_TEXTURE_PATTERNS = ["ROAD", "TARMAC", "ASPHALT", "TRKASPH", "TRKROAD"]
 TRACK_GRASS_TEXTURE_PATTERNS = ["GRASS", "GRAS", "LAWN"]
 TRACK_SAND_TEXTURE_PATTERNS = ["SAND", "GRAVEL", "DIRT", "MUD"]
@@ -277,6 +280,8 @@ def parse_car_metadata(source_root, car_xml):
 		"xml": runtime_path(car_xml),
 		"name": root.attrib.get("name", car_xml.parent.name),
 		"wheelTexture": attstr(objects, "wheel texture"),
+		"wheel3dBasename": attstr(objects, "3d wheel basename"),
+		"wheel3dDirectory": attstr(objects, "3d wheel directory"),
 		"shadowTexture": attstr(objects, "shadow texture"),
 		"lights": parse_car_lights(objects),
 		"sound": {
@@ -463,6 +468,18 @@ def classify_track_object(name, texture=""):
 	if starts_with_any(upper, TRACK_TERRAIN_OBJECT_PREFIXES):
 		return "terrain"
 	return ""
+
+
+def classify_wheel_object(name, texture=""):
+	upper = name.upper()
+	texture_upper = texture.upper()
+	if contains_any(upper, WHEEL_BRAKE_PATTERNS) or contains_any(texture_upper, WHEEL_BRAKE_PATTERNS):
+		return "wheelBrake"
+	if contains_any(upper, WHEEL_TIRE_PATTERNS) or contains_any(texture_upper, ["TIRE", "TYRE"]):
+		return "wheelTire"
+	if contains_any(upper, WHEEL_RIM_PATTERNS) or contains_any(texture_upper, ["RIM", "WHEEL3D"]):
+		return "wheelRim"
+	return "wheelTire"
 
 
 def make_primitive_key(texture, material_class):
@@ -877,6 +894,40 @@ def convert_car(source_root, output_dir, car_xml):
 		lod["materialClasses"] = sorted({material["class"] for material in result["materials"]})
 		lod["materials"] = result["materials"]
 
+	wheel_asset = None
+	wheel_dir = car_meta["wheel3dDirectory"]
+	wheel_basename = car_meta["wheel3dBasename"]
+	if wheel_dir and wheel_basename:
+		wheel_source_dir = source_root / "data/cars/wheels" / wheel_dir
+		wheel_sources = [wheel_source_dir / f"{wheel_basename}{index}.acc" for index in range(4)]
+		if all(path.exists() for path in wheel_sources):
+			wheel_states = []
+			for speed_index, wheel_source in enumerate(wheel_sources):
+				wheel_glb = car_dir / f"{wheel_dir}-{wheel_basename}{speed_index}.glb"
+				result = convert_ac_to_glb(
+					source_root,
+					wheel_source,
+					wheel_glb,
+					classify_wheel_object,
+				)
+				car_texture_sources.update(result["textureSources"])
+				wheel_states.append({
+					"speedIndex": speed_index,
+					"source": runtime_path(wheel_source.relative_to(source_root)),
+					"asset": relative_to_output(wheel_glb, output_dir),
+					"primitiveCount": result["primitives"],
+					"objectNames": result["objects"],
+					"materialClasses": sorted({material["class"] for material in result["materials"]}),
+					"materials": result["materials"],
+				})
+			wheel_asset = {
+				"source": "torcs-detailed-wheel-acc",
+				"directory": wheel_dir,
+				"basename": wheel_basename,
+				"speedThresholds": [20.0, 40.0, 70.0],
+				"states": wheel_states,
+			}
+
 	for texture in [car_meta["wheelTexture"], car_meta["shadowTexture"]]:
 		resolved = resolve_texture(source_root, car_source_dir, texture)
 		if resolved:
@@ -904,6 +955,7 @@ def convert_car(source_root, output_dir, car_xml):
 			"radiusScale": 1.0,
 			"widthScale": 1.0,
 		},
+		"wheelAsset": wheel_asset,
 		"sound": {
 			"engineSample": car_meta["sound"]["engineSample"],
 			"engineAsset": engine_sample_output,

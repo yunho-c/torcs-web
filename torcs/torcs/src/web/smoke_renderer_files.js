@@ -968,7 +968,10 @@ requireText(byPath["renderer/assets.js"], "loadDataTexture(relativePath)", "mate
 requireText(byPath["renderer/assets.js"], "clearcoatMap: remasterMaterialMask", "paint clearcoat mask binding");
 requireText(byPath["renderer/assets.js"], "roughnessMap: remasterMaterialMask", "paint roughness mask binding");
 requireText(byPath["renderer/assets.js"], "const source = normalizeRuntimePath(carPath)", "car asset source path annotation");
-requireText(byPath["renderer/assets.js"], "return { entry: carEntry, lods, shadowTexture, materialMask }", "loaded car entry source metadata");
+requireText(byPath["renderer/assets.js"], "return { entry: carEntry, lods, wheelAsset, shadowTexture, materialMask }", "loaded car entry source metadata");
+requireText(byPath["renderer/assets.js"], "entry.wheelAsset.states.map", "detailed wheel asset loading");
+requireText(byPath["renderer/assets.js"], "case \"wheelTire\":", "modern wheel tire material class");
+requireText(byPath["renderer/assets.js"], "case \"wheelRim\":", "modern wheel rim material class");
 requireText(byPath["renderer/assets.js"], "return this.makeLegacyMaterial(material)", "modern profile preserves legacy visual baseline");
 requireText(byPath["renderer/assets.js"], "TORCS web renderer failed to load track background texture", "background texture load warning");
 requireText(byPath["renderer/diagnostics.js"], "export function warnOnce", "one-shot warning helper export");
@@ -1142,6 +1145,11 @@ requireText(byPath["renderer/scene.js"], "opponent.effects.update(values, oppone
 requireText(byPath["renderer/effects.js"], "setVisible(visible)", "Phase 6 effect visibility control");
 requireText(byPath["renderer/scene.js"], "export { getTorcsPoseQuaternion, torcsToThree }", "shared TORCS pose export");
 requireText(byPath["renderer/scene.js"], "createGeneratedWheels(values)", "generated wheel fallback");
+requireText(byPath["renderer/scene.js"], "createDetailedWheels(values", "detailed wheel asset rig");
+requireText(byPath["renderer/scene.js"], "getWheelSpeedState(values, index", "native wheel speed-state selection");
+requireText(byPath["renderer/scene.js"], "const WHEEL_SPEED_THRESHOLDS = [20, 40, 70]", "native wheel speed thresholds");
+requireText(byPath["renderer/scene.js"], "wheel.scale.scale.set(radius * 2, radius * 2, width)", "native wheel radius and width scaling");
+requireText(byPath["renderer/scene.js"], "RIGHT_WHEELS.has(index)", "right-side detailed wheel flip");
 requireText(byPath["renderer/scene.js"], "TORCS web renderer using runtime generated wheels for car LOD", "selected car generated wheel warning");
 requireText(byPath["renderer/scene.js"], "TORCS web renderer using runtime generated wheels for opponent car LOD", "opponent generated wheel warning");
 requireText(byPath["renderer/scene.js"], "setObjectQuaternionFromTorcsPosMat(this.car, values)", "car body pose matrix conversion");
@@ -1237,6 +1245,18 @@ if (car7Trb1.materialMask !== "cars/car7-trb1/car7-trb1-material-mask.png") {
 		materialMask: car7Trb1.materialMask,
 	});
 }
+if (!car7Trb1.wheelAsset || car7Trb1.wheelAsset.source !== "torcs-detailed-wheel-acc" ||
+	car7Trb1.wheelAsset.directory !== "trb1-5" || car7Trb1.wheelAsset.basename !== "wheel" ||
+	!Array.isArray(car7Trb1.wheelAsset.states) || car7Trb1.wheelAsset.states.length !== 4) {
+	fail("TORCS web renderer smoke test found missing car7-trb1 detailed wheel metadata", {
+		wheelAsset: car7Trb1.wheelAsset,
+	});
+}
+if (JSON.stringify(car7Trb1.wheelAsset.speedThresholds) !== JSON.stringify([20, 40, 70])) {
+	fail("TORCS web renderer smoke test found unexpected car7-trb1 wheel speed thresholds", {
+		speedThresholds: car7Trb1.wheelAsset.speedThresholds,
+	});
+}
 if (!manifest.tracks["data/tracks/g-track-1/g-track-1.xml"] ||
 	!manifest.cars["data/cars/models/kc-a110/kc-a110.xml"]) {
 	fail("TORCS web renderer smoke test missing selectable multi-asset manifest entries");
@@ -1251,6 +1271,13 @@ if (typeof track.backgroundType !== "number") {
 }
 checkPng(track.backgroundTexture);
 checkPng(car7Trb1.materialMask);
+for (const [index, state] of car7Trb1.wheelAsset.states.entries()) {
+	if (state.speedIndex !== index || !state.asset ||
+		!Array.isArray(state.materialClasses) || !state.materialClasses.includes("wheelTire")) {
+		fail("TORCS web renderer smoke test found malformed car7-trb1 wheel state", state);
+	}
+	checkGlb(state.asset);
+}
 checkExr("web/hdri/120_hdrmaps_com_free_2K.exr");
 for (const field of ["backgroundColor", "ambientColor", "diffuseColor", "specularColor", "lightPosition"]) {
 	checkNumberTriplet(track, field, track.source);

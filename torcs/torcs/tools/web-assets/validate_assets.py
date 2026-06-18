@@ -209,6 +209,24 @@ def main():
 				raise ValueError("car missing turbo sound metadata")
 			if car.get("materialMask"):
 				check_texture(require(root, car["materialMask"]))
+			wheel_asset = car.get("wheelAsset")
+			if wheel_asset:
+				if wheel_asset.get("source") != "torcs-detailed-wheel-acc":
+					raise ValueError("car detailed wheel asset has unsupported source")
+				if not wheel_asset.get("directory") or not wheel_asset.get("basename"):
+					raise ValueError("car detailed wheel asset missing directory or basename")
+				thresholds = wheel_asset.get("speedThresholds")
+				if thresholds != [20.0, 40.0, 70.0]:
+					raise ValueError("car detailed wheel asset missing native speed thresholds")
+				states = wheel_asset.get("states") or []
+				if len(states) != 4:
+					raise ValueError("car detailed wheel asset must contain four speed states")
+				for index, state in enumerate(states):
+					if state.get("speedIndex") != index:
+						raise ValueError("car detailed wheel asset states must be ordered by speed index")
+					check_glb(require(root, state["asset"]))
+					check_object_names(state, state.get("source", "wheel"))
+					check_material_metadata(state)
 			for lod in car.get("lods", []):
 				if "wheels" not in lod:
 					raise ValueError(f"{lod.get('model', 'car LOD')} missing wheel visibility metadata")

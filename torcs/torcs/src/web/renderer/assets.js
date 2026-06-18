@@ -242,6 +242,24 @@ export class AssetManager {
 					metalness: 0.0,
 					roughness: 0.82,
 				});
+			case "wheelTire":
+				return this.makeStandardMaterial({
+					...parameters,
+					metalness: 0.0,
+					roughness: 0.88,
+				});
+			case "wheelRim":
+				return this.makeStandardMaterial({
+					...parameters,
+					metalness: 0.55,
+					roughness: 0.36,
+				});
+			case "wheelBrake":
+				return this.makeStandardMaterial({
+					...parameters,
+					metalness: 0.75,
+					roughness: 0.42,
+				});
 			case "road":
 				return this.makeStandardMaterial({
 					...parameters,
@@ -401,11 +419,21 @@ export class AssetManager {
 			scene.visible = false;
 			return { lod, scene };
 		}));
+		let wheelAsset = null;
+		if (entry.wheelAsset && Array.isArray(entry.wheelAsset.states)) {
+			const states = await Promise.all(entry.wheelAsset.states.map(async (state) => {
+				const scene = await this.loadGltf(state.asset);
+				scene.name = `${entry.name || "car"} wheel ${state.speedIndex}`;
+				scene.visible = false;
+				return { ...state, scene };
+			}));
+			wheelAsset = { ...entry.wheelAsset, states };
+		}
 		const shadowPath = entry.shadowTexture && entry.textures ? entry.textures[entry.shadowTexture] : "";
 		let shadowTexture = null;
 		if (shadowPath) {
 			shadowTexture = await this.loadTexture(shadowPath);
 		}
-		return { entry: carEntry, lods, shadowTexture, materialMask };
+		return { entry: carEntry, lods, wheelAsset, shadowTexture, materialMask };
 	}
 }

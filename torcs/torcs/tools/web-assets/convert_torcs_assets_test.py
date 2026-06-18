@@ -320,6 +320,91 @@ kids 0
 			self.assertIn("cars/demo-car/demo-car-material-mask.png", textures)
 			self.assertTrue((output_dir / entry["materialMask"]).exists())
 
+	def test_convert_car_emits_detailed_wheel_assets(self):
+		car_xml = Path("data/cars/models/demo-car/demo-car.xml")
+		content = """<?xml version="1.0"?>
+<params name="demo-car">
+<section name="Graphic Objects">
+<attstr name="wheel texture" val="wheel.png"/>
+<attstr name="shadow texture" val="shadow.png"/>
+<attstr name="3d wheel basename" val="wheel"/>
+<attstr name="3d wheel directory" val="demo-wheel"/>
+<section name="Ranges">
+<section name="1">
+<attnum name="threshold" val="0"/>
+<attstr name="car" val="demo-car.acc"/>
+<attstr name="wheels" val="yes"/>
+</section>
+</section>
+</section>
+<section name="Sound">
+<attstr name="engine sample" val="engine.wav"/>
+</section>
+</params>
+"""
+		asset = """AC3Db
+OBJECT poly
+name "ROOF_s_4"
+texture "body.png" base
+numvert 3
+0 0 0
+1 0 0
+0 1 0
+numsurf 1
+SURF 0x14
+mat 0
+refs 3
+0 0 0
+1 1 0
+2 0 1
+kids 0
+"""
+		wheel_asset = """AC3Db
+OBJECT poly
+name "TIRE_s_1"
+texture "wheel3d.png" base
+numvert 3
+0 0 0
+1 0 0
+0 1 0
+numsurf 1
+SURF 0x14
+mat 0
+refs 3
+0 0 0
+1 1 0
+2 0 1
+kids 0
+"""
+		with tempfile.TemporaryDirectory() as tmp_dir:
+			source_root = Path(tmp_dir) / "source"
+			output_dir = Path(tmp_dir) / "out"
+			car_dir = source_root / car_xml.parent
+			car_dir.mkdir(parents=True)
+			(car_dir / car_xml.name).write_text(content, encoding="utf-8")
+			(car_dir / "demo-car.acc").write_text(asset, encoding="latin-1")
+			for name in ["body.png", "wheel.png", "shadow.png"]:
+				convert.write_png(car_dir / name, 1, 1, b"\xff\0\0\xff")
+			(car_dir / "engine.wav").write_bytes(b"RIFFxxxxWAVE" + b"\0" * 32)
+			wheel_dir = source_root / "data/cars/wheels/demo-wheel"
+			wheel_dir.mkdir(parents=True)
+			convert.write_png(wheel_dir / "wheel3d.png", 1, 1, b"\0\0\0\xff")
+			for index in range(4):
+				(wheel_dir / f"wheel{index}.acc").write_text(wheel_asset, encoding="latin-1")
+
+			_, entry, textures, _ = convert.convert_car(source_root, output_dir, car_xml)
+
+			self.assertEqual(entry["wheelAsset"]["source"], "torcs-detailed-wheel-acc")
+			self.assertEqual(entry["wheelAsset"]["directory"], "demo-wheel")
+			self.assertEqual(entry["wheelAsset"]["basename"], "wheel")
+			self.assertEqual(entry["wheelAsset"]["speedThresholds"], [20.0, 40.0, 70.0])
+			self.assertEqual([state["speedIndex"] for state in entry["wheelAsset"]["states"]], [0, 1, 2, 3])
+			self.assertEqual(entry["wheelAsset"]["states"][0]["materialClasses"], ["wheelTire"])
+			for index, state in enumerate(entry["wheelAsset"]["states"]):
+				self.assertEqual(state["asset"], f"cars/demo-car/demo-wheel-wheel{index}.glb")
+				self.assertTrue((output_dir / state["asset"]).exists())
+			self.assertIn("cars/demo-car/wheel3d.png", textures)
+
 	def test_parse_track_metadata_includes_material_controls(self):
 		content = """<?xml version="1.0"?>
 <params name="Test Track">
