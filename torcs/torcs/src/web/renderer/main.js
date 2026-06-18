@@ -464,10 +464,12 @@ async function main() {
 			elements.audioState.textContent = status;
 			elements.audio.textContent = audio.enabled ? "Stop" : "Audio";
 		});
-		haptics = new DualSenseHaptics((status) => {
+		haptics = new DualSenseHaptics((status, diagnostics = {}) => {
 			elements.hapticsState.textContent = status;
+			elements.hapticsState.title = diagnostics.summary || "";
 			elements.haptics.textContent = haptics.enabled ? "Stop" : "Haptics";
 		});
+		window.torcsHaptics = haptics;
 		haptics.setIntensity(Number(elements.hapticsIntensity.value));
 		input = new InputController({
 			steer: elements.steer,

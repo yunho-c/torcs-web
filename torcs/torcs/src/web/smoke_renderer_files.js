@@ -1238,6 +1238,7 @@ requireText(byPath["renderer/main.js"], "import { DualSenseHaptics } from \"./ha
 requireText(byPath["renderer/main.js"], "new AssetManager", "asset manager creation");
 requireText(byPath["renderer/main.js"], "new TorcsAudio(\"./web-assets/\"", "audio runtime creation");
 requireText(byPath["renderer/main.js"], "new DualSenseHaptics", "DualSense haptics runtime creation");
+requireText(byPath["renderer/main.js"], "window.torcsHaptics = haptics", "global DualSense haptics diagnostics hook");
 requireText(byPath["renderer/main.js"], "new AssetManager(\"./web-assets/\", scene.renderer, activeRenderProfile)", "asset render profile handoff");
 requireText(byPath["renderer/main.js"], "audio.enabled ? \"Stop\" : \"Audio\"", "audio button start/stop label");
 requireText(byPath["renderer/main.js"], "haptics.enabled ? \"Stop\" : \"Haptics\"", "haptics button start/stop label");
@@ -1314,6 +1315,9 @@ requireText(byPath["renderer/audio.js"], "SNAPSHOT.wheelSurfaceStyle0", "curb st
 requireText(byPath["renderer/haptics.js"], "export class DualSenseHaptics", "DualSense haptics runtime export");
 requireText(byPath["renderer/haptics.js"], "export class DualSenseTelemetryModel", "DualSense telemetry model export");
 requireText(byPath["renderer/haptics.js"], "findDualsenseAudioDevices", "DualSense USB audio sink discovery");
+requireText(byPath["renderer/haptics.js"], "getDiagnostics()", "DualSense haptics diagnostics getter");
+requireText(byPath["renderer/haptics.js"], "fallbackReason", "DualSense haptics fallback reason");
+requireText(byPath["renderer/haptics.js"], "No DualSense USB audio output was found", "DualSense haptics no-audio-output diagnostic");
 requireText(byPath["renderer/haptics.js"], "TriggerEffect.Vibration", "adaptive trigger ABS vibration");
 requireText(byPath["renderer/haptics.js"], "controller.left.rumble", "fallback left rumble output");
 requireText(byPath["renderer/haptics.js"], "wheelOtherSurfaceContribution0", "mixed-surface haptic routing");

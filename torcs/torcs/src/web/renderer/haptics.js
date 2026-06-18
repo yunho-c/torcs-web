@@ -12,6 +12,12 @@ const TR_CURB = 1;
 const RM_CAR_STATE_NO_SIMU = 0x000000FF;
 const DEFAULT_CYLINDERS = 4;
 const HAPTIC_GAIN_RAMP = 0.025;
+const FALLBACK_REASONS = {
+	noAudioContext: "no-audio-context",
+	enumerationFailed: "audio-device-enumeration-failed",
+	noDualSenseAudioOutput: "no-dualsense-audio-output",
+	sinkFailed: "audio-sink-failed",
+};
 
 function clamp(value, min, max) {
 	return Math.min(max, Math.max(min, value));
@@ -406,11 +412,51 @@ export class DualSenseHaptics {
 		this.intensity = 0.65;
 		this.lastRumbleUpdate = 0;
 		this.lastTriggerSignature = "";
+		this.diagnostics = {
+			status: this.status,
+			fallbackReason: "",
+			webHid: typeof navigator !== "undefined" && Boolean(navigator.hid),
+			audioContext: typeof window !== "undefined" && Boolean(window.AudioContext || window.webkitAudioContext),
+			mediaDevices: typeof navigator !== "undefined" && Boolean(navigator.mediaDevices),
+			controllerRequested: false,
+			controllerConnectionActive: false,
+			controllerWireless: false,
+			audioEnumeration: "not-started",
+			audioOutputCount: 0,
+			audioInputCount: 0,
+			audioOutputs: [],
+			selectedSinkId: "",
+			sinkStrategy: "",
+			sinkError: "",
+			summary: "DualSense haptics not started",
+		};
 	}
 
-	setStatus(status) {
+	setDiagnostic(updates = {}) {
+		this.diagnostics = {
+			...this.diagnostics,
+			...updates,
+			status: updates.status || this.status,
+		};
+	}
+
+	getDiagnostics() {
+		return {
+			...this.diagnostics,
+			controllerConnectionActive: Boolean(this.controller && this.controller.connection && this.controller.connection.active),
+			controllerWireless: Boolean(this.controller && this.controller.wireless),
+			status: this.status,
+		};
+	}
+
+	logDiagnostics(label = "TORCS DualSense haptics diagnostics") {
+		console.info(label, this.getDiagnostics());
+	}
+
+	setStatus(status, updates = {}) {
 		this.status = status;
-		this.onStatus(status);
+		this.setDiagnostic({ ...updates, status });
+		this.onStatus(status, this.getDiagnostics());
 	}
 
 	setIntensity(intensity) {
@@ -425,10 +471,20 @@ export class DualSenseHaptics {
 			this.controller = new Dualsense();
 			if (this.controller.connection && typeof this.controller.connection.on === "function") {
 				this.controller.connection.on("change", ({ active }) => {
+					this.setDiagnostic({
+						controllerConnectionActive: Boolean(active),
+						controllerWireless: Boolean(this.controller.wireless),
+					});
 					if (!active && this.enabled) {
-						this.setStatus("disconnected");
+						this.setStatus("disconnected", {
+							summary: "DualSense disconnected; waiting for reconnection",
+						});
 					} else if (active && this.enabled) {
-						this.setStatus(this.fallbackRumble ? "fallback" : "active");
+						this.setStatus(this.fallbackRumble ? "fallback" : "active", {
+							summary: this.fallbackRumble ?
+								this.diagnostics.summary :
+								"DualSense stereo audio haptics active",
+						});
 						this.applyTriggerFeedback(this.model.makeSilentModel());
 					}
 				});
@@ -438,38 +494,109 @@ export class DualSenseHaptics {
 		if (provider && typeof provider.getRequest === "function") {
 			await provider.getRequest();
 		}
+		this.setDiagnostic({
+			controllerRequested: true,
+			controllerConnectionActive: Boolean(this.controller.connection && this.controller.connection.active),
+			controllerWireless: Boolean(this.controller.wireless),
+		});
 		return this.controller;
 	}
 
 	async createAudioContext() {
 		const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
 		if (!AudioContextCtor) {
+			this.setDiagnostic({
+				fallbackReason: FALLBACK_REASONS.noAudioContext,
+				summary: "Web Audio is unavailable; using HID rumble fallback",
+			});
 			return null;
 		}
 		let outputs = [];
+		let inputs = [];
 		try {
 			const devices = await findDualsenseAudioDevices();
 			outputs = devices && Array.isArray(devices.outputs) ? devices.outputs : [];
+			inputs = devices && Array.isArray(devices.inputs) ? devices.inputs : [];
+			this.setDiagnostic({
+				audioEnumeration: "ok",
+				audioOutputCount: outputs.length,
+				audioInputCount: inputs.length,
+				audioOutputs: outputs.map((output) => ({
+					label: output.label || "",
+					deviceId: output.deviceId ? "[available]" : "",
+					groupId: output.groupId ? "[available]" : "",
+				})),
+			});
 		} catch (error) {
 			console.warn("TORCS DualSense haptics could not enumerate DualSense audio devices", error);
+			this.setDiagnostic({
+				audioEnumeration: "error",
+				fallbackReason: FALLBACK_REASONS.enumerationFailed,
+				sinkError: error && error.message ? error.message : String(error),
+				summary: "DualSense audio device enumeration failed; using HID rumble fallback",
+			});
 		}
 		const sinkId = outputs.length ? outputs[0].deviceId : "";
+		if (!sinkId) {
+			this.setDiagnostic({
+				fallbackReason: FALLBACK_REASONS.noDualSenseAudioOutput,
+				summary: "No DualSense USB audio output was found; using HID rumble fallback",
+			});
+			return null;
+		}
+		this.setDiagnostic({
+			selectedSinkId: "[available]",
+		});
 		if (sinkId) {
 			try {
-				return new AudioContextCtor({ sinkId });
-			} catch (_) {
-				const context = new AudioContextCtor();
-				if (typeof context.setSinkId === "function") {
-					await context.setSinkId(sinkId);
-				}
+				const context = new AudioContextCtor({ sinkId });
+				this.setDiagnostic({
+					sinkStrategy: "constructor-sinkId",
+					fallbackReason: "",
+					summary: "DualSense stereo audio haptics active",
+				});
 				return context;
+			} catch (constructorError) {
+				const context = new AudioContextCtor();
+				if (typeof context.setSinkId !== "function") {
+					this.setDiagnostic({
+						fallbackReason: FALLBACK_REASONS.sinkFailed,
+						sinkStrategy: "unavailable",
+						sinkError: constructorError && constructorError.message ? constructorError.message : String(constructorError),
+						summary: "Browser could not route Web Audio to the DualSense output; using HID rumble fallback",
+					});
+					await context.close();
+					return null;
+				}
+				try {
+					await context.setSinkId(sinkId);
+					this.setDiagnostic({
+						sinkStrategy: "setSinkId",
+						fallbackReason: "",
+						summary: "DualSense stereo audio haptics active",
+					});
+					return context;
+				} catch (setSinkError) {
+					this.setDiagnostic({
+						fallbackReason: FALLBACK_REASONS.sinkFailed,
+						sinkStrategy: "setSinkId-failed",
+						sinkError: setSinkError && setSinkError.message ? setSinkError.message : String(setSinkError),
+						summary: "Browser refused the DualSense audio sink; using HID rumble fallback",
+					});
+					await context.close();
+					return null;
+				}
 			}
 		}
 		return null;
 	}
 
 	async enable() {
-		this.setStatus("loading");
+		this.setStatus("loading", {
+			fallbackReason: "",
+			sinkError: "",
+			summary: "Requesting DualSense HID and audio access",
+		});
 		try {
 			await this.requestController();
 			this.context = await this.createAudioContext();
@@ -485,12 +612,21 @@ export class DualSenseHaptics {
 			this.model.reset();
 			this.setControllerLight(true);
 			this.applyTriggerFeedback(this.model.makeSilentModel());
-			this.setStatus(this.fallbackRumble ? "fallback" : "active");
+			this.setStatus(this.fallbackRumble ? "fallback" : "active", {
+				summary: this.fallbackRumble ?
+					this.diagnostics.summary :
+					"DualSense stereo audio haptics active",
+			});
+			this.logDiagnostics();
 			return true;
 		} catch (error) {
 			this.enabled = false;
-			this.setStatus("error");
+			this.setStatus("error", {
+				sinkError: error && error.message ? error.message : String(error),
+				summary: "DualSense haptics failed to start",
+			});
 			this.disposeGraph();
+			this.logDiagnostics("TORCS DualSense haptics startup failed");
 			throw error;
 		}
 	}
@@ -500,7 +636,9 @@ export class DualSenseHaptics {
 		this.stopControllerOutputs();
 		this.disposeGraph();
 		this.model.reset();
-		this.setStatus("off");
+		this.setStatus("off", {
+			summary: "DualSense haptics disabled",
+		});
 	}
 
 	async reload() {
