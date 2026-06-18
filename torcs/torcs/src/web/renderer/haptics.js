@@ -15,9 +15,11 @@ const HAPTIC_GAIN_RAMP = 0.025;
 const FALLBACK_REASONS = {
 	noAudioContext: "no-audio-context",
 	enumerationFailed: "audio-device-enumeration-failed",
+	audioLabelsRedacted: "audio-device-labels-redacted",
 	noDualSenseAudioOutput: "no-dualsense-audio-output",
 	sinkFailed: "audio-sink-failed",
 };
+const DUALSENSE_AUDIO_LABELS = ["wireless controller", "dualsense"];
 
 function clamp(value, min, max) {
 	return Math.min(max, Math.max(min, value));
@@ -51,6 +53,11 @@ function createNoiseBuffer(context) {
 		data[i] = clamp(white * 0.55 + pink * 0.45, -1, 1);
 	}
 	return buffer;
+}
+
+function looksLikeDualSenseLabel(label) {
+	const lower = String(label || "").toLowerCase();
+	return DUALSENSE_AUDIO_LABELS.some((pattern) => lower.includes(pattern));
 }
 
 function makeOutputPair(context, merger, leftLevel = 0.5, rightLevel = 0.5) {
@@ -424,6 +431,11 @@ export class DualSenseHaptics {
 			audioEnumeration: "not-started",
 			audioOutputCount: 0,
 			audioInputCount: 0,
+			mediaDeviceCount: 0,
+			mediaAudioOutputCount: 0,
+			mediaAudioInputCount: 0,
+			mediaLabelsRedacted: false,
+			mediaAudioOutputs: [],
 			audioOutputs: [],
 			selectedSinkId: "",
 			sinkStrategy: "",
@@ -457,6 +469,73 @@ export class DualSenseHaptics {
 		this.status = status;
 		this.setDiagnostic({ ...updates, status });
 		this.onStatus(status, this.getDiagnostics());
+	}
+
+	async inspectMediaDevices() {
+		if (typeof navigator === "undefined" ||
+			!navigator.mediaDevices ||
+			typeof navigator.mediaDevices.enumerateDevices !== "function") {
+			this.setDiagnostic({
+				mediaDeviceCount: 0,
+				mediaAudioOutputCount: 0,
+				mediaAudioInputCount: 0,
+				mediaLabelsRedacted: false,
+				mediaAudioOutputs: [],
+			});
+			return [];
+		}
+		const devices = await navigator.mediaDevices.enumerateDevices();
+		const audioOutputs = devices.filter((device) => device.kind === "audiooutput");
+		const audioInputs = devices.filter((device) => device.kind === "audioinput");
+		const redacted = audioOutputs.length > 0 && audioOutputs.every((device) => !device.label);
+		this.setDiagnostic({
+			mediaDeviceCount: devices.length,
+			mediaAudioOutputCount: audioOutputs.length,
+			mediaAudioInputCount: audioInputs.length,
+			mediaLabelsRedacted: redacted,
+			mediaAudioOutputs: audioOutputs.map((output) => ({
+				label: output.label || "",
+				looksLikeDualSense: looksLikeDualSenseLabel(output.label),
+				deviceId: output.deviceId ? "[available]" : "",
+				groupId: output.groupId ? "[available]" : "",
+			})),
+		});
+		return devices;
+	}
+
+	async requestAudioDeviceLabelAccess() {
+		if (typeof navigator === "undefined" ||
+			!navigator.mediaDevices ||
+			typeof navigator.mediaDevices.getUserMedia !== "function") {
+			this.setDiagnostic({
+				summary: "Browser cannot request microphone permission to reveal audio device labels",
+			});
+			this.logDiagnostics("TORCS DualSense haptics label access unavailable");
+			return this.getDiagnostics();
+		}
+		let stream = null;
+		try {
+			stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+			this.setDiagnostic({
+				summary: "Audio device labels unlocked; retrying DualSense audio discovery",
+			});
+			await this.inspectMediaDevices();
+			this.logDiagnostics("TORCS DualSense haptics after audio label access");
+			return this.getDiagnostics();
+		} catch (error) {
+			this.setDiagnostic({
+				sinkError: error && error.message ? error.message : String(error),
+				summary: "Microphone permission was not granted, so audio device labels may remain hidden",
+			});
+			this.logDiagnostics("TORCS DualSense haptics label access failed");
+			return this.getDiagnostics();
+		} finally {
+			if (stream) {
+				for (const track of stream.getTracks()) {
+					track.stop();
+				}
+			}
+		}
 	}
 
 	setIntensity(intensity) {
@@ -513,7 +592,9 @@ export class DualSenseHaptics {
 		}
 		let outputs = [];
 		let inputs = [];
+		let mediaDevices = [];
 		try {
+			mediaDevices = await this.inspectMediaDevices();
 			const devices = await findDualsenseAudioDevices();
 			outputs = devices && Array.isArray(devices.outputs) ? devices.outputs : [];
 			inputs = devices && Array.isArray(devices.inputs) ? devices.inputs : [];
@@ -538,9 +619,25 @@ export class DualSenseHaptics {
 		}
 		const sinkId = outputs.length ? outputs[0].deviceId : "";
 		if (!sinkId) {
+			if (this.diagnostics.mediaLabelsRedacted) {
+				this.setDiagnostic({
+					fallbackReason: FALLBACK_REASONS.audioLabelsRedacted,
+					summary: "Audio output labels are hidden; run window.torcsHaptics.requestAudioDeviceLabelAccess() or grant microphone permission, then click Haptics again",
+				});
+				return null;
+			}
+			const possibleDualSenseOutput = mediaDevices.some((device) =>
+				device.kind === "audiooutput" && looksLikeDualSenseLabel(device.label));
+			if (possibleDualSenseOutput) {
+				this.setDiagnostic({
+					fallbackReason: FALLBACK_REASONS.noDualSenseAudioOutput,
+					summary: "A DualSense-like audio output was visible but dualsense-ts did not return it; inspect mediaAudioOutputs",
+				});
+				return null;
+			}
 			this.setDiagnostic({
 				fallbackReason: FALLBACK_REASONS.noDualSenseAudioOutput,
-				summary: "No DualSense USB audio output was found; using HID rumble fallback",
+				summary: "No DualSense USB audio output was found; connect the controller over USB and confirm the OS exposes a Wireless Controller audio output",
 			});
 			return null;
 		}

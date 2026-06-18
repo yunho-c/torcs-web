@@ -1316,7 +1316,10 @@ requireText(byPath["renderer/haptics.js"], "export class DualSenseHaptics", "Dua
 requireText(byPath["renderer/haptics.js"], "export class DualSenseTelemetryModel", "DualSense telemetry model export");
 requireText(byPath["renderer/haptics.js"], "findDualsenseAudioDevices", "DualSense USB audio sink discovery");
 requireText(byPath["renderer/haptics.js"], "getDiagnostics()", "DualSense haptics diagnostics getter");
+requireText(byPath["renderer/haptics.js"], "inspectMediaDevices()", "DualSense haptics raw media-device diagnostics");
+requireText(byPath["renderer/haptics.js"], "requestAudioDeviceLabelAccess()", "DualSense haptics audio label permission helper");
 requireText(byPath["renderer/haptics.js"], "fallbackReason", "DualSense haptics fallback reason");
+requireText(byPath["renderer/haptics.js"], "audio-device-labels-redacted", "DualSense haptics redacted-label diagnostic");
 requireText(byPath["renderer/haptics.js"], "No DualSense USB audio output was found", "DualSense haptics no-audio-output diagnostic");
 requireText(byPath["renderer/haptics.js"], "TriggerEffect.Vibration", "adaptive trigger ABS vibration");
 requireText(byPath["renderer/haptics.js"], "controller.left.rumble", "fallback left rumble output");
