@@ -1026,6 +1026,7 @@ requireText(byPath["renderer/assets.js"], "entry.backgroundTexture", "track back
 requireText(byPath["renderer/assets.js"], "async loadEffects()", "effect texture loading");
 requireText(byPath["renderer/assets.js"], "manifest.effects && manifest.effects.textures", "effect texture manifest lookup");
 requireText(byPath["renderer/assets.js"], "shadowTexture", "car shadow texture loading");
+requireText(byPath["renderer/assets.js"], "typeof this.renderer.getMaxAnisotropy === \"function\"", "WebGPU renderer anisotropy capability");
 requireText(byPath["renderer/assets.js"], "typeof caps.getMaxAnisotropy === \"function\"", "guarded renderer anisotropy capability");
 requireText(byPath["renderer/assets.js"], "this.carCache = new Map()", "cached car visual asset storage");
 requireText(byPath["renderer/assets.js"], "resolveCarPathByModelName(modelName)", "runtime car model name manifest resolver");

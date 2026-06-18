@@ -68,6 +68,9 @@ export class AssetManager {
 	}
 
 	getMaxAnisotropy() {
+		if (this.renderer && typeof this.renderer.getMaxAnisotropy === "function") {
+			return this.renderer.getMaxAnisotropy();
+		}
 		const caps = this.renderer && this.renderer.capabilities;
 		return caps && typeof caps.getMaxAnisotropy === "function" ? caps.getMaxAnisotropy() : 1;
 	}
