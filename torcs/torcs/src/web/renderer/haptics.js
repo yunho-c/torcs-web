@@ -483,8 +483,10 @@ export class DualSenseHaptics {
 		this.pcmDebugEnabled = false;
 		this.status = "locked";
 		this.intensity = 0.65;
+		this.triggerStrength = 1;
 		this.lastRumbleUpdate = 0;
 		this.lastTriggerSignature = "";
+		this.lastTriggerModel = null;
 		this.diagnostics = {
 			status: this.status,
 			fallbackReason: "",
@@ -498,6 +500,7 @@ export class DualSenseHaptics {
 			hapticTransport: HAPTIC_TRANSPORT.unavailable,
 			pcmDebugAvailable: false,
 			pcmDebugEnabled: false,
+			triggerStrength: this.triggerStrength,
 			audioEnumeration: "not-started",
 			audioOutputCount: 0,
 			audioInputCount: 0,
@@ -610,9 +613,18 @@ export class DualSenseHaptics {
 	}
 
 	setIntensity(intensity) {
-		this.intensity = clamp(Number(intensity), 0, 1);
+		this.intensity = clamp(finite(Number(intensity), this.intensity), 0, 1);
 		if (this.graph) {
 			this.graph.setIntensity(this.intensity);
+		}
+	}
+
+	setTriggerStrength(strength) {
+		this.triggerStrength = clamp(finite(Number(strength), this.triggerStrength), 0, 1);
+		this.lastTriggerSignature = "";
+		this.setDiagnostic({ triggerStrength: this.triggerStrength });
+		if (this.enabled) {
+			this.applyTriggerFeedback(this.lastTriggerModel || this.model.makeSilentModel());
 		}
 	}
 
@@ -903,6 +915,7 @@ export class DualSenseHaptics {
 		this.disposeGraph();
 		this.model.reset();
 		this.rumbleSynth.reset();
+		this.lastTriggerModel = null;
 		this.setStatus("off", {
 			hapticTransport: HAPTIC_TRANSPORT.unavailable,
 			summary: "DualSense haptics disabled",
@@ -915,6 +928,7 @@ export class DualSenseHaptics {
 		}
 		this.model.reset();
 		this.rumbleSynth.reset();
+		this.lastTriggerModel = null;
 		this.stopControllerOutputs();
 		this.applyTriggerFeedback(this.model.makeSilentModel());
 	}
@@ -922,6 +936,7 @@ export class DualSenseHaptics {
 	resetDynamics() {
 		this.model.reset();
 		this.rumbleSynth.reset();
+		this.lastTriggerModel = null;
 		this.lastTriggerSignature = "";
 	}
 
@@ -968,21 +983,44 @@ export class DualSenseHaptics {
 		if (!this.controller || !model || !model.triggers) {
 			return;
 		}
-		const signature = JSON.stringify(model.triggers);
+		this.lastTriggerModel = model;
+		const triggers = {
+			...model.triggers,
+			throttle: this.scaleTriggerFeedback(model.triggers.throttle),
+			brake: this.scaleTriggerFeedback(model.triggers.brake),
+		};
+		const signature = JSON.stringify({
+			strength: this.triggerStrength,
+			triggers,
+		});
 		if (signature === this.lastTriggerSignature) {
 			return;
 		}
 		this.lastTriggerSignature = signature;
 		try {
 			if (this.controller.right && this.controller.right.trigger && this.controller.right.trigger.feedback) {
-				this.controller.right.trigger.feedback.set(model.triggers.throttle);
+				this.controller.right.trigger.feedback.set(triggers.throttle);
 			}
 			if (this.controller.left && this.controller.left.trigger && this.controller.left.trigger.feedback) {
-				this.controller.left.trigger.feedback.set(model.triggers.brake);
+				this.controller.left.trigger.feedback.set(triggers.brake);
 			}
 		} catch (error) {
 			console.warn("TORCS DualSense haptics trigger feedback failed", error);
 		}
+	}
+
+	scaleTriggerFeedback(config) {
+		if (!config) {
+			return config;
+		}
+		const scaled = { ...config };
+		if (Object.prototype.hasOwnProperty.call(scaled, "strength")) {
+			scaled.strength = clamp(finite(scaled.strength) * this.triggerStrength, 0, 1);
+		}
+		if (Object.prototype.hasOwnProperty.call(scaled, "amplitude")) {
+			scaled.amplitude = clamp(finite(scaled.amplitude) * this.triggerStrength, 0, 1);
+		}
+		return scaled;
 	}
 
 	updateRumble(model) {

@@ -20,6 +20,7 @@ const elements = {
 		audioState: document.getElementById("audio-state"),
 		haptics: document.getElementById("haptics"),
 		hapticsIntensity: document.getElementById("haptics-intensity"),
+		hapticsTriggerStrength: document.getElementById("haptics-trigger-strength"),
 		hapticsState: document.getElementById("haptics-state"),
 		camera: document.getElementById("camera"),
 		renderProfile: document.getElementById("render-profile"),
@@ -418,6 +419,9 @@ function bindUi() {
 	elements.hapticsIntensity.addEventListener("input", () => {
 		haptics.setIntensity(Number(elements.hapticsIntensity.value));
 	});
+	elements.hapticsTriggerStrength.addEventListener("input", () => {
+		haptics.setTriggerStrength(Number(elements.hapticsTriggerStrength.value));
+	});
 	elements.camera.addEventListener("change", () => {
 		cameras.setMode(elements.camera.value);
 		if (snapshot) {
@@ -471,6 +475,7 @@ async function main() {
 		});
 		window.torcsHaptics = haptics;
 		haptics.setIntensity(Number(elements.hapticsIntensity.value));
+		haptics.setTriggerStrength(Number(elements.hapticsTriggerStrength.value));
 		input = new InputController({
 			steer: elements.steer,
 			accel: elements.accel,

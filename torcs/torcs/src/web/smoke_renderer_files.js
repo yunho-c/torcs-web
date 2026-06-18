@@ -1109,6 +1109,7 @@ requireText(byPath["torcs_web_renderer.html"], "id=\"volume\"", "audio volume sl
 requireText(byPath["torcs_web_renderer.html"], "id=\"audio-state\"", "audio status readout");
 requireText(byPath["torcs_web_renderer.html"], "id=\"haptics\"", "DualSense haptics unlock button");
 requireText(byPath["torcs_web_renderer.html"], "id=\"haptics-intensity\"", "DualSense haptics intensity slider");
+requireText(byPath["torcs_web_renderer.html"], "id=\"haptics-trigger-strength\"", "DualSense adaptive trigger strength slider");
 requireText(byPath["torcs_web_renderer.html"], "id=\"haptics-state\"", "DualSense haptics status readout");
 requireText(byPath["torcs_web_renderer.html"], "https://esm.sh/dualsense-ts@6.15.0?bundle", "pinned dualsense-ts import map");
 requireText(byPath["torcs_web_renderer.html"], "id=\"track-map\"", "Phase 5 track map canvas");
@@ -1324,6 +1325,8 @@ requireText(byPath["renderer/haptics.js"], "requestAudioDeviceLabelAccess()", "D
 requireText(byPath["renderer/haptics.js"], "class HidRumbleSynth", "DualSense HID rumble synthesis");
 requireText(byPath["renderer/haptics.js"], "hapticTransport", "DualSense haptics transport diagnostic");
 requireText(byPath["renderer/haptics.js"], "hid-rumble", "DualSense HID rumble primary transport");
+requireText(byPath["renderer/haptics.js"], "setTriggerStrength", "DualSense adaptive trigger strength setter");
+requireText(byPath["renderer/haptics.js"], "scaleTriggerFeedback", "DualSense adaptive trigger feedback scaling");
 requireText(byPath["renderer/haptics.js"], "configureControllerHaptics()", "DualSense haptics power-save routing");
 requireText(byPath["renderer/haptics.js"], "configureControllerAudio()", "DualSense PCM debug controller audio routing");
 requireText(byPath["renderer/haptics.js"], "enablePcmDebug()", "DualSense PCM debug opt-in method");
@@ -1334,6 +1337,8 @@ requireText(byPath["renderer/haptics.js"], "No DualSense USB speaker PCM debug o
 requireText(byPath["renderer/haptics.js"], "TriggerEffect.Vibration", "adaptive trigger ABS vibration");
 requireText(byPath["renderer/haptics.js"], "controller.left.rumble", "primary left rumble output");
 requireText(byPath["renderer/haptics.js"], "wheelOtherSurfaceContribution0", "mixed-surface haptic routing");
+requireText(byPath["renderer/main.js"], "hapticsTriggerStrength", "DualSense adaptive trigger strength UI wiring");
+requireText(byPath["renderer/main.js"], "haptics.setTriggerStrength", "DualSense adaptive trigger strength event handling");
 
 requireText(byPath["renderer/scene.js"], "import * as THREE from \"three/webgpu\"", "Three.js WebGPU module import");
 requireText(byPath["renderer/scene.js"], "import { TorcsEffects } from \"./effects.js\"", "effects module import");
