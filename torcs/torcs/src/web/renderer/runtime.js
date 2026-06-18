@@ -81,6 +81,9 @@ export const SNAPSHOT = {
 	wheelOtherRoughness0: 163,
 	wheelSurfaceStyle0: 167,
 	wheelOtherSurfaceStyle0: 171,
+	shadowX0: 175,
+	shadowY0: 181,
+	shadowZ0: 187,
 };
 
 export const DRIVER_KIND = {

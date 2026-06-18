@@ -50,8 +50,9 @@ extern "C" int inferno2(tModInfo *modInfo);
 #define TORCS_WEB_SIM_IDENT 0
 #define TORCS_WEB_TRACK_SAMPLES_PER_SEG 12
 #define TORCS_WEB_RUNTIME_MAX_CARS 4
-#define TORCS_WEB_RUNTIME_SNAPSHOT_VERSION 6
-#define TORCS_WEB_RUNTIME_SNAPSHOT_DOUBLE_COUNT 175
+#define TORCS_WEB_RUNTIME_SNAPSHOT_VERSION 7
+#define TORCS_WEB_RUNTIME_SNAPSHOT_DOUBLE_COUNT 193
+#define TORCS_WEB_RUNTIME_SHADOW_POINTS 6
 
 enum TorcsWebRuntimeSnapshotField {
 	TORCS_WEB_SNAPSHOT_TIME = 0,
@@ -135,7 +136,10 @@ enum TorcsWebRuntimeSnapshotField {
 	TORCS_WEB_SNAPSHOT_WHEEL_OTHER_ROUGHNESS_FREQ_0 = 159,
 	TORCS_WEB_SNAPSHOT_WHEEL_OTHER_ROUGHNESS_0 = 163,
 	TORCS_WEB_SNAPSHOT_WHEEL_SURFACE_STYLE_0 = 167,
-	TORCS_WEB_SNAPSHOT_WHEEL_OTHER_SURFACE_STYLE_0 = 171
+	TORCS_WEB_SNAPSHOT_WHEEL_OTHER_SURFACE_STYLE_0 = 171,
+	TORCS_WEB_SNAPSHOT_SHADOW_X_0 = 175,
+	TORCS_WEB_SNAPSHOT_SHADOW_Y_0 = 181,
+	TORCS_WEB_SNAPSHOT_SHADOW_Z_0 = 187
 };
 
 struct CarElt;
@@ -695,6 +699,40 @@ getRuntimeLapProgress(int carIndex)
 }
 
 static void
+transformCarLocalPoint(tCarElt *car, tdble localX, tdble localY, tdble localZ, tdble *worldX, tdble *worldY, tdble *worldZ)
+{
+	*worldX = localX * car->_posMat[0][0] + localY * car->_posMat[1][0] + localZ * car->_posMat[2][0] + car->_posMat[3][0];
+	*worldY = localX * car->_posMat[0][1] + localY * car->_posMat[1][1] + localZ * car->_posMat[2][1] + car->_posMat[3][1];
+	*worldZ = localX * car->_posMat[0][2] + localY * car->_posMat[1][2] + localZ * car->_posMat[2][2] + car->_posMat[3][2];
+}
+
+static void
+writeRuntimeShadowValues(double *values, tCarElt *car)
+{
+	const tdble shadowLength = car->_dimension_x * 1.1f;
+	const tdble shadowWidth = car->_dimension_y * 1.1f;
+	const tdble xStep = shadowLength / 2.0f;
+	const tdble y[2] = { -shadowWidth / 2.0f, shadowWidth / 2.0f };
+	int index = 0;
+
+	for (int column = 0; column < TORCS_WEB_RUNTIME_SHADOW_POINTS / 2; column++) {
+		const tdble x = shadowLength / 2.0f - xStep * column;
+		for (int side = 0; side < 2; side++, index++) {
+			tdble worldX = 0.0f;
+			tdble worldY = 0.0f;
+			tdble worldZ = 0.0f;
+			transformCarLocalPoint(car, x, y[side], 0.0f, &worldX, &worldY, &worldZ);
+			if (car->_trkPos.seg) {
+				worldZ = RtTrackHeightG(car->_trkPos.seg, worldX, worldY) + 0.01f;
+			}
+			values[TORCS_WEB_SNAPSHOT_SHADOW_X_0 + index] = worldX;
+			values[TORCS_WEB_SNAPSHOT_SHADOW_Y_0 + index] = worldY;
+			values[TORCS_WEB_SNAPSHOT_SHADOW_Z_0 + index] = worldZ;
+		}
+	}
+}
+
+static void
 writeRuntimeSnapshotValues(double *values, int carIndex)
 {
 	tCarElt *car = getRuntimeCar(carIndex);
@@ -791,6 +829,7 @@ writeRuntimeSnapshotValues(double *values, int carIndex)
 		values[TORCS_WEB_SNAPSHOT_EXHAUST_Y_0 + i] = car->_exhaustPos[i].y;
 		values[TORCS_WEB_SNAPSHOT_EXHAUST_Z_0 + i] = car->_exhaustPos[i].z;
 	}
+	writeRuntimeShadowValues(values, car);
 
 	values[TORCS_WEB_SNAPSHOT_TRACK_LENGTH] = Runtime.trackData ? Runtime.trackData->length : 0.0;
 	values[TORCS_WEB_SNAPSHOT_TRACK_WIDTH] = Runtime.trackData ? Runtime.trackData->width : 0.0;

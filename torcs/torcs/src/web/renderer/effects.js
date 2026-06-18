@@ -4,6 +4,7 @@ import { warnOnce } from "./diagnostics.js";
 
 const WHEEL_COUNT = 4;
 const ROAD_EFFECT_Y = 0.075;
+const SHADOW_POINT_COUNT = 6;
 const MAX_SKID_SEGMENTS = 220;
 const MAX_SMOKE_PARTICLES = 300;
 const SKID_INTERVAL = 0.05;
@@ -288,17 +289,29 @@ export class TorcsEffects {
 	}
 
 	createShadow() {
+		const geometry = new THREE.BufferGeometry();
+		geometry.setAttribute("position", new THREE.Float32BufferAttribute(SHADOW_POINT_COUNT * 3, 3));
+		geometry.setAttribute("uv", new THREE.Float32BufferAttribute([
+			1.0, 0.0,
+			1.0, 1.0,
+			0.5, 0.0,
+			0.5, 1.0,
+			0.0, 0.0,
+			0.0, 1.0,
+		], 2));
+		geometry.setIndex([0, 1, 2, 2, 1, 3, 2, 3, 4, 4, 3, 5]);
 		const shadow = new THREE.Mesh(
-			new THREE.CircleGeometry(1, 40),
+			geometry,
 			new THREE.MeshBasicMaterial({
 				color: 0x000000,
 				transparent: true,
 				opacity: 0.34,
 				depthWrite: false,
+				depthTest: true,
+				side: THREE.DoubleSide,
 				map: null,
 			}),
 		);
-		shadow.rotation.x = -Math.PI / 2;
 		shadow.renderOrder = 5;
 		this.groups.shadows.add(shadow);
 		return shadow;
@@ -422,13 +435,22 @@ export class TorcsEffects {
 	}
 
 	updateShadow(values, car) {
-		this.shadow.position.set(car.position.x, ROAD_EFFECT_Y, car.position.z);
-		this.shadow.scale.set(
-			Math.max(1.2, values[SNAPSHOT.dimensionX] * 0.62),
-			Math.max(0.9, values[SNAPSHOT.dimensionY] * 0.82),
-			1,
-		);
-		this.shadow.rotation.z = -car.rotation.y;
+		const positions = this.shadow.geometry.getAttribute("position");
+		let valid = true;
+		for (let index = 0; index < SHADOW_POINT_COUNT; index += 1) {
+			const x = values[SNAPSHOT.shadowX0 + index];
+			const y = values[SNAPSHOT.shadowY0 + index];
+			const z = values[SNAPSHOT.shadowZ0 + index];
+			if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
+				valid = false;
+				break;
+			}
+			const point = torcsToThree(x, y, z);
+			positions.setXYZ(index, point.x, point.y, point.z);
+		}
+		positions.needsUpdate = true;
+		this.shadow.geometry.computeBoundingSphere();
+		this.shadow.visible = valid;
 	}
 
 	updateSkidMarks(values, car) {

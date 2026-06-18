@@ -259,7 +259,7 @@ async function importInputModuleForSmoke() {
 }
 
 function makeAudioSnapshot(SNAPSHOT, overrides = {}) {
-	const values = new Array(175).fill(0);
+	const values = new Array(193).fill(0);
 	values[SNAPSHOT.x] = 10;
 	values[SNAPSHOT.y] = 20;
 	values[SNAPSHOT.z] = 1.5;
@@ -312,7 +312,7 @@ function makeInputElements() {
 }
 
 function makeInputSnapshot(time, speed) {
-	const values = new Array(175).fill(0);
+	const values = new Array(193).fill(0);
 	values[0] = time;
 	values[7] = speed;
 	return values;
@@ -1090,6 +1090,9 @@ requireText(byPath["renderer/runtime.js"], "driverLabel", "browser driver metada
 requireText(byPath["renderer/runtime.js"], "readSnapshots()", "Phase 6 multi-car snapshot reader");
 requireText(byPath["renderer/runtime.js"], "Float64Array.from(values)", "Phase 6 copied per-car snapshot buffer");
 requireText(byPath["renderer/runtime.js"], "export const SNAPSHOT", "snapshot layout export");
+requireText(byPath["renderer/runtime.js"], "shadowX0: 175", "native shadow X snapshot offset");
+requireText(byPath["renderer/runtime.js"], "shadowY0: 181", "native shadow Y snapshot offset");
+requireText(byPath["renderer/runtime.js"], "shadowZ0: 187", "native shadow Z snapshot offset");
 requireText(byPath["renderer/runtime.js"], "export class TorcsRuntime", "runtime adapter export");
 
 requireText(byPath["../CMakeLists.txt"], "'_torcs_web_runtime_start_multi_with_files'", "Phase 6 multi-car Emscripten export");
@@ -1282,9 +1285,15 @@ if (byPath["renderer/scene.js"].content.includes("WebGLRenderer")) {
 if (byPath["renderer/scene.js"].content.includes("LineLoop")) {
 	fail("TORCS web renderer smoke test found unsupported WebGPU LineLoop usage");
 }
+if (byPath["renderer/effects.js"].content.includes("CircleGeometry")) {
+	fail("TORCS web renderer smoke test found fixed circular car shadow geometry");
+}
 
 requireText(byPath["renderer/effects.js"], "export class TorcsEffects", "effects layer export");
-requireText(byPath["renderer/effects.js"], "createShadow()", "planar car shadow effect");
+requireText(byPath["renderer/effects.js"], "createShadow()", "height-adaptive car shadow effect");
+requireText(byPath["renderer/effects.js"], "new THREE.BufferGeometry()", "dynamic car shadow geometry");
+requireText(byPath["renderer/effects.js"], "SNAPSHOT.shadowX0", "native shadow vertex snapshot use");
+requireText(byPath["renderer/effects.js"], "SHADOW_POINT_COUNT", "native six-point shadow strip");
 requireText(byPath["renderer/effects.js"], "createSkidMarks()", "dynamic skid-mark strips");
 requireText(byPath["renderer/effects.js"], "updateSmoke(values, car, time, deltaTime)", "smoke sprite update");
 requireText(byPath["renderer/effects.js"], "updateFire(values, car, time, deltaTime)", "exhaust fire sprite update");

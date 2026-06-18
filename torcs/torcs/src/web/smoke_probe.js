@@ -84,6 +84,9 @@ const SNAPSHOT = {
 	wheelOtherRoughness0: 163,
 	wheelSurfaceStyle0: 167,
 	wheelOtherSurfaceStyle0: 171,
+	shadowX0: 175,
+	shadowY0: 181,
+	shadowZ0: 187,
 };
 
 function readSnapshot(module) {
@@ -475,10 +478,10 @@ createModule()
 			runtime.trackWidth <= 0 ||
 			runtime.trackSegments <= 0 ||
 			runtime.trackSamples !== runtime.trackSegments * 12 ||
-			runtime.snapshot.version !== 6 ||
-			runtime.snapshot.size !== 175 * 8 ||
+			runtime.snapshot.version !== 7 ||
+			runtime.snapshot.size !== 193 * 8 ||
 			runtime.snapshot.write !== 0 ||
-			runtime.snapshot.values.length !== 175 ||
+			runtime.snapshot.values.length !== 193 ||
 			Math.abs(runtime.snapshot.values[SNAPSHOT.time] - runtime.time) > 0.000001 ||
 			Math.abs(runtime.snapshot.values[SNAPSHOT.x] - runtime.x) > 0.000001 ||
 			Math.abs(runtime.snapshot.values[SNAPSHOT.y] - runtime.y) > 0.000001 ||
@@ -546,6 +549,11 @@ createModule()
 			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.wheelOtherRoughness0]) ||
 			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.wheelSurfaceStyle0]) ||
 			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.wheelOtherSurfaceStyle0]) ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.shadowX0]) ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.shadowY0]) ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.shadowZ0]) ||
+			Math.abs(runtime.snapshot.values[SNAPSHOT.shadowZ0] - 0.075) < 0.0001 ||
+			Math.abs(runtime.snapshot.values[SNAPSHOT.shadowZ0] - 0.01) > 2.0 ||
 			!Number.isFinite(runtime.trackCenterX) ||
 			!Number.isFinite(runtime.trackCenterY) ||
 			!Number.isFinite(runtime.trackRightX) ||
