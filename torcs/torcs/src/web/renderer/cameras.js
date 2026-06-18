@@ -34,10 +34,13 @@ const CAMERA_MODES = {
 		far: 4000,
 	},
 };
+const DIAGONAL_LOOKAROUND = Math.SQRT1_2;
 const CAMERA_LOOKAROUNDS = {
 	left: { side: 1, forward: 0 },
 	right: { side: -1, forward: 0 },
 	front: { side: 0, forward: 1 },
+	backLeft: { side: DIAGONAL_LOOKAROUND, forward: -DIAGONAL_LOOKAROUND },
+	backRight: { side: -DIAGONAL_LOOKAROUND, forward: -DIAGONAL_LOOKAROUND },
 };
 const LOOKAROUND_DISTANCE_SCALE = 1.55;
 const LOOKAROUND_SIDE_DISTANCE_SCALE = 3.8;

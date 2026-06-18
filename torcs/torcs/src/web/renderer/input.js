@@ -24,6 +24,10 @@ const CAMERA_LOOKAROUND_KEYS = new Map([
 	["BracketRight", "right"],
 	["Backslash", "front"],
 ]);
+const CAMERA_SHIFT_LOOKAROUND_KEYS = new Map([
+	["BracketLeft", "backLeft"],
+	["BracketRight", "backRight"],
+]);
 
 function clamp(value, min, max) {
 	return Math.max(min, Math.min(max, value));
@@ -71,8 +75,7 @@ export class InputController {
 
 	getCameraLookaround() {
 		this.updateGamepadLook(this.getGamepad());
-		const code = this.lookaroundKeys[this.lookaroundKeys.length - 1];
-		const keyboardLookaround = CAMERA_LOOKAROUND_KEYS.get(code);
+		const keyboardLookaround = this.lookaroundKeys[this.lookaroundKeys.length - 1];
 		if (keyboardLookaround) {
 			return keyboardLookaround;
 		}
@@ -331,9 +334,16 @@ export class InputController {
 	handleKey(event, pressed) {
 		if (CAMERA_LOOKAROUND_KEYS.has(event.code)) {
 			event.preventDefault();
-			this.lookaroundKeys = this.lookaroundKeys.filter((code) => code !== event.code);
+			const lookaround = event.shiftKey && CAMERA_SHIFT_LOOKAROUND_KEYS.has(event.code)
+				? CAMERA_SHIFT_LOOKAROUND_KEYS.get(event.code)
+				: CAMERA_LOOKAROUND_KEYS.get(event.code);
+			const mappedLookarounds = new Set([
+				CAMERA_LOOKAROUND_KEYS.get(event.code),
+				CAMERA_SHIFT_LOOKAROUND_KEYS.get(event.code),
+			].filter(Boolean));
+			this.lookaroundKeys = this.lookaroundKeys.filter((heldLookaround) => !mappedLookarounds.has(heldLookaround));
 			if (pressed) {
-				this.lookaroundKeys.push(event.code);
+				this.lookaroundKeys.push(lookaround);
 			}
 			return;
 		}

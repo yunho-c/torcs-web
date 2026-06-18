@@ -422,6 +422,7 @@ async function checkInputControllerBehavior() {
 
 		input.handleKey({
 			code: "BracketLeft",
+			shiftKey: false,
 			repeat: false,
 			preventDefault() {},
 		}, true);
@@ -430,6 +431,7 @@ async function checkInputControllerBehavior() {
 		});
 		input.handleKey({
 			code: "BracketRight",
+			shiftKey: false,
 			repeat: false,
 			preventDefault() {},
 		}, true);
@@ -438,6 +440,7 @@ async function checkInputControllerBehavior() {
 		});
 		input.handleKey({
 			code: "BracketRight",
+			shiftKey: false,
 			repeat: false,
 			preventDefault() {},
 		}, false);
@@ -446,11 +449,46 @@ async function checkInputControllerBehavior() {
 		});
 		input.handleKey({
 			code: "BracketLeft",
+			shiftKey: false,
+			repeat: false,
+			preventDefault() {},
+		}, false);
+		input.handleKey({
+			code: "BracketLeft",
+			shiftKey: true,
+			repeat: false,
+			preventDefault() {},
+		}, true);
+		assertInput(input.getCameraLookaround() === "backLeft", "shift-left lookaround key uses rear-left 45 degree camera", {
+			lookaround: input.getCameraLookaround(),
+		});
+		input.handleKey({
+			code: "BracketRight",
+			shiftKey: true,
+			repeat: false,
+			preventDefault() {},
+		}, true);
+		assertInput(input.getCameraLookaround() === "backRight", "shift-right lookaround key uses rear-right 45 degree camera", {
+			lookaround: input.getCameraLookaround(),
+		});
+		input.handleKey({
+			code: "BracketRight",
+			shiftKey: true,
+			repeat: false,
+			preventDefault() {},
+		}, false);
+		assertInput(input.getCameraLookaround() === "backLeft", "shift lookaround release returns to previous held 45 degree direction", {
+			lookaround: input.getCameraLookaround(),
+		});
+		input.handleKey({
+			code: "BracketLeft",
+			shiftKey: true,
 			repeat: false,
 			preventDefault() {},
 		}, false);
 		input.handleKey({
 			code: "Backslash",
+			shiftKey: false,
 			repeat: false,
 			preventDefault() {},
 		}, true);
@@ -459,6 +497,7 @@ async function checkInputControllerBehavior() {
 		});
 		input.handleKey({
 			code: "Backslash",
+			shiftKey: false,
 			repeat: false,
 			preventDefault() {},
 		}, false);
@@ -556,6 +595,7 @@ async function checkInputControllerBehavior() {
 		lookGamepad = makeGamepad({ axes: [0, 0, 0.6, 0] });
 		gamepadLookInput.handleKey({
 			code: "BracketLeft",
+			shiftKey: false,
 			repeat: false,
 			preventDefault() {},
 		}, true);
@@ -564,6 +604,7 @@ async function checkInputControllerBehavior() {
 		});
 		gamepadLookInput.handleKey({
 			code: "BracketLeft",
+			shiftKey: false,
 			repeat: false,
 			preventDefault() {},
 		}, false);
@@ -1074,6 +1115,8 @@ requireText(byPath["renderer/input.js"], "this.setRangeValue(this.elements.steer
 requireText(byPath["renderer/input.js"], "this.changeGear(delta)", "Phase 5 gamepad gear buttons");
 requireText(byPath["renderer/input.js"], "\"BracketLeft\", \"left\"", "left camera lookaround key");
 requireText(byPath["renderer/input.js"], "\"BracketRight\", \"right\"", "right camera lookaround key");
+requireText(byPath["renderer/input.js"], "\"BracketLeft\", \"backLeft\"", "shift-left rear diagonal camera lookaround key");
+requireText(byPath["renderer/input.js"], "\"BracketRight\", \"backRight\"", "shift-right rear diagonal camera lookaround key");
 requireText(byPath["renderer/input.js"], "\"Backslash\", \"front\"", "front camera lookaround key");
 requireText(byPath["renderer/input.js"], "getCameraLookaround()", "temporary camera lookaround state");
 requireText(byPath["renderer/input.js"], "const GAMEPAD_LOOK_X_AXIS = 2", "right stick horizontal lookaround axis");
@@ -1222,6 +1265,8 @@ requireText(byPath["renderer/cameras.js"], "this.tracksideViews = this.makeTrack
 requireText(byPath["renderer/cameras.js"], "selectTracksideView(car)", "nearest trackside camera selection");
 requireText(byPath["renderer/cameras.js"], "this.trackView = { center, height: span * 0.78 }", "fixed top alignment camera framing");
 requireText(byPath["renderer/cameras.js"], "CAMERA_LOOKAROUNDS", "temporary camera lookaround modes");
+requireText(byPath["renderer/cameras.js"], "backLeft: { side: DIAGONAL_LOOKAROUND, forward: -DIAGONAL_LOOKAROUND }", "rear-left diagonal camera lookaround mode");
+requireText(byPath["renderer/cameras.js"], "backRight: { side: -DIAGONAL_LOOKAROUND, forward: -DIAGONAL_LOOKAROUND }", "rear-right diagonal camera lookaround mode");
 requireText(byPath["renderer/cameras.js"], "updateLookaround(values, car, lookaround, analogLookaround = null)", "temporary car-relative lookaround camera");
 requireText(byPath["renderer/cameras.js"], "applyAnalogLookTarget(values, lookaround)", "right stick analog camera look target");
 requireText(byPath["renderer/cameras.js"], "analogLookaround && analogLookaround.front", "right stick press front camera override");
