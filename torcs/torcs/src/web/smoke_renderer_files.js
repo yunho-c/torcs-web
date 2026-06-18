@@ -1009,6 +1009,8 @@ requireText(byPath["torcs_web_renderer.html"], "id=\"car-count\"", "Phase 6 car 
 requireText(byPath["torcs_web_renderer.html"], "id=\"current-car\"", "Phase 6 current car selector");
 requireText(byPath["torcs_web_renderer.html"], "id=\"standings\"", "Phase 6 standings panel");
 requireText(byPath["torcs_web_renderer.html"], "id=\"render-profile\"", "render profile selector");
+requireText(byPath["torcs_web_renderer.html"], "id=\"light-intensity\"", "light intensity slider");
+requireText(byPath["torcs_web_renderer.html"], "id=\"light-intensity-value\"", "light intensity value readout");
 requireText(byPath["torcs_web_renderer.html"], "<option value=\"legacy\" selected>Legacy</option>", "legacy render profile default");
 requireText(byPath["torcs_web_renderer.html"], "<option value=\"modern\">Modern</option>", "modern render profile option");
 for (const id of ["position", "fuel", "current-lap", "last-lap", "best-lap", "top-speed"]) {
@@ -1063,8 +1065,11 @@ requireText(byPath["renderer/main.js"], "populateAssetSelects()", "manifest-driv
 requireText(byPath["renderer/main.js"], "Object.entries(entries || {})", "manifest asset option enumeration");
 requireText(byPath["renderer/main.js"], "DEFAULT_TRACK_PATH", "default track selection preservation");
 requireText(byPath["renderer/main.js"], "DEFAULT_CAR_PATH", "default car selection preservation");
+requireText(byPath["renderer/main.js"], "const DEFAULT_LIGHT_INTENSITY = 1.5", "default light intensity tuning");
 requireText(byPath["renderer/main.js"], "getInitialRenderProfile()", "query-string render profile initialization");
 requireText(byPath["renderer/main.js"], "params.get(\"profile\")", "render profile query parameter");
+requireText(byPath["renderer/main.js"], "getInitialLightIntensity()", "query-string light intensity initialization");
+requireText(byPath["renderer/main.js"], "params.get(\"lightIntensity\")", "light intensity query parameter");
 
 requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_get_snapshot_size", "snapshot size export");
 requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_write_snapshot", "snapshot write export");
@@ -1123,8 +1128,10 @@ requireText(byPath["renderer/main.js"], "new AssetManager(\"./web-assets/\", sce
 requireText(byPath["renderer/main.js"], "audio.enabled ? \"Stop\" : \"Audio\"", "audio button start/stop label");
 requireText(byPath["renderer/main.js"], "scene = await TorcsScene.create(elements.canvas)", "async WebGPU scene creation");
 requireText(byPath["renderer/main.js"], "scene.setRenderProfile(activeRenderProfile)", "scene render profile handoff");
+requireText(byPath["renderer/main.js"], "scene.setLightIntensityScale(activeLightIntensity)", "scene light intensity handoff");
 requireText(byPath["renderer/main.js"], "elements.renderProfile.addEventListener", "render profile selector binding");
 requireText(byPath["renderer/main.js"], "applyRenderProfile(elements.renderProfile.value, true)", "render profile visual asset reload");
+requireText(byPath["renderer/main.js"], "elements.lightIntensity.addEventListener", "light intensity slider binding");
 requireText(byPath["renderer/main.js"], "runtime.readTrackSamples()", "track sample ingestion");
 requireText(byPath["renderer/main.js"], "runtime.readSnapshots()", "Phase 6 snapshot array ingestion");
 requireText(byPath["renderer/main.js"], "scene.updateCars(snapshots, cameras.camera, selectedCarIndex, carAssets)", "Phase 6 selected-car scene update with per-car visual assets");
@@ -1202,6 +1209,9 @@ requireText(byPath["renderer/scene.js"], "makeRoadMesh(track)", "sampled track r
 requireText(byPath["renderer/scene.js"], "setTrackVisual(model)", "converted track mesh hook");
 requireText(byPath["renderer/scene.js"], "setTrackAtmosphere(entry, backgroundTexture = null)", "track atmosphere hook");
 requireText(byPath["renderer/scene.js"], "setRenderProfile(profile)", "scene render profile setter");
+requireText(byPath["renderer/scene.js"], "setLightIntensityScale(scale)", "interactive light intensity setter");
+requireText(byPath["renderer/scene.js"], "DEFAULT_AMBIENT_INTENSITY * this.lightIntensityScale", "scaled ambient intensity");
+requireText(byPath["renderer/scene.js"], "DEFAULT_SUN_INTENSITY * this.lightIntensityScale", "scaled sun intensity");
 requireText(byPath["renderer/scene.js"], "this.renderProfile = \"legacy\"", "legacy scene render profile default");
 requireText(byPath["renderer/scene.js"], "backgroundColor.clone().multiplyScalar(0.8)", "native fog color scaling");
 requireText(byPath["renderer/scene.js"], "const FOG_NEAR = 300", "linear TORCS fog start");

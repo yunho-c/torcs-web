@@ -100,13 +100,17 @@
 			gap: 8px;
 		}
 
-		.assets {
-			grid-template-columns: 1fr 1fr;
-		}
+			.assets {
+				grid-template-columns: 1fr 1fr;
+			}
 
-		.audio-row {
-			grid-template-columns: auto 1fr minmax(86px, auto);
-			align-items: end;
+			.render-row {
+				grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(130px, auto);
+			}
+
+			.audio-row {
+				grid-template-columns: auto 1fr minmax(86px, auto);
+				align-items: end;
 		}
 
 		.race-row {
@@ -146,14 +150,31 @@
 			text-transform: uppercase;
 		}
 
-		input[type="range"] {
-			width: 100%;
-			accent-color: var(--cyan);
-		}
+			input[type="range"] {
+				width: 100%;
+				accent-color: var(--cyan);
+			}
 
-		input[type="number"],
-		select {
-			width: 100%;
+			.inline-range {
+				min-height: 38px;
+				display: grid;
+				grid-template-columns: 1fr 44px;
+				gap: 8px;
+				align-items: center;
+				padding: 0 8px;
+				border: 1px solid var(--line);
+				border-radius: 4px;
+				background: var(--panel-strong);
+			}
+
+			.inline-value {
+				color: var(--green);
+				text-align: right;
+			}
+
+			input[type="number"],
+			select {
+				width: 100%;
 			padding: 0 8px;
 		}
 
@@ -342,10 +363,10 @@
 				</select>
 			</label>
 		</div>
-		<div class="row assets">
-			<label>Camera
-				<select id="camera">
-					<option value="chase">Chase</option>
+			<div class="row assets render-row">
+				<label>Camera
+					<select id="camera">
+						<option value="chase">Chase</option>
 					<option value="onboard">Onboard</option>
 					<option value="trackside">Trackside</option>
 					<option value="top">Top</option>
@@ -354,10 +375,16 @@
 			<label>Render
 				<select id="render-profile">
 					<option value="legacy" selected>Legacy</option>
-					<option value="modern">Modern</option>
-				</select>
-			</label>
-		</div>
+						<option value="modern">Modern</option>
+					</select>
+				</label>
+				<label>Light
+					<span class="inline-range">
+						<input id="light-intensity" type="range" min="0" max="3" step="0.05" value="1.5">
+						<span id="light-intensity-value" class="inline-value">1.50</span>
+					</span>
+				</label>
+			</div>
 		<div class="row assets">
 			<label>Gear
 				<input id="gear-input" type="number" min="-1" max="5" step="1" value="1">

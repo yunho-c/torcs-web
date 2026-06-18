@@ -23,6 +23,8 @@ const BACKGROUND_HEIGHT = BACKGROUND_RADIUS * 2;
 const BACKGROUND_VERTICAL_BIAS = 0;
 const DEFAULT_ENVIRONMENT_MAP = "./web/hdri/120_hdrmaps_com_free_2K.exr";
 const DEFAULT_ENVIRONMENT_INTENSITY = 0.8;
+const DEFAULT_AMBIENT_INTENSITY = 2.4;
+const DEFAULT_SUN_INTENSITY = 2.3;
 const TORCS_TO_THREE_BASIS = new THREE.Matrix4().set(
 	1, 0, 0, 0,
 	0, 0, 1, 0,
@@ -282,21 +284,35 @@ export class TorcsScene {
 		this.footprint = null;
 		this.track = null;
 		this.trackVisual = null;
-		this.backgroundDome = null;
-		this.environmentMap = null;
-		this.renderProfile = "legacy";
-		this.carEffects = [];
-		this.effects = this.createCarEffects(0);
-	}
+			this.backgroundDome = null;
+			this.environmentMap = null;
+			this.renderProfile = "legacy";
+			this.lightIntensityScale = 1.0;
+			this.carEffects = [];
+			this.effects = this.createCarEffects(0);
+		}
 
 	setRenderProfile(profile) {
 		this.renderProfile = normalizeRenderProfile(profile);
 	}
 
+	setLightIntensityScale(scale) {
+		this.lightIntensityScale = Number.isFinite(scale) ? Math.max(0, scale) : 1.0;
+		this.applyTrackLightIntensities();
+	}
+
+	applyTrackLightIntensities() {
+		if (!this.ambientLight || !this.sunLight) {
+			return;
+		}
+		this.ambientLight.intensity = DEFAULT_AMBIENT_INTENSITY * this.lightIntensityScale;
+		this.sunLight.intensity = DEFAULT_SUN_INTENSITY * this.lightIntensityScale;
+	}
+
 	addLighting() {
-		this.ambientLight = new THREE.AmbientLight(DEFAULT_AMBIENT, 1.7);
+		this.ambientLight = new THREE.AmbientLight(DEFAULT_AMBIENT, DEFAULT_AMBIENT_INTENSITY);
 		this.scene.add(this.ambientLight);
-		this.sunLight = new THREE.DirectionalLight(DEFAULT_SUN, 2.2);
+		this.sunLight = new THREE.DirectionalLight(DEFAULT_SUN, DEFAULT_SUN_INTENSITY);
 		this.sunLight.position.set(-90, 160, 80);
 		this.scene.add(this.sunLight);
 	}
@@ -384,13 +400,12 @@ export class TorcsScene {
 		const diffuseColor = colorFromRgb(entry && entry.diffuseColor, DEFAULT_SUN);
 		this.renderer.setClearColor(backgroundColor, 1);
 		this.scene.background = backgroundColor.clone();
-		this.scene.fog = new THREE.Fog(fogColor, FOG_NEAR, FOG_FAR);
-		this.ambientLight.color.copy(ambientColor);
-		this.ambientLight.intensity = 2.4;
-		this.sunLight.color.copy(diffuseColor);
-		this.sunLight.intensity = 2.3;
+			this.scene.fog = new THREE.Fog(fogColor, FOG_NEAR, FOG_FAR);
+			this.ambientLight.color.copy(ambientColor);
+			this.sunLight.color.copy(diffuseColor);
+			this.applyTrackLightIntensities();
 
-		const lightPosition = entry && Array.isArray(entry.lightPosition)
+			const lightPosition = entry && Array.isArray(entry.lightPosition)
 			? torcsToThree(entry.lightPosition[0], entry.lightPosition[1], entry.lightPosition[2])
 			: new THREE.Vector3(-90, 160, 80);
 		if (lightPosition.lengthSq() > 0.001) {

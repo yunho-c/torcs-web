@@ -16,11 +16,13 @@ const elements = {
 	reset: document.getElementById("reset"),
 	audio: document.getElementById("audio"),
 	volume: document.getElementById("volume"),
-	audioState: document.getElementById("audio-state"),
-	camera: document.getElementById("camera"),
-	renderProfile: document.getElementById("render-profile"),
-	track: document.getElementById("track"),
-	car: document.getElementById("car"),
+		audioState: document.getElementById("audio-state"),
+		camera: document.getElementById("camera"),
+		renderProfile: document.getElementById("render-profile"),
+		lightIntensity: document.getElementById("light-intensity"),
+		lightIntensityValue: document.getElementById("light-intensity-value"),
+		track: document.getElementById("track"),
+		car: document.getElementById("car"),
 	carCount: document.getElementById("car-count"),
 	currentCar: document.getElementById("current-car"),
 	steer: document.getElementById("steer"),
@@ -49,6 +51,7 @@ const elements = {
 const hud = new Hud(elements);
 const DEFAULT_TRACK_PATH = "/torcs/data/tracks/e-track-1/e-track-1.xml";
 const DEFAULT_CAR_PATH = "/torcs/data/cars/models/kc-2000gt/kc-2000gt.xml";
+const DEFAULT_LIGHT_INTENSITY = 1.5;
 const RENDER_PROFILES = new Set(["legacy", "modern"]);
 let scene = null;
 let cameras = null;
@@ -57,6 +60,7 @@ let audio = null;
 let input = null;
 let runtime = null;
 let activeRenderProfile = getInitialRenderProfile();
+let activeLightIntensity = getInitialLightIntensity();
 let running = false;
 let lastTime = 0;
 let snapshot = null;
@@ -75,6 +79,16 @@ function normalizeRenderProfile(profile) {
 function getInitialRenderProfile() {
 	const params = new URLSearchParams(window.location.search);
 	return normalizeRenderProfile(params.get("profile"));
+}
+
+function getInitialLightIntensity() {
+	const params = new URLSearchParams(window.location.search);
+	const value = Number(params.get("lightIntensity"));
+	return Number.isFinite(value) ? Math.max(0, Math.min(3, value)) : DEFAULT_LIGHT_INTENSITY;
+}
+
+function formatLightIntensity(value) {
+	return value.toFixed(2);
 }
 
 function setEnabled(enabled) {
@@ -303,6 +317,19 @@ async function applyRenderProfile(profile, reloadVisuals = false) {
 	}
 }
 
+function applyLightIntensity(value) {
+	const nextIntensity = Number(value);
+	activeLightIntensity = Number.isFinite(nextIntensity) ? Math.max(0, Math.min(3, nextIntensity)) : DEFAULT_LIGHT_INTENSITY;
+	elements.lightIntensity.value = String(activeLightIntensity);
+	elements.lightIntensityValue.textContent = formatLightIntensity(activeLightIntensity);
+	if (scene) {
+		scene.setLightIntensityScale(activeLightIntensity);
+	}
+	if (snapshot) {
+		readAndRender();
+	}
+}
+
 async function startSession() {
 	if (!runtime) {
 		return;
@@ -370,13 +397,16 @@ function bindUi() {
 			readAndRender();
 		}
 	});
-	elements.renderProfile.addEventListener("change", () => {
-		applyRenderProfile(elements.renderProfile.value, true).catch((error) => {
-			console.warn("TORCS web renderer render profile switch failed", error);
-			hud.setState("debug");
+		elements.renderProfile.addEventListener("change", () => {
+			applyRenderProfile(elements.renderProfile.value, true).catch((error) => {
+				console.warn("TORCS web renderer render profile switch failed", error);
+				hud.setState("debug");
+			});
 		});
-	});
-	elements.currentCar.addEventListener("change", () => {
+		elements.lightIntensity.addEventListener("input", () => {
+			applyLightIntensity(Number(elements.lightIntensity.value));
+		});
+		elements.currentCar.addEventListener("change", () => {
 		selectedCarIndex = Number(elements.currentCar.value) || 0;
 		if (snapshot) {
 			readAndRender();
@@ -396,12 +426,13 @@ async function main() {
 	setEnabled(false);
 	hud.setState("loading");
 
-	try {
-		scene = await TorcsScene.create(elements.canvas);
-		scene.setRenderProfile(activeRenderProfile);
-		cameras = new CameraRig(elements.canvas);
-		assets = new AssetManager("./web-assets/", scene.renderer, activeRenderProfile);
-		elements.renderProfile.value = activeRenderProfile;
+		try {
+			scene = await TorcsScene.create(elements.canvas);
+			scene.setRenderProfile(activeRenderProfile);
+			applyLightIntensity(activeLightIntensity);
+			cameras = new CameraRig(elements.canvas);
+			assets = new AssetManager("./web-assets/", scene.renderer, activeRenderProfile);
+			elements.renderProfile.value = activeRenderProfile;
 		audio = new TorcsAudio("./web-assets/", (status) => {
 			elements.audioState.textContent = status;
 			elements.audio.textContent = audio.enabled ? "Stop" : "Audio";
