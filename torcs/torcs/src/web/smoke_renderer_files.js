@@ -1163,6 +1163,10 @@ requireText(byPath["torcs_web_renderer.html"], "id=\"standings\"", "Phase 6 stan
 requireText(byPath["torcs_web_renderer.html"], "id=\"render-profile\"", "render profile selector");
 requireText(byPath["torcs_web_renderer.html"], "id=\"light-intensity\"", "light intensity slider");
 requireText(byPath["torcs_web_renderer.html"], "id=\"light-intensity-value\"", "light intensity value readout");
+requireText(byPath["torcs_web_renderer.html"], "id=\"track-glb\"", "custom track GLB load button");
+requireText(byPath["torcs_web_renderer.html"], "id=\"clear-track-glb\"", "custom track GLB clear button");
+requireText(byPath["torcs_web_renderer.html"], "id=\"track-glb-file\"", "custom track GLB file input");
+requireText(byPath["torcs_web_renderer.html"], "id=\"track-glb-status\"", "custom track GLB status readout");
 requireText(byPath["torcs_web_renderer.html"], "<option value=\"legacy\" selected>Legacy</option>", "legacy render profile default");
 requireText(byPath["torcs_web_renderer.html"], "<option value=\"modern\">Modern</option>", "modern render profile option");
 for (const id of ["position", "fuel", "current-lap", "last-lap", "best-lap", "top-speed"]) {
@@ -1177,6 +1181,9 @@ requireText(byPath["renderer/assets.js"], "Promise.all(entry.lods.map", "all car
 requireText(byPath["renderer/assets.js"], "entry.backgroundTexture", "track background texture loading");
 requireText(byPath["renderer/assets.js"], "async loadEffects()", "effect texture loading");
 requireText(byPath["renderer/assets.js"], "manifest.effects && manifest.effects.textures", "effect texture manifest lookup");
+requireText(byPath["renderer/assets.js"], "async loadLocalGltf(file, context = {})", "custom local GLB loader");
+requireText(byPath["renderer/assets.js"], "URL.createObjectURL(file)", "custom local GLB object URL loading");
+requireText(byPath["renderer/assets.js"], "URL.revokeObjectURL(url)", "custom local GLB object URL cleanup");
 requireText(byPath["renderer/assets.js"], "shadowTexture", "car shadow texture loading");
 requireText(byPath["renderer/assets.js"], "typeof this.renderer.getMaxAnisotropy === \"function\"", "WebGPU renderer anisotropy capability");
 requireText(byPath["renderer/assets.js"], "typeof caps.getMaxAnisotropy === \"function\"", "guarded renderer anisotropy capability");
@@ -1290,6 +1297,10 @@ requireText(byPath["renderer/main.js"], "window.torcsHaptics = haptics", "global
 requireText(byPath["renderer/main.js"], "new AssetManager(\"./web-assets/\", scene.renderer, activeRenderProfile)", "asset render profile handoff");
 requireText(byPath["renderer/main.js"], "audio.enabled ? \"Stop\" : \"Audio\"", "audio button start/stop label");
 requireText(byPath["renderer/main.js"], "haptics.enabled ? \"Stop\" : \"Haptics\"", "haptics button start/stop label");
+requireText(byPath["renderer/main.js"], "customTrackFile", "custom track GLB override state");
+requireText(byPath["renderer/main.js"], "applyCustomTrackFile(file)", "custom track GLB apply path");
+requireText(byPath["renderer/main.js"], "clearCustomTrackFile(true)", "custom track GLB clear path");
+requireText(byPath["renderer/main.js"], "getVisualTrackPath()", "runtime track path visual reload guard");
 requireText(byPath["renderer/main.js"], "scene = await TorcsScene.create(elements.canvas)", "async WebGPU scene creation");
 requireText(byPath["renderer/main.js"], "scene.setRenderProfile(activeRenderProfile)", "scene render profile handoff");
 requireText(byPath["renderer/main.js"], "scene.setLightIntensityScale(activeLightIntensity)", "scene light intensity handoff");

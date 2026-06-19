@@ -108,6 +108,11 @@
 				grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(130px, auto);
 			}
 
+			.track-override-row {
+				grid-template-columns: auto auto minmax(0, 1fr);
+				align-items: end;
+			}
+
 			.audio-row {
 				grid-template-columns: auto 1fr minmax(86px, auto);
 				align-items: end;
@@ -140,6 +145,10 @@
 		button:disabled {
 			color: #62685c;
 			cursor: not-allowed;
+		}
+
+		input[type="file"][hidden] {
+			display: none;
 		}
 
 		#start {
@@ -194,6 +203,23 @@
 			color: var(--green);
 			text-transform: uppercase;
 			font-size: 0.72rem;
+		}
+
+		.track-override-status {
+			min-height: 38px;
+			display: grid;
+			align-items: center;
+			min-width: 0;
+			padding: 0 10px;
+			border: 1px solid var(--line);
+			border-radius: 4px;
+			background: var(--panel-strong);
+			color: var(--muted);
+			text-transform: uppercase;
+			font-size: 0.72rem;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
 		}
 
 		.modal {
@@ -587,6 +613,12 @@
 					<option value="/torcs/data/cars/models/kc-a110/kc-a110.xml">kc-a110</option>
 				</select>
 			</label>
+		</div>
+		<div class="row assets track-override-row">
+			<button id="track-glb" type="button">Load GLB</button>
+			<button id="clear-track-glb" type="button" disabled>Clear GLB</button>
+			<span class="track-override-status" id="track-glb-status">Converted track</span>
+			<input id="track-glb-file" type="file" accept=".glb,model/gltf-binary" hidden>
 		</div>
 			<div class="row assets render-row">
 				<label>Camera

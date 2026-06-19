@@ -404,6 +404,17 @@ export class AssetManager {
 		return gltf.scene;
 	}
 
+	async loadLocalGltf(file, context = {}) {
+		const url = URL.createObjectURL(file);
+		try {
+			const gltf = await this.loader.loadAsync(url);
+			this.configureSceneMaterials(gltf.scene, context);
+			return gltf.scene;
+		} finally {
+			URL.revokeObjectURL(url);
+		}
+	}
+
 	async loadTexture(relativePath, colorSpace = THREE.SRGBColorSpace) {
 		const texture = await this.textureLoader.loadAsync(`${this.baseUrl}${relativePath}`);
 		this.configureTexture(texture, colorSpace);

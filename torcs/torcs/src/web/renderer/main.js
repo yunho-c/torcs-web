@@ -46,6 +46,10 @@ const elements = {
 		lightIntensity: document.getElementById("light-intensity"),
 		lightIntensityValue: document.getElementById("light-intensity-value"),
 		track: document.getElementById("track"),
+		trackGlb: document.getElementById("track-glb"),
+		clearTrackGlb: document.getElementById("clear-track-glb"),
+		trackGlbFile: document.getElementById("track-glb-file"),
+		trackGlbStatus: document.getElementById("track-glb-status"),
 		car: document.getElementById("car"),
 	carCount: document.getElementById("car-count"),
 	currentCar: document.getElementById("current-car"),
@@ -86,12 +90,15 @@ let input = null;
 let runtime = null;
 let activeRenderProfile = getInitialRenderProfile();
 let activeLightIntensity = getInitialLightIntensity();
+let activeTrackPath = DEFAULT_TRACK_PATH;
 let running = false;
 let lastTime = 0;
 let snapshot = null;
 let snapshots = [];
 let carAssets = new Map();
 let selectedCarIndex = 0;
+let customTrackFile = null;
+let customTrackVisualName = "";
 
 const RUMBLE_CONFIG_SOURCES = [
 	{
@@ -517,6 +524,8 @@ function setEnabled(enabled) {
 	elements.audio.disabled = !runtime;
 	elements.haptics.disabled = !runtime;
 	elements.rumbleConfigOpen.disabled = !runtime;
+	elements.trackGlb.disabled = !assets || !scene;
+	elements.clearTrackGlb.disabled = !customTrackFile;
 }
 
 function applyControls(controls = input.getControls()) {
@@ -588,6 +597,61 @@ async function populateAssetSelects() {
 		}
 	} catch (error) {
 		console.warn("TORCS web renderer asset manifest discovery failed", error);
+	}
+}
+
+function getVisualTrackPath() {
+	return runtime && runtime.active && activeTrackPath ? activeTrackPath : elements.track.value;
+}
+
+function updateCustomTrackUi(status = "") {
+	const hasOverride = Boolean(customTrackFile);
+	elements.clearTrackGlb.disabled = !hasOverride;
+	elements.trackGlbStatus.textContent = status || (hasOverride ? customTrackVisualName : "Converted track");
+	elements.trackGlbStatus.title = hasOverride
+		? `Using custom track visual: ${customTrackVisualName}`
+		: "Using converted TORCS track visual";
+}
+
+async function applyCustomTrackFile(file) {
+	if (!file || !assets || !scene) {
+		return false;
+	}
+	updateCustomTrackUi(`Loading ${file.name}`);
+	try {
+		const model = await assets.loadLocalGltf(file);
+		model.name = file.name || "custom track";
+		customTrackFile = file;
+		customTrackVisualName = file.name || "custom track";
+		scene.setTrackVisual(model);
+		updateCustomTrackUi();
+		if (snapshot) {
+			readAndRender();
+		}
+		return true;
+	} catch (error) {
+		console.warn("TORCS web renderer failed to load custom track GLB", {
+			file: file.name,
+			error,
+		});
+		hud.setState("debug");
+		updateCustomTrackUi(customTrackFile ? "" : "GLB load failed");
+		return false;
+	}
+}
+
+async function clearCustomTrackFile(restoreConverted = true) {
+	customTrackFile = null;
+	customTrackVisualName = "";
+	elements.trackGlbFile.value = "";
+	updateCustomTrackUi();
+	if (restoreConverted && assets && scene) {
+		const hasAssets = await loadVisualAssets();
+		const readyState = runtime && runtime.active ? (running ? "running" : "ready") : "loaded";
+		hud.setState(hasAssets ? readyState : "debug");
+		if (snapshot) {
+			readAndRender();
+		}
 	}
 }
 
@@ -674,8 +738,9 @@ function animate(time) {
 
 async function loadVisualAssets() {
 	try {
+		const trackPath = getVisualTrackPath();
 		const [track, selectedCarAsset, effects] = await Promise.all([
-			assets.loadTrack(elements.track.value),
+			assets.loadTrack(trackPath),
 			assets.loadCar(elements.car.value),
 			assets.loadEffects(),
 		]);
@@ -683,16 +748,20 @@ async function loadVisualAssets() {
 			? await assets.loadCarAssetsForSnapshots(snapshots, elements.car.value)
 			: new Map([[selectedCarIndex, selectedCarAsset]]);
 		await warnCarVisualFallbacks(carAssets, selectedCarAsset);
-		scene.setTrackVisual(track ? track.scene : null);
+		if (customTrackFile) {
+			await applyCustomTrackFile(customTrackFile);
+		} else {
+			scene.setTrackVisual(track ? track.scene : null);
+		}
 		scene.setTrackAtmosphere(track ? track.entry : null, track ? track.backgroundTexture : null);
 		scene.setCarVisualAssets(carAssets, selectedCarAsset);
 		scene.setEffectTextures(effects ? effects.textures : null);
 		if (!track) {
 			warnOnce(
-				`track-visual-fallback:${elements.track.value}`,
+				`track-visual-fallback:${trackPath}`,
 				"TORCS web renderer using runtime sampled track geometry fallback",
 				{
-					track: elements.track.value,
+					track: trackPath,
 					reason: "converted track visual unavailable",
 				},
 			);
@@ -728,10 +797,11 @@ async function applyRenderProfile(profile, reloadVisuals = false) {
 	if (assets) {
 		assets.setRenderProfile(activeRenderProfile);
 	}
-	if (reloadVisuals && runtime && runtime.active) {
+	if (reloadVisuals && (customTrackFile || (runtime && runtime.active))) {
 		hud.setState("loading");
 		const hasAssets = await loadVisualAssets();
-		hud.setState(hasAssets ? (running ? "running" : "ready") : "debug");
+		const readyState = runtime && runtime.active ? (running ? "running" : "ready") : "loaded";
+		hud.setState(hasAssets ? readyState : "debug");
 	}
 	if (snapshot) {
 		readAndRender();
@@ -758,12 +828,14 @@ async function startSession() {
 	running = false;
 	elements.run.textContent = "Run";
 	const carCount = Math.max(1, Math.min(4, Number(elements.carCount.value) || 1));
-	const ok = runtime.start(elements.track.value, elements.car.value, carCount);
+	const trackPath = elements.track.value;
+	const ok = runtime.start(trackPath, elements.car.value, carCount);
 	if (!ok) {
 		hud.setState("failed");
 		setEnabled(false);
 		return;
 	}
+	activeTrackPath = trackPath;
 	selectedCarIndex = 0;
 	if (haptics) {
 		haptics.resetDynamics();
@@ -889,6 +961,35 @@ function bindUi() {
 		if (snapshot) {
 			readAndRender();
 		}
+	});
+	elements.trackGlb.addEventListener("click", () => {
+		elements.trackGlbFile.value = "";
+		elements.trackGlbFile.click();
+	});
+	elements.trackGlbFile.addEventListener("change", () => {
+		const file = elements.trackGlbFile.files && elements.trackGlbFile.files[0];
+		if (!file) {
+			return;
+		}
+		applyCustomTrackFile(file).catch((error) => {
+			console.warn("TORCS web renderer custom track GLB apply failed", error);
+			hud.setState("debug");
+		});
+	});
+	elements.clearTrackGlb.addEventListener("click", () => {
+		clearCustomTrackFile(true).catch((error) => {
+			console.warn("TORCS web renderer custom track GLB clear failed", error);
+			hud.setState("debug");
+		});
+	});
+	elements.track.addEventListener("change", () => {
+		if (!customTrackFile) {
+			return;
+		}
+		clearCustomTrackFile(true).catch((error) => {
+			console.warn("TORCS web renderer custom track GLB clear on track change failed", error);
+			hud.setState("debug");
+		});
 	});
 		elements.renderProfile.addEventListener("change", () => {
 			applyRenderProfile(elements.renderProfile.value, true).catch((error) => {
