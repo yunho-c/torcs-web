@@ -387,7 +387,13 @@ function assertHaptics(condition, label, details = {}) {
 }
 
 async function checkHapticsModelBehavior() {
-	const { DualSenseHaptics, DualSenseTelemetryModel, SNAPSHOT } = await importHapticsModuleForSmoke();
+	const {
+		DirectionalRumbleMixer,
+		DualSenseHaptics,
+		DualSenseRumbleMapper,
+		DualSenseTelemetryModel,
+		SNAPSHOT,
+	} = await importHapticsModuleForSmoke();
 	const lowThrottle = new DualSenseTelemetryModel().update(makeAudioSnapshot(SNAPSHOT, {
 		controlAccel: 0.15,
 		engineRpm: 4200,
@@ -404,21 +410,56 @@ async function checkHapticsModelBehavior() {
 		{ low: lowThrottle.engine.amplitude, high: highThrottle.engine.amplitude },
 	);
 
+	const mixer = new DirectionalRumbleMixer();
+	const centered = mixer.mix([{ source: "engine", volume: 0.4, direction: 0 }]);
+	assertHaptics(Math.abs(centered.left - centered.right) < 0.000001,
+		"center source produces equal abstract stereo before DualSense calibration", centered);
+	const mixedLeft = mixer.mix([{ source: "texture", volume: 0.4, direction: -1 }]);
+	assertHaptics(mixedLeft.left > mixedLeft.right * 8, "left source stays left-dominant in abstract stereo", mixedLeft);
+	const mixedRight = mixer.mix([{ source: "texture", volume: 0.4, direction: 1 }]);
+	assertHaptics(mixedRight.right > mixedRight.left * 8, "right source stays right-dominant in abstract stereo", mixedRight);
+
+	const mapper = new DualSenseRumbleMapper();
+	const mappedEqual = mapper.map({ left: 0.5, right: 0.5 }, 1);
+	assertHaptics(mappedEqual.right < 0.5 && mappedEqual.left < mappedEqual.right,
+		"DualSense mapper applies gamma curve and left/right compensation", mappedEqual);
+
 	const leftDirtValues = makeAudioSnapshot(SNAPSHOT, { speed: 44 });
 	for (const index of [1, 3]) {
 		leftDirtValues[SNAPSHOT.wheelSurfaceKind0 + index] = 4;
 		leftDirtValues[SNAPSHOT.wheelRoughness0 + index] = 0.85;
 		leftDirtValues[SNAPSHOT.wheelReaction0 + index] = 5200;
+		leftDirtValues[SNAPSHOT.wheelSkidIntensity0 + index] = 0.72;
 	}
 	for (const index of [0, 2]) {
 		leftDirtValues[SNAPSHOT.wheelSurfaceKind0 + index] = 0;
 		leftDirtValues[SNAPSHOT.wheelRoughness0 + index] = 0.04;
 		leftDirtValues[SNAPSHOT.wheelReaction0 + index] = 1800;
+		leftDirtValues[SNAPSHOT.wheelSkidIntensity0 + index] = 0.02;
 	}
 	const leftDirt = new DualSenseTelemetryModel().update(leftDirtValues);
 	assertHaptics(leftDirt.left.texture > leftDirt.right.texture * 1.8, "left-side rough surface routes to left haptics", {
 		left: leftDirt.left.texture,
 		right: leftDirt.right.texture,
+	});
+
+	const rightDirtValues = makeAudioSnapshot(SNAPSHOT, { speed: 44 });
+	for (const index of [0, 2]) {
+		rightDirtValues[SNAPSHOT.wheelSurfaceKind0 + index] = 4;
+		rightDirtValues[SNAPSHOT.wheelRoughness0 + index] = 0.85;
+		rightDirtValues[SNAPSHOT.wheelReaction0 + index] = 5200;
+		rightDirtValues[SNAPSHOT.wheelSkidIntensity0 + index] = 0.72;
+	}
+	for (const index of [1, 3]) {
+		rightDirtValues[SNAPSHOT.wheelSurfaceKind0 + index] = 0;
+		rightDirtValues[SNAPSHOT.wheelRoughness0 + index] = 0.04;
+		rightDirtValues[SNAPSHOT.wheelReaction0 + index] = 1800;
+		rightDirtValues[SNAPSHOT.wheelSkidIntensity0 + index] = 0.02;
+	}
+	const rightDirt = new DualSenseTelemetryModel().update(rightDirtValues);
+	assertHaptics(rightDirt.right.texture > rightDirt.left.texture * 1.8, "right-side rough surface routes to right haptics", {
+		left: rightDirt.left.texture,
+		right: rightDirt.right.texture,
 	});
 
 	const gearModel = new DualSenseTelemetryModel();
@@ -430,6 +471,64 @@ async function checkHapticsModelBehavior() {
 		second: secondGear.transients.gear,
 	});
 
+	const haptics = new DualSenseHaptics();
+	haptics.setRumbleConfig({ soloSource: "engine", engine: { gain: 1 } });
+	let engineRumble = haptics.rumbleSynth.update(highThrottle, 1, 1 / 30, haptics.getRumbleConfig());
+	haptics.setRumbleConfig({ soloSource: "engine", engine: { gain: 0.35 } });
+	haptics.rumbleSynth.reset();
+	const softerEngineRumble = haptics.rumbleSynth.update(highThrottle, 1, 1 / 30, haptics.getRumbleConfig());
+	assertHaptics(
+		engineRumble.abstractStereo.left > softerEngineRumble.abstractStereo.left &&
+			engineRumble.right > softerEngineRumble.right,
+		"engine gain changes abstract stereo and final motor command",
+		{ engineRumble, softerEngineRumble },
+	);
+	assertHaptics(
+		Math.abs(engineRumble.abstractStereo.left - engineRumble.abstractStereo.right) < 0.000001 &&
+			engineRumble.left < engineRumble.right,
+		"center engine is equal before calibration and asymmetric after DualSense mapping",
+		engineRumble,
+	);
+
+	haptics.setRumbleConfig({ soloSource: "texture", texture: { gain: 1, noise: 0 } });
+	haptics.rumbleSynth.reset();
+	const leftTextureRumble = haptics.rumbleSynth.update(leftDirt, 1, 1 / 30, haptics.getRumbleConfig());
+	haptics.rumbleSynth.reset();
+	const rightTextureRumble = haptics.rumbleSynth.update(rightDirt, 1, 1 / 30, haptics.getRumbleConfig());
+	assertHaptics(leftTextureRumble.abstractStereo.left > leftTextureRumble.abstractStereo.right,
+		"left texture remains left-dominant after source mixing", leftTextureRumble);
+	assertHaptics(rightTextureRumble.abstractStereo.right > rightTextureRumble.abstractStereo.left,
+		"right texture remains right-dominant after source mixing", rightTextureRumble);
+
+	haptics.setRumbleConfig({ soloSource: "slip", slip: { gain: 1, pulseRate: 13.5 } });
+	haptics.rumbleSynth.reset();
+	const leftSlipRumble = haptics.rumbleSynth.update(leftDirt, 1, 1 / 30, haptics.getRumbleConfig());
+	haptics.rumbleSynth.reset();
+	const rightSlipRumble = haptics.rumbleSynth.update(rightDirt, 1, 1 / 30, haptics.getRumbleConfig());
+	assertHaptics(leftSlipRumble.abstractStereo.left > leftSlipRumble.abstractStereo.right,
+		"left slip remains left-dominant after source mixing", leftSlipRumble);
+	assertHaptics(rightSlipRumble.abstractStereo.right > rightSlipRumble.abstractStereo.left,
+		"right slip remains right-dominant after source mixing", rightSlipRumble);
+
+	haptics.setRumbleConfig({ soloSource: "gear", gear: { gain: 1, decay: 0.085 } });
+	haptics.rumbleSynth.reset();
+	const firstGearRumble = haptics.rumbleSynth.update(firstGear, 1, 1 / 30, haptics.getRumbleConfig());
+	const secondGearRumble = haptics.rumbleSynth.update(secondGear, 1, 1 / 30, haptics.getRumbleConfig());
+	assertHaptics(firstGearRumble.right > 0 && secondGearRumble.right > 0 &&
+		secondGearRumble.contributions.gear < firstGearRumble.contributions.gear,
+	"gear transient decays and produces final motor output", { firstGearRumble, secondGearRumble });
+
+	const collisionModel = new DualSenseTelemetryModel();
+	const firstCollision = collisionModel.update(makeAudioSnapshot(SNAPSHOT, { collisionEvent: 1 }));
+	const secondCollision = collisionModel.update(makeAudioSnapshot(SNAPSHOT, { collisionEvent: 1 }));
+	haptics.setRumbleConfig({ soloSource: "collision", collision: { gain: 1, decay: 0.16 } });
+	haptics.rumbleSynth.reset();
+	const firstCollisionRumble = haptics.rumbleSynth.update(firstCollision, 1, 1 / 30, haptics.getRumbleConfig());
+	const secondCollisionRumble = haptics.rumbleSynth.update(secondCollision, 1, 1 / 30, haptics.getRumbleConfig());
+	assertHaptics(firstCollisionRumble.right > 0 && secondCollisionRumble.right > 0 &&
+		secondCollisionRumble.contributions.collision < firstCollisionRumble.contributions.collision,
+	"collision transient decays and produces final motor output", { firstCollisionRumble, secondCollisionRumble });
+
 	const absValues = makeAudioSnapshot(SNAPSHOT, { controlBrake: 0.9 });
 	absValues[SNAPSHOT.wheelSkidIntensity0 + 0] = 0.85;
 	absValues[SNAPSHOT.wheelSlipAccel0 + 0] = 18;
@@ -438,7 +537,6 @@ async function checkHapticsModelBehavior() {
 		trigger: absModel.triggers.brake,
 	});
 
-	const haptics = new DualSenseHaptics();
 	haptics.setRumbleConfig({
 		soloSource: "slip",
 		engine: { enabled: false, gain: 0.25 },
@@ -470,6 +568,7 @@ async function checkHapticsModelBehavior() {
 		engineHz: highThrottle.engine.frequency,
 		leftTexture: leftDirt.left.texture,
 		absTrigger: absModel.triggers.brake.effect,
+		mapperGamma: mappedEqual.gamma,
 		rumbleSolo: config.soloSource,
 	};
 }
@@ -1151,6 +1250,7 @@ requireText(byPath["torcs_web_renderer.html"], "id=\"rumble-signal-left-fill\"",
 requireText(byPath["torcs_web_renderer.html"], "id=\"rumble-signal-right-fill\"", "DualSense rumble right meter");
 requireText(byPath["torcs_web_renderer.html"], "id=\"rumble-signal-scope\"", "DualSense rumble signal scope canvas");
 requireText(byPath["torcs_web_renderer.html"], "id=\"rumble-signal-contributions\"", "DualSense rumble contribution meter container");
+requireText(byPath["torcs_web_renderer.html"], "DualSense output", "DualSense calibrated output label");
 requireText(byPath["torcs_web_renderer.html"], "id=\"rumble-config-json\"", "DualSense rumble config JSON textarea");
 requireText(byPath["torcs_web_renderer.html"], "id=\"rumble-config-reset\"", "DualSense rumble config reset button");
 requireText(byPath["torcs_web_renderer.html"], "id=\"rumble-config-copy\"", "DualSense rumble config copy button");
@@ -1329,6 +1429,8 @@ requireText(byPath["renderer/main.js"], "haptics.setRumbleConfig", "DualSense ru
 requireText(byPath["renderer/main.js"], "haptics.importRumbleConfig", "DualSense rumble config JSON import handler");
 requireText(byPath["renderer/main.js"], "navigator.clipboard", "DualSense rumble config clipboard integration");
 requireText(byPath["renderer/main.js"], "RUMBLE_SIGNAL_CONTRIBUTIONS", "DualSense rumble signal source definitions");
+requireText(byPath["renderer/main.js"], "abstractLeft", "DualSense abstract stereo signal UI");
+requireText(byPath["renderer/main.js"], "finalMotor", "DualSense final motor signal UI");
 requireText(byPath["renderer/main.js"], "RUMBLE_SIGNAL_HISTORY_LIMIT", "DualSense rumble signal history bound");
 requireText(byPath["renderer/main.js"], "setRumbleConfigTab", "DualSense rumble config tab switching");
 requireText(byPath["renderer/main.js"], "buildRumbleSignalUi", "DualSense rumble signal contribution UI builder");
@@ -1386,6 +1488,9 @@ requireText(byPath["renderer/audio.js"], "SNAPSHOT.wheelSurfaceStyle0", "curb st
 
 requireText(byPath["renderer/haptics.js"], "export class DualSenseHaptics", "DualSense haptics runtime export");
 requireText(byPath["renderer/haptics.js"], "export class DualSenseTelemetryModel", "DualSense telemetry model export");
+requireText(byPath["renderer/haptics.js"], "export class DirectionalRumbleMixer", "directional rumble mixer export");
+requireText(byPath["renderer/haptics.js"], "export class DualSenseRumbleMapper", "DualSense rumble mapper export");
+requireText(byPath["renderer/haptics.js"], "createRumbleLut", "DualSense rumble gamma LUT");
 requireText(byPath["renderer/haptics.js"], "findDualsenseAudioDevices", "DualSense speaker PCM debug discovery");
 requireText(byPath["renderer/haptics.js"], "getDiagnostics()", "DualSense haptics diagnostics getter");
 requireText(byPath["renderer/haptics.js"], "inspectMediaDevices()", "DualSense haptics raw media-device diagnostics");
@@ -1414,6 +1519,9 @@ requireText(byPath["renderer/haptics.js"], "importRumbleConfig", "DualSense rumb
 requireText(byPath["renderer/haptics.js"], "resetRumbleConfig", "DualSense rumble config reset");
 requireText(byPath["renderer/haptics.js"], "soloSource", "DualSense rumble config source soloing");
 requireText(byPath["renderer/haptics.js"], "contributions", "DualSense rumble contribution diagnostics");
+requireText(byPath["renderer/haptics.js"], "sourcePackets", "directional rumble source diagnostics");
+requireText(byPath["renderer/haptics.js"], "abstractStereo", "abstract stereo rumble diagnostics");
+requireText(byPath["renderer/haptics.js"], "finalMotor", "final DualSense motor diagnostics");
 requireText(byPath["renderer/main.js"], "hapticsTriggerStrength", "DualSense adaptive trigger strength UI wiring");
 requireText(byPath["renderer/main.js"], "haptics.setTriggerStrength", "DualSense adaptive trigger strength event handling");
 

@@ -152,14 +152,18 @@ const RUMBLE_CONFIG_SOURCES = [
 	},
 ];
 const RUMBLE_SIGNAL_CONTRIBUTIONS = [
-	["engine", "Engine", ""],
-	["leftSlip", "L Slip", ""],
-	["rightSlip", "R Slip", "right"],
-	["leftTexture", "L Texture", ""],
-	["rightTexture", "R Texture", "right"],
-	["gear", "Gear", "event"],
-	["collision", "Collision", "event"],
-	["abs", "ABS", "event"],
+	["abstractLeft", "Abstract L", ""],
+	["abstractRight", "Abstract R", "right"],
+	["finalLeft", "Motor L", ""],
+	["finalRight", "Motor R", "right"],
+	["engine", "Engine", "", "C"],
+	["leftSlip", "L Slip", "", "L"],
+	["rightSlip", "R Slip", "right", "R"],
+	["leftTexture", "L Texture", "", "L"],
+	["rightTexture", "R Texture", "right", "R"],
+	["gear", "Gear", "event", "C"],
+	["collision", "Collision", "event", "C"],
+	["abs", "ABS", "event", "C"],
 ];
 const RUMBLE_SIGNAL_HISTORY_LIMIT = 240;
 let activeRumbleConfigTab = "sources";
@@ -217,7 +221,13 @@ function getRumbleSignalOutput() {
 	if (!haptics || typeof haptics.getDiagnostics !== "function") {
 		return {
 			status: "off",
-			output: { left: 0, right: 0, contributions: {} },
+			output: {
+				left: 0,
+				right: 0,
+				abstractStereo: { left: 0, right: 0 },
+				finalMotor: { left: 0, right: 0 },
+				contributions: {},
+			},
 		};
 	}
 	const diagnostics = haptics.getDiagnostics();
@@ -241,13 +251,13 @@ function buildRumbleSignalUi() {
 	if (!elements.rumbleSignalContributions || elements.rumbleSignalContributions.childElementCount) {
 		return;
 	}
-	for (const [key, label, tone] of RUMBLE_SIGNAL_CONTRIBUTIONS) {
+	for (const [key, label, tone, direction] of RUMBLE_SIGNAL_CONTRIBUTIONS) {
 		const row = document.createElement("div");
 		row.className = "rumble-signal-source";
 		row.dataset.rumbleSignalSource = key;
 
 		const name = document.createElement("span");
-		name.textContent = label;
+		name.textContent = direction ? `${label} ${direction}` : label;
 		const track = document.createElement("div");
 		track.className = "rumble-signal-track";
 		const fill = document.createElement("div");
@@ -330,9 +340,17 @@ function updateRumbleSignalUi() {
 
 	const signal = getRumbleSignalOutput();
 	const output = signal.output;
-	const left = clampUnit(output.left);
-	const right = clampUnit(output.right);
-	const contributions = output.contributions || {};
+	const finalMotor = output.finalMotor || output;
+	const abstractStereo = output.abstractStereo || output;
+	const left = clampUnit(finalMotor.left);
+	const right = clampUnit(finalMotor.right);
+	const contributions = {
+		abstractLeft: clampUnit(abstractStereo.left),
+		abstractRight: clampUnit(abstractStereo.right),
+		finalLeft: left,
+		finalRight: right,
+		...(output.contributions || {}),
+	};
 	setSignalBar(elements.rumbleSignalLeftFill, elements.rumbleSignalLeftValue, left);
 	setSignalBar(elements.rumbleSignalRightFill, elements.rumbleSignalRightValue, right);
 	if (elements.rumbleSignalStatus) {

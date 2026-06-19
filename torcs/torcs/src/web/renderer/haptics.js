@@ -27,6 +27,17 @@ const HAPTIC_TRANSPORT = {
 	unavailable: "unavailable",
 };
 const RUMBLE_CONFIG_STORAGE_KEY = "torcs-web:dualsense-rumble-config:v1";
+const RUMBLE_DIRECTION = Object.freeze({
+	left: -1,
+	center: 0,
+	right: 1,
+});
+const DUALSENSE_RUMBLE_CALIBRATION = Object.freeze({
+	gamma: 2.5,
+	deadZone: 0.015,
+	leftCompensation: 0.78,
+	rightCompensation: 1,
+});
 const DEFAULT_RUMBLE_CONFIG = Object.freeze({
 	soloSource: "",
 	engine: { enabled: true, gain: 1, modulationDepth: 1, rateScale: 1 },
@@ -48,6 +59,15 @@ function finite(value, fallback = 0) {
 function smoothstep(edge0, edge1, value) {
 	const t = clamp((value - edge0) / (edge1 - edge0), 0, 1);
 	return t * t * (3 - 2 * t);
+}
+
+function createRumbleLut(gamma = DUALSENSE_RUMBLE_CALIBRATION.gamma) {
+	const lut = new Uint8Array(256);
+	const exponent = Math.max(0.1, finite(gamma, DUALSENSE_RUMBLE_CALIBRATION.gamma));
+	for (let i = 0; i < lut.length; i += 1) {
+		lut[i] = Math.round(Math.pow(i / 255, exponent) * 255);
+	}
+	return lut;
 }
 
 function setAudioParam(param, value, time, ramp = HAPTIC_GAIN_RAMP) {
@@ -137,6 +157,23 @@ function saveStoredRumbleConfig(config) {
 	} catch (error) {
 		console.warn("TORCS DualSense haptics could not save rumble config", error);
 	}
+}
+
+function makeSilentRumbleOutput() {
+	return {
+		left: 0,
+		right: 0,
+		abstractStereo: { left: 0, right: 0 },
+		finalMotor: { left: 0, right: 0 },
+		contributions: {},
+		sourcePackets: [],
+		mapper: {
+			gamma: DUALSENSE_RUMBLE_CALIBRATION.gamma,
+			deadZone: DUALSENSE_RUMBLE_CALIBRATION.deadZone,
+			leftCompensation: DUALSENSE_RUMBLE_CALIBRATION.leftCompensation,
+			rightCompensation: DUALSENSE_RUMBLE_CALIBRATION.rightCompensation,
+		},
+	};
 }
 
 function makeOutputPair(context, merger, leftLevel = 0.5, rightLevel = 0.5) {
@@ -443,10 +480,6 @@ export class DualSenseTelemetryModel {
 				gear: gearPulse,
 				collision: collisionPulse,
 			},
-			rumble: {
-				left: clamp(engineAmplitude * 1.8 + left.slip * 0.6 + left.texture * 0.45 + (gearPulse ? 0.22 : 0) + (collisionPulse ? 0.65 : 0), 0, 1),
-				right: clamp(engineAmplitude * 1.8 + right.slip * 0.6 + right.texture * 0.45 + (gearPulse ? 0.22 : 0) + (collisionPulse ? 0.65 : 0), 0, 1),
-			},
 			triggers: {
 				throttle: {
 					effect: TriggerEffect.Feedback,
@@ -475,12 +508,93 @@ export class DualSenseTelemetryModel {
 			left: { slip: this.leftSlip, texture: this.leftTexture, textureFrequency: 90, frontSlip: 0 },
 			right: { slip: this.rightSlip, texture: this.rightTexture, textureFrequency: 90, frontSlip: 0 },
 			transients: { gear: false, collision: false },
-			rumble: { left: 0, right: 0 },
 			triggers: {
 				throttle: { effect: TriggerEffect.Feedback, position: 0.18, strength: 0.18 },
 				brake: { effect: TriggerEffect.Feedback, position: 0.12, strength: 0.45 },
 				absPulse: false,
 			},
+		};
+	}
+}
+
+export class DirectionalRumbleMixer {
+	mix(sourcePackets = []) {
+		const stereo = {
+			left: 0,
+			right: 0,
+		};
+		const contributions = {};
+		const packets = [];
+
+		for (const packet of sourcePackets) {
+			const source = String(packet?.source || "");
+			if (!source) {
+				continue;
+			}
+			const volume = clamp(finite(packet.volume), 0, 1);
+			const direction = clamp(finite(packet.direction), -1, 1);
+			const angle = (direction + 1) * Math.PI * 0.25;
+			const left = Math.cos(angle) * volume;
+			const right = Math.sin(angle) * volume;
+
+			stereo.left += left;
+			stereo.right += right;
+			contributions[source] = (contributions[source] || 0) + volume;
+			packets.push({
+				source,
+				volume,
+				direction,
+				left,
+				right,
+			});
+		}
+
+		return {
+			left: clamp(stereo.left, 0, 1),
+			right: clamp(stereo.right, 0, 1),
+			contributions,
+			sourcePackets: packets,
+		};
+	}
+}
+
+export class DualSenseRumbleMapper {
+	constructor({
+		gamma = DUALSENSE_RUMBLE_CALIBRATION.gamma,
+		deadZone = DUALSENSE_RUMBLE_CALIBRATION.deadZone,
+		leftCompensation = DUALSENSE_RUMBLE_CALIBRATION.leftCompensation,
+		rightCompensation = DUALSENSE_RUMBLE_CALIBRATION.rightCompensation,
+	} = {}) {
+		this.gamma = Math.max(0.1, finite(gamma, DUALSENSE_RUMBLE_CALIBRATION.gamma));
+		this.deadZone = clamp(finite(deadZone, DUALSENSE_RUMBLE_CALIBRATION.deadZone), 0, 0.5);
+		this.leftCompensation = clamp(finite(leftCompensation, DUALSENSE_RUMBLE_CALIBRATION.leftCompensation), 0, 2);
+		this.rightCompensation = clamp(finite(rightCompensation, DUALSENSE_RUMBLE_CALIBRATION.rightCompensation), 0, 2);
+		this.lut = createRumbleLut(this.gamma);
+	}
+
+	shape(value) {
+		const input = clamp(finite(value), 0, 1);
+		if (input <= this.deadZone) {
+			return 0;
+		}
+		const normalized = clamp((input - this.deadZone) / (1 - this.deadZone), 0, 1);
+		return this.lut[Math.round(normalized * 255)] / 255;
+	}
+
+	map(stereo = {}, force = 1) {
+		const strength = clamp(finite(force, 1), 0, 1);
+		const compensated = {
+			left: clamp(finite(stereo.left) * this.leftCompensation * strength, 0, 1),
+			right: clamp(finite(stereo.right) * this.rightCompensation * strength, 0, 1),
+		};
+		return {
+			left: this.shape(compensated.left),
+			right: this.shape(compensated.right),
+			compensated,
+			gamma: this.gamma,
+			deadZone: this.deadZone,
+			leftCompensation: this.leftCompensation,
+			rightCompensation: this.rightCompensation,
 		};
 	}
 }
@@ -491,6 +605,8 @@ class HidRumbleSynth {
 		this.gearPulse = 0;
 		this.collisionPulse = 0;
 		this.noiseSeed = 0x6d2b79f5;
+		this.mixer = new DirectionalRumbleMixer();
+		this.mapper = new DualSenseRumbleMapper();
 	}
 
 	reset() {
@@ -536,27 +652,73 @@ class HidRumbleSynth {
 			0;
 		const leftNoise = clamp(1 - config.texture.noise * 0.55 + config.texture.noise * 0.55 * this.nextNoise(), 0, 1.7);
 		const rightNoise = clamp(1 - config.texture.noise * 0.55 + config.texture.noise * 0.55 * this.nextNoise(), 0, 1.7);
-		const contributions = {
-			engine: active.engine ? model.engine.amplitude * 1.7 * engineMod * config.engine.gain : 0,
-			leftSlip: active.slip ? model.left.slip * 0.58 * slipPulse * config.slip.gain : 0,
-			rightSlip: active.slip ? model.right.slip * 0.58 * slipPulse * config.slip.gain : 0,
-			leftTexture: active.texture ? model.left.texture * 0.54 * leftNoise * config.texture.gain : 0,
-			rightTexture: active.texture ? model.right.texture * 0.54 * rightNoise * config.texture.gain : 0,
-			gear: active.gear ? this.gearPulse * 0.3 * config.gear.gain : 0,
-			collision: active.collision ? this.collisionPulse * 0.85 * config.collision.gain : 0,
-			abs: active.abs ? absPulse * 0.24 * config.abs.gain : 0,
-		};
-		const centerBurst = contributions.gear + contributions.collision + contributions.abs;
-		const left = contributions.engine + contributions.leftSlip + contributions.leftTexture + centerBurst;
-		const right = contributions.engine + contributions.rightSlip + contributions.rightTexture + centerBurst;
+		const sourcePackets = [
+			{
+				source: "engine",
+				volume: active.engine ? model.engine.amplitude * 1.7 * engineMod * config.engine.gain : 0,
+				direction: RUMBLE_DIRECTION.center,
+			},
+			{
+				source: "leftSlip",
+				volume: active.slip ? model.left.slip * 0.58 * slipPulse * config.slip.gain : 0,
+				direction: RUMBLE_DIRECTION.left,
+			},
+			{
+				source: "rightSlip",
+				volume: active.slip ? model.right.slip * 0.58 * slipPulse * config.slip.gain : 0,
+				direction: RUMBLE_DIRECTION.right,
+			},
+			{
+				source: "leftTexture",
+				volume: active.texture ? model.left.texture * 0.54 * leftNoise * config.texture.gain : 0,
+				direction: RUMBLE_DIRECTION.left,
+			},
+			{
+				source: "rightTexture",
+				volume: active.texture ? model.right.texture * 0.54 * rightNoise * config.texture.gain : 0,
+				direction: RUMBLE_DIRECTION.right,
+			},
+			{
+				source: "gear",
+				volume: active.gear ? this.gearPulse * 0.3 * config.gear.gain : 0,
+				direction: RUMBLE_DIRECTION.center,
+			},
+			{
+				source: "collision",
+				volume: active.collision ? this.collisionPulse * 0.85 * config.collision.gain : 0,
+				direction: RUMBLE_DIRECTION.center,
+			},
+			{
+				source: "abs",
+				volume: active.abs ? absPulse * 0.24 * config.abs.gain : 0,
+				direction: RUMBLE_DIRECTION.center,
+			},
+		];
+		const abstractStereo = this.mixer.mix(sourcePackets);
+		const finalMotor = this.mapper.map(abstractStereo, intensity);
 
 		this.gearPulse *= Math.exp(-dt / config.gear.decay);
 		this.collisionPulse *= Math.exp(-dt / config.collision.decay);
 
 		return {
-			left: clamp(left * intensity, 0, 1),
-			right: clamp(right * intensity, 0, 1),
-			contributions,
+			left: finalMotor.left,
+			right: finalMotor.right,
+			abstractStereo: {
+				left: abstractStereo.left,
+				right: abstractStereo.right,
+			},
+			finalMotor: {
+				left: finalMotor.left,
+				right: finalMotor.right,
+			},
+			contributions: abstractStereo.contributions,
+			sourcePackets: abstractStereo.sourcePackets,
+			mapper: {
+				gamma: finalMotor.gamma,
+				deadZone: finalMotor.deadZone,
+				leftCompensation: finalMotor.leftCompensation,
+				rightCompensation: finalMotor.rightCompensation,
+			},
 		};
 	}
 }
@@ -570,7 +732,7 @@ export class DualSenseHaptics {
 		this.model = new DualSenseTelemetryModel();
 		this.rumbleSynth = new HidRumbleSynth();
 		this.rumbleConfig = loadStoredRumbleConfig();
-		this.lastRumbleOutput = { left: 0, right: 0, contributions: {} };
+		this.lastRumbleOutput = makeSilentRumbleOutput();
 		this.enabled = false;
 		this.pcmDebugEnabled = false;
 		this.status = "locked";
@@ -1075,7 +1237,7 @@ export class DualSenseHaptics {
 		this.disposeGraph();
 		this.model.reset();
 		this.rumbleSynth.reset();
-		this.lastRumbleOutput = { left: 0, right: 0, contributions: {} };
+		this.lastRumbleOutput = makeSilentRumbleOutput();
 		this.lastTriggerModel = null;
 		this.setStatus("off", {
 			hapticTransport: HAPTIC_TRANSPORT.unavailable,
@@ -1089,7 +1251,7 @@ export class DualSenseHaptics {
 		}
 		this.model.reset();
 		this.rumbleSynth.reset();
-		this.lastRumbleOutput = { left: 0, right: 0, contributions: {} };
+		this.lastRumbleOutput = makeSilentRumbleOutput();
 		this.lastTriggerModel = null;
 		this.stopControllerOutputs();
 		this.applyTriggerFeedback(this.model.makeSilentModel());
@@ -1098,7 +1260,7 @@ export class DualSenseHaptics {
 	resetDynamics() {
 		this.model.reset();
 		this.rumbleSynth.reset();
-		this.lastRumbleOutput = { left: 0, right: 0, contributions: {} };
+		this.lastRumbleOutput = makeSilentRumbleOutput();
 		this.lastTriggerModel = null;
 		this.lastTriggerSignature = "";
 	}
