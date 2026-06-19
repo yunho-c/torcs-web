@@ -45,6 +45,7 @@ const elements = {
 		renderProfile: document.getElementById("render-profile"),
 		lightIntensity: document.getElementById("light-intensity"),
 		lightIntensityValue: document.getElementById("light-intensity-value"),
+		skybox: document.getElementById("skybox"),
 		track: document.getElementById("track"),
 		trackGlb: document.getElementById("track-glb"),
 		clearTrackGlb: document.getElementById("clear-track-glb"),
@@ -839,6 +840,24 @@ function applyLightIntensity(value) {
 	}
 }
 
+async function applySkybox(enabled) {
+	if (!scene) {
+		return;
+	}
+	elements.skybox.checked = Boolean(enabled);
+	try {
+		await scene.setUseSkybox(elements.skybox.checked);
+	} catch (error) {
+		console.warn("TORCS web renderer skybox switch failed", error);
+		elements.skybox.checked = false;
+		await scene.setUseSkybox(false);
+		hud.setState("debug");
+	}
+	if (snapshot) {
+		readAndRender();
+	}
+}
+
 async function startSession() {
 	if (!runtime) {
 		return;
@@ -1018,6 +1037,12 @@ function bindUi() {
 		elements.lightIntensity.addEventListener("input", () => {
 			applyLightIntensity(Number(elements.lightIntensity.value));
 		});
+		elements.skybox.addEventListener("change", () => {
+			applySkybox(elements.skybox.checked).catch((error) => {
+				console.warn("TORCS web renderer skybox checkbox failed", error);
+				hud.setState("debug");
+			});
+		});
 		elements.currentCar.addEventListener("change", () => {
 		selectedCarIndex = Number(elements.currentCar.value) || 0;
 		if (snapshot) {
@@ -1045,6 +1070,7 @@ async function main() {
 			scene = await TorcsScene.create(elements.canvas);
 			scene.setRenderProfile(activeRenderProfile);
 			applyLightIntensity(activeLightIntensity);
+			elements.skybox.checked = false;
 			cameras = new CameraRig(elements.canvas);
 			assets = new AssetManager("./web-assets/", scene.renderer, activeRenderProfile);
 			elements.renderProfile.value = activeRenderProfile;

@@ -22,6 +22,8 @@ const BACKGROUND_RADIUS = 500;
 const BACKGROUND_HEIGHT = BACKGROUND_RADIUS * 2;
 const BACKGROUND_VERTICAL_BIAS = 0;
 const DEFAULT_ENVIRONMENT_MAP = "./web/hdri/120_hdrmaps_com_free_2K.exr";
+const DEFAULT_SKYBOX_PREFIX = "./web/skybox/arid2";
+const DEFAULT_SKYBOX_FACES = ["rt", "lf", "up", "dn", "ft", "bk"];
 const DEFAULT_ENVIRONMENT_INTENSITY = 0.8;
 const DEFAULT_AMBIENT_INTENSITY = 2.4;
 const DEFAULT_SUN_INTENSITY = 2.3;
@@ -300,6 +302,11 @@ export class TorcsScene {
 		this.trackVisual = null;
 			this.backgroundDome = null;
 			this.environmentMap = null;
+			this.skyboxMap = null;
+			this.skyboxLoadPromise = null;
+			this.useSkybox = false;
+			this.trackBackgroundColor = DEFAULT_BACKGROUND.clone();
+			this.trackBackgroundTexture = null;
 			this.renderProfile = "legacy";
 			this.lightIntensityScale = 1.0;
 			this.carEffects = [];
@@ -359,6 +366,58 @@ export class TorcsScene {
 		}
 	}
 
+	async loadSkybox(prefix = DEFAULT_SKYBOX_PREFIX) {
+		if (this.skyboxMap) {
+			return this.skyboxMap;
+		}
+		if (!this.skyboxLoadPromise) {
+			const paths = DEFAULT_SKYBOX_FACES.map((face) => `${prefix}_${face}.jpg`);
+			this.skyboxLoadPromise = new THREE.CubeTextureLoader()
+				.loadAsync(paths)
+				.then((texture) => {
+					texture.colorSpace = THREE.SRGBColorSpace;
+					texture.mapping = THREE.CubeReflectionMapping;
+					this.skyboxMap = texture;
+					return texture;
+				})
+				.catch((error) => {
+					this.skyboxLoadPromise = null;
+					console.warn("TORCS web renderer failed to load skybox cubemap", {
+						skybox: prefix,
+						error,
+					});
+					throw error;
+				});
+		}
+		return this.skyboxLoadPromise;
+	}
+
+	async setUseSkybox(enabled) {
+		this.useSkybox = Boolean(enabled);
+		if (this.useSkybox) {
+			await this.loadSkybox();
+		}
+		this.applyBackgroundMode();
+	}
+
+	applyBackgroundMode() {
+		if (this.useSkybox && this.skyboxMap) {
+			this.removeBackgroundDome();
+			this.scene.background = this.skyboxMap;
+			this.scene.environment = this.skyboxMap;
+			if ("environmentIntensity" in this.scene) {
+				this.scene.environmentIntensity = DEFAULT_ENVIRONMENT_INTENSITY;
+			}
+			return;
+		}
+		this.scene.background = this.trackBackgroundColor.clone();
+		this.scene.environment = this.environmentMap;
+		if ("environmentIntensity" in this.scene) {
+			this.scene.environmentIntensity = DEFAULT_ENVIRONMENT_INTENSITY;
+		}
+		this.setBackgroundDome(this.trackBackgroundTexture);
+	}
+
 	addReferenceGrid() {
 		const grid = new THREE.GridHelper(720, 48, 0x435047, 0x242a25);
 		grid.position.y = -0.01;
@@ -413,7 +472,8 @@ export class TorcsScene {
 		const ambientColor = colorFromRgb(entry && entry.ambientColor, DEFAULT_AMBIENT);
 		const diffuseColor = colorFromRgb(entry && entry.diffuseColor, DEFAULT_SUN);
 		this.renderer.setClearColor(backgroundColor, 1);
-		this.scene.background = backgroundColor.clone();
+		this.trackBackgroundColor = backgroundColor.clone();
+		this.trackBackgroundTexture = backgroundTexture;
 			this.scene.fog = new THREE.Fog(fogColor, FOG_NEAR, FOG_FAR);
 			this.ambientLight.color.copy(ambientColor);
 			this.sunLight.color.copy(diffuseColor);
@@ -426,7 +486,7 @@ export class TorcsScene {
 			lightPosition.normalize().multiplyScalar(260);
 		}
 		this.sunLight.position.copy(lightPosition);
-		this.setBackgroundDome(backgroundTexture);
+		this.applyBackgroundMode();
 		if (entry && entry.backgroundTexture && !backgroundTexture) {
 			console.warn("TORCS web renderer track background texture is configured but unavailable", {
 				background: entry.background,
@@ -435,16 +495,17 @@ export class TorcsScene {
 		}
 	}
 
-	setBackgroundDome(texture) {
+	removeBackgroundDome() {
 		if (this.backgroundDome) {
 			this.groups.background.remove(this.backgroundDome);
-			if (this.backgroundDome.material.map) {
-				this.backgroundDome.material.map.dispose();
-			}
 			this.backgroundDome.geometry.dispose();
 			this.backgroundDome.material.dispose();
 			this.backgroundDome = null;
 		}
+	}
+
+	setBackgroundDome(texture) {
+		this.removeBackgroundDome();
 		if (!texture) {
 			console.warn("TORCS web renderer skipped background dome because no texture was provided");
 			return;

@@ -268,8 +268,19 @@ if(EMSCRIPTEN)
 			"${CMAKE_COMMAND}" -E copy_directory
 			"${TORCS_ROOT}/data/web/hdri"
 			"$<TARGET_FILE_DIR:torcs_web_probe>/web/hdri"
+		COMMAND
+			"${CMAKE_COMMAND}" -E copy_directory
+			"${TORCS_ROOT}/data/web/skybox"
+			"$<TARGET_FILE_DIR:torcs_web_probe>/web/skybox"
 		DEPENDS torcs_web_probe
 			"${TORCS_ROOT}/data/web/hdri/120_hdrmaps_com_free_2K.exr"
+			"${TORCS_ROOT}/data/web/skybox/arid2_bk.jpg"
+			"${TORCS_ROOT}/data/web/skybox/arid2_dn.jpg"
+			"${TORCS_ROOT}/data/web/skybox/arid2_ft.jpg"
+			"${TORCS_ROOT}/data/web/skybox/arid2_lf.jpg"
+			"${TORCS_ROOT}/data/web/skybox/arid2_rt.jpg"
+			"${TORCS_ROOT}/data/web/skybox/arid2_up.jpg"
+			"${TORCS_ROOT}/data/web/skybox/readme.txt"
 		COMMENT "Copying TORCS WASM browser renderer"
 	)
 		if(TARGET torcs_web_assets)

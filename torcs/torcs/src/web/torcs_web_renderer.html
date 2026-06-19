@@ -105,7 +105,7 @@
 			}
 
 			.render-row {
-				grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(130px, auto);
+				grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(130px, auto) auto;
 			}
 
 			.track-override-row {
@@ -190,6 +190,23 @@
 			select {
 				width: 100%;
 			padding: 0 8px;
+		}
+
+		input[type="checkbox"] {
+			width: 16px;
+			height: 16px;
+			accent-color: var(--cyan);
+		}
+
+		.toggle-label {
+			min-height: 38px;
+			grid-template-columns: auto 1fr;
+			align-items: center;
+			padding: 0 10px;
+			border: 1px solid var(--line);
+			border-radius: 4px;
+			background: var(--panel-strong);
+			color: var(--ink);
 		}
 
 		.audio-state {
@@ -640,6 +657,10 @@
 						<input id="light-intensity" type="range" min="0" max="3" step="0.05" value="1.5">
 						<span id="light-intensity-value" class="inline-value">1.50</span>
 					</span>
+				</label>
+				<label class="toggle-label">
+					<input id="skybox" type="checkbox">
+					<span>Skybox</span>
 				</label>
 			</div>
 		<div class="row assets">

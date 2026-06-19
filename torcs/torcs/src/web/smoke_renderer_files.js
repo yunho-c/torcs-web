@@ -80,6 +80,15 @@ function checkExr(relativePath) {
 	}
 }
 
+function checkJpeg(relativePath) {
+	const filePath = path.join(root, relativePath);
+	const data = fs.readFileSync(filePath);
+	if (data.length < 4 || data[0] !== 0xff || data[1] !== 0xd8 ||
+		data[data.length - 2] !== 0xff || data[data.length - 1] !== 0xd9) {
+		fail("TORCS web renderer smoke test found invalid JPEG", { file: relativePath });
+	}
+}
+
 function checkObjectNames(entry, label) {
 	if (!Array.isArray(entry.objectNames) || entry.objectNames.length === 0 ||
 		entry.objectNames.some((name) => typeof name !== "string" || name.length === 0)) {
@@ -1267,6 +1276,7 @@ requireText(byPath["torcs_web_renderer.html"], "id=\"track-glb\"", "custom track
 requireText(byPath["torcs_web_renderer.html"], "id=\"clear-track-glb\"", "custom track GLB clear button");
 requireText(byPath["torcs_web_renderer.html"], "id=\"track-glb-file\"", "custom track GLB file input");
 requireText(byPath["torcs_web_renderer.html"], "id=\"track-glb-status\"", "custom track GLB status readout");
+requireText(byPath["torcs_web_renderer.html"], "id=\"skybox\"", "skybox cubemap checkbox");
 requireText(byPath["torcs_web_renderer.html"], "<option value=\"legacy\" selected>Legacy</option>", "legacy render profile default");
 requireText(byPath["torcs_web_renderer.html"], "<option value=\"modern\">Modern</option>", "modern render profile option");
 for (const id of ["position", "fuel", "current-lap", "last-lap", "best-lap", "top-speed"]) {
@@ -1372,6 +1382,8 @@ requireText(byPath["../CMakeLists.txt"], "TORCS_WEB_CAR_CATEGORY_CONFIGS", "car 
 requireText(byPath["../CMakeLists.txt"], "TORCS_WEB_INFERNO2_CONFIGS", "inferno2 XML preload discovery");
 requireText(byPath["../CMakeLists.txt"], "TORCS_WEB_TRACK_CONFIGS", "dynamic track XML preload discovery");
 requireText(byPath["../CMakeLists.txt"], "TORCS_WEB_CAR_CONFIGS", "dynamic car XML preload discovery");
+requireText(byPath["../CMakeLists.txt"], "data/web/skybox", "skybox asset copy source");
+requireText(byPath["../CMakeLists.txt"], "web/skybox", "skybox asset copy destination");
 
 requireText(byPath["renderer/runtime.js"], "wheelSkidIntensity0: 116", "Phase 4 skid snapshot field");
 requireText(byPath["renderer/runtime.js"], "wheelSurfaceKind0: 120", "Phase 5 wheel surface snapshot field");
@@ -1404,9 +1416,11 @@ requireText(byPath["renderer/main.js"], "getVisualTrackPath()", "runtime track p
 requireText(byPath["renderer/main.js"], "scene = await TorcsScene.create(elements.canvas)", "async WebGPU scene creation");
 requireText(byPath["renderer/main.js"], "scene.setRenderProfile(activeRenderProfile)", "scene render profile handoff");
 requireText(byPath["renderer/main.js"], "scene.setLightIntensityScale(activeLightIntensity)", "scene light intensity handoff");
+requireText(byPath["renderer/main.js"], "applySkybox(elements.skybox.checked)", "skybox checkbox handoff");
 requireText(byPath["renderer/main.js"], "elements.renderProfile.addEventListener", "render profile selector binding");
 requireText(byPath["renderer/main.js"], "applyRenderProfile(elements.renderProfile.value, true)", "render profile visual asset reload");
 requireText(byPath["renderer/main.js"], "elements.lightIntensity.addEventListener", "light intensity slider binding");
+requireText(byPath["renderer/main.js"], "elements.skybox.addEventListener", "skybox checkbox binding");
 requireText(byPath["renderer/main.js"], "runtime.readTrackSamples()", "track sample ingestion");
 requireText(byPath["renderer/main.js"], "runtime.readSnapshots()", "Phase 6 snapshot array ingestion");
 requireText(byPath["renderer/main.js"], "scene.updateCars(snapshots, cameras.camera, selectedCarIndex, carAssets)", "Phase 6 selected-car scene update with per-car visual assets");
@@ -1535,6 +1549,10 @@ requireText(byPath["renderer/scene.js"], "EXRLoader", "HDRI EXR loader import");
 requireText(byPath["renderer/scene.js"], "120_hdrmaps_com_free_2K.exr", "canonical HDRI environment asset");
 requireText(byPath["renderer/scene.js"], "new THREE.PMREMGenerator(this.renderer)", "HDRI PMREM generation");
 requireText(byPath["renderer/scene.js"], "this.scene.environment = this.environmentMap", "HDRI environment map binding");
+requireText(byPath["renderer/scene.js"], "new THREE.CubeTextureLoader()", "skybox cubemap loader");
+requireText(byPath["renderer/scene.js"], "this.scene.background = this.skyboxMap", "skybox visible background binding");
+requireText(byPath["renderer/scene.js"], "this.scene.environment = this.skyboxMap", "skybox environment binding");
+requireText(byPath["renderer/scene.js"], "DEFAULT_SKYBOX_FACES = [\"rt\", \"lf\", \"up\", \"dn\", \"ft\", \"bk\"]", "skybox face order");
 requireText(byPath["renderer/scene.js"], "new THREE.BoxGeometry", "simulated car box");
 requireText(byPath["renderer/scene.js"], "makeRoadMesh(track)", "sampled track road mesh");
 requireText(byPath["renderer/scene.js"], "setTrackVisual(model)", "converted track mesh hook");
@@ -1720,6 +1738,12 @@ for (const [index, state] of car7Trb1.wheelAsset.states.entries()) {
 	checkGlb(state.asset);
 }
 checkExr("web/hdri/120_hdrmaps_com_free_2K.exr");
+for (const face of ["rt", "lf", "up", "dn", "ft", "bk"]) {
+	checkJpeg(`web/skybox/arid2_${face}.jpg`);
+}
+if (!fs.existsSync(path.join(root, "web/skybox/readme.txt"))) {
+	fail("TORCS web renderer smoke test found missing skybox attribution readme");
+}
 for (const field of ["backgroundColor", "ambientColor", "diffuseColor", "specularColor", "lightPosition"]) {
 	checkNumberTriplet(track, field, track.source);
 }
