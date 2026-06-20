@@ -1731,11 +1731,27 @@ requireText(byPath["renderer/effects.js"], "this.previousEngineLevel - engineLev
 requireText(byPath["renderer/effects.js"], "makeSlipVelocity(car, accelSlip, sideSlip, horizontalScale, verticalSpeed)", "car-oriented smoke particle velocity");
 requireText(byPath["renderer/effects.js"], "velocity: new THREE.Vector3().copy(world).sub(car.position).normalize().multiplyScalar(0.035)", "independent exhaust fire velocity vector");
 requireText(byPath["renderer/effects.js"], "textures[\"grey-tracks.rgb\"]", "native skid texture use");
+requireText(byPath["renderer/effects.js"], "SKID_MAX_STRIP_BY_WHEEL = 40", "native skid strip ring count");
+requireText(byPath["renderer/effects.js"], "SKID_MAX_POINT_BY_STRIP = 600", "native skid strip length");
+requireText(byPath["renderer/effects.js"], "SKID_DELTA_T = 0.3", "native skid sampling interval");
+requireText(byPath["renderer/effects.js"], "SKID_TEXTURE_ADVANCE = 0.01", "native skid texture advance");
+requireText(byPath["renderer/effects.js"], "SKID_CONTACT_RADIUS_SCALE = 0.95", "native skid contact radius scale");
+requireText(byPath["renderer/effects.js"], "makeSkidWheelState()", "per-wheel skid state");
+requireText(byPath["renderer/effects.js"], "this.skidWheels = Array.from({ length: WHEEL_COUNT }, makeSkidWheelState)", "native-style skid wheel state allocation");
+requireText(byPath["renderer/effects.js"], "state.texState += SKID_TEXTURE_ADVANCE * wheelSpinVelocity", "wheel-spin skid texture coordinate progression");
+requireText(byPath["renderer/effects.js"], "0.75 + slingRight * 0.25", "native skid texture V coordinate for first tire edge");
+requireText(byPath["renderer/effects.js"], "0.25 + slingLeft * 0.25", "native skid texture V coordinate for second tire edge");
+requireText(byPath["renderer/effects.js"], "state.smoothColor.lerp(makeColor(surface.color), 0.1)", "native skid color smoothing");
+requireText(byPath["renderer/effects.js"], "geometry.setAttribute(\"uv\"", "textured skid geometry UVs");
 requireText(byPath["renderer/effects.js"], "SNAPSHOT.lightCommand", "light snapshot field use");
 requireText(byPath["renderer/effects.js"], "SNAPSHOT.collision", "collision snapshot field use");
 requireText(byPath["renderer/effects.js"], "makeRadialTexture", "effect texture fallback");
 requireText(byPath["renderer/effects.js"], "TORCS web renderer using generic planar shadow fallback", "generic shadow fallback warning");
 requireText(byPath["renderer/effects.js"], "TORCS web renderer using default dimension-based car light anchors", "default light anchor fallback warning");
+if (byPath["renderer/effects.js"].content.includes("left.y = ROAD_EFFECT_Y") ||
+	byPath["renderer/effects.js"].content.includes("right.y = ROAD_EFFECT_Y")) {
+	fail("TORCS web renderer smoke test found constant-height skid marks");
+}
 if (byPath["renderer/effects.js"].content.includes("velocity: tempVector.copy(world).sub(car.position)")) {
 	fail("TORCS web renderer smoke test found shared tempVector exhaust fire velocity");
 }

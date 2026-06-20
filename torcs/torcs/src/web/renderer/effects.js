@@ -5,10 +5,17 @@ import { warnOnce } from "./diagnostics.js";
 const WHEEL_COUNT = 4;
 const ROAD_EFFECT_Y = 0.075;
 const SHADOW_POINT_COUNT = 6;
-const MAX_SKID_SEGMENTS = 220;
 const MAX_SMOKE_PARTICLES = 300;
-const SKID_INTERVAL = 0.05;
-const SKID_MIN_DISTANCE = 0.18;
+const SKID_MAX_STRIP_BY_WHEEL = 40;
+const SKID_MAX_POINT_BY_STRIP = 600;
+const SKID_DELTA_T = 0.3;
+const SKID_TEXTURE_ADVANCE = 0.01;
+const SKID_CONTACT_RADIUS_SCALE = 0.95;
+const SKID_Z_OFFSET = 0.012;
+const SKID_UNUSED = 1;
+const SKID_BEGIN = 2;
+const SKID_RUNNING = 3;
+const SKID_STOPPED = 4;
 const SMOKE_INTERVAL = 0.01;
 const SMOKE_LIFE = 2.0;
 const FIRE_INTERVAL = SMOKE_INTERVAL * 8;
@@ -142,6 +149,77 @@ function makeColor(rgb) {
 	return new THREE.Color(rgb[0], rgb[1], rgb[2]);
 }
 
+function makeSkidStrip() {
+	return {
+		state: SKID_UNUSED,
+		points: [],
+	};
+}
+
+function resetSkidStrip(strip) {
+	strip.state = SKID_UNUSED;
+	strip.points.length = 0;
+}
+
+function makeSkidWheelState() {
+	return {
+		strips: Array.from({ length: SKID_MAX_STRIP_BY_WHEEL }, makeSkidStrip),
+		smoothColor: new THREE.Color(0, 0, 0),
+		timeStrip: 0,
+		runningSkid: 0,
+		nextSkid: 0,
+		lastStateOfSkid: 0,
+		texState: 0,
+	};
+}
+
+function resetSkidWheelState(state) {
+	for (const strip of state.strips) {
+		resetSkidStrip(strip);
+	}
+	state.smoothColor.setRGB(0, 0, 0);
+	state.timeStrip = 0;
+	state.runningSkid = 0;
+	state.nextSkid = 0;
+	state.lastStateOfSkid = 0;
+	state.texState = 0;
+}
+
+function advanceSkidStrip(state) {
+	state.nextSkid = (state.nextSkid + 1) % SKID_MAX_STRIP_BY_WHEEL;
+	const next = state.strips[state.nextSkid];
+	if (next.state !== SKID_UNUSED || next.points.length > 0) {
+		resetSkidStrip(next);
+	}
+}
+
+function stopSkidStrip(state) {
+	if (state.lastStateOfSkid === 0) {
+		return;
+	}
+	state.strips[state.runningSkid].state = SKID_STOPPED;
+	state.lastStateOfSkid = 0;
+	advanceSkidStrip(state);
+}
+
+function startSkidStrip(state) {
+	state.runningSkid = state.nextSkid;
+	const strip = state.strips[state.runningSkid];
+	resetSkidStrip(strip);
+	strip.state = SKID_BEGIN;
+	state.lastStateOfSkid = 1;
+	return strip;
+}
+
+function appendSkidPoint(strip, position, uv, color, alpha) {
+	strip.points.push({
+		position: position.clone(),
+		uv,
+		color: color.clone(),
+		alpha: clamp01(alpha),
+	});
+}
+
 function worldFromCarLocal(car, local, target = new THREE.Vector3()) {
 	return target.copy(local).applyMatrix4(car.matrixWorld);
 }
@@ -188,11 +266,9 @@ export class TorcsEffects {
 		this.collisionFlash = this.createCollisionFlash();
 		this.smokeParticles = [];
 		this.fireParticles = [];
-		this.lastWheelPoints = Array.from({ length: WHEEL_COUNT }, () => null);
 		this.lastSmokeTime = Array.from({ length: WHEEL_COUNT }, () => 0);
-		this.lastSkidTime = Array.from({ length: WHEEL_COUNT }, () => 0);
-		this.smoothSkidColors = Array.from({ length: WHEEL_COUNT }, () => new THREE.Color(0, 0, 0));
-		this.skidSegments = [];
+		this.skidWheels = Array.from({ length: WHEEL_COUNT }, makeSkidWheelState);
+		this.skidGeometryDirty = false;
 		this.lastTime = 0;
 		this.previousEngineLevel = null;
 		this.fireCount = 0;
@@ -273,11 +349,11 @@ export class TorcsEffects {
 		}
 		this.smokeParticles = [];
 		this.fireParticles = [];
-		this.lastWheelPoints = Array.from({ length: WHEEL_COUNT }, () => null);
 		this.lastSmokeTime = Array.from({ length: WHEEL_COUNT }, () => 0);
-		this.lastSkidTime = Array.from({ length: WHEEL_COUNT }, () => 0);
-		this.smoothSkidColors = Array.from({ length: WHEEL_COUNT }, () => new THREE.Color(0, 0, 0));
-		this.skidSegments = [];
+		for (const state of this.skidWheels) {
+			resetSkidWheelState(state);
+		}
+		this.skidGeometryDirty = true;
 		this.lastTime = 0;
 		this.previousEngineLevel = null;
 		this.fireCount = 0;
@@ -321,6 +397,7 @@ export class TorcsEffects {
 		const geometry = new THREE.BufferGeometry();
 		geometry.setAttribute("position", new THREE.Float32BufferAttribute([], 3));
 		geometry.setAttribute("color", new THREE.Float32BufferAttribute([], 4));
+		geometry.setAttribute("uv", new THREE.Float32BufferAttribute([], 2));
 		const mesh = new THREE.Mesh(
 			geometry,
 			new THREE.MeshBasicMaterial({
@@ -454,63 +531,97 @@ export class TorcsEffects {
 	}
 
 	updateSkidMarks(values, car) {
-		const speed = Math.abs(values[SNAPSHOT.speed] || 0);
+		const time = Number.isFinite(values[SNAPSHOT.time]) ? values[SNAPSHOT.time] : 0;
+		const speed = values[SNAPSHOT.speed] || 0;
+		const absSpeed = Math.abs(speed);
 		for (let index = 0; index < WHEEL_COUNT; index += 1) {
+			const state = this.skidWheels[index];
 			const rawSkid = getRawWheelSkid(values, index);
 			const surface = getSurfaceEffect(values, index);
 			const intensity = rawSkid > 0.1 ? Math.tanh(surface.sensitivity * rawSkid) : 0;
-			const wheelWidth = Math.max(0.08, values[SNAPSHOT.wheelWidth0 + index] || 0.2);
-			const tireHeight = Math.max(0.02, values[SNAPSHOT.wheelRadius0 + index] - wheelWidth * 0.5 || 0.12);
-			const local = getWheelLocal(values, index, -Math.max(0.02, values[SNAPSHOT.wheelRadius0 + index] * 0.95 || 0.3));
-			local.x -= tireHeight;
-			const sling = surface.slingMud;
-			const leftOffset = speed > 0 ? (-sling - 1) * wheelWidth * 0.5 : (sling + 1) * wheelWidth * 0.5;
-			const rightOffset = speed > 0 ? (sling + 1) * wheelWidth * 0.5 : (-sling - 1) * wheelWidth * 0.5;
-			const left = worldFromCarLocal(car, local.clone().add(new THREE.Vector3(0, 0, leftOffset)));
-			const right = worldFromCarLocal(car, local.clone().add(new THREE.Vector3(0, 0, rightOffset)));
-			left.y = ROAD_EFFECT_Y;
-			right.y = ROAD_EFFECT_Y;
-
-			const last = this.lastWheelPoints[index];
-			this.smoothSkidColors[index].lerp(makeColor(surface.color), 0.1);
-			if (speed > 1 && intensity > 0.1 && timeSince(this.lastSkidTime[index], values[SNAPSHOT.time]) >= SKID_INTERVAL && last &&
-				last.center.distanceTo(left.clone().add(right).multiplyScalar(0.5)) > SKID_MIN_DISTANCE) {
-				this.lastSkidTime[index] = values[SNAPSHOT.time];
-				this.skidSegments.push({
-					left0: last.left.clone(),
-					right0: last.right.clone(),
-					left1: left.clone(),
-					right1: right.clone(),
-					alpha: clamp01(intensity),
-					color: this.smoothSkidColors[index].clone(),
-				});
-				if (this.skidSegments.length > MAX_SKID_SEGMENTS) {
-					this.skidSegments.splice(0, this.skidSegments.length - MAX_SKID_SEGMENTS);
-				}
+			const color = state.smoothColor.clone();
+			state.smoothColor.lerp(makeColor(surface.color), 0.1);
+			if (time - state.timeStrip < SKID_DELTA_T) {
+				continue;
 			}
-			this.lastWheelPoints[index] = {
-				left,
-				right,
-				center: left.clone().add(right).multiplyScalar(0.5),
-			};
+			if (absSpeed <= 1 || intensity <= 0.1) {
+				if (state.lastStateOfSkid !== 0) {
+					stopSkidStrip(state);
+					this.skidGeometryDirty = true;
+				}
+				continue;
+			}
+
+			let startingSkid = state.lastStateOfSkid === 0;
+			let strip = startingSkid ? startSkidStrip(state) : state.strips[state.runningSkid];
+			if (strip.points.length + 2 > SKID_MAX_POINT_BY_STRIP) {
+				stopSkidStrip(state);
+				startingSkid = true;
+				strip = startSkidStrip(state);
+			}
+
+			const wheelWidth = Math.max(0.08, values[SNAPSHOT.wheelWidth0 + index] || 0.2);
+			const wheelRadius = Math.max(0.08, values[SNAPSHOT.wheelRadius0 + index] || 0.3);
+			const tireHeight = Math.max(0.02, wheelRadius - wheelWidth * 0.5 || 0.12);
+			const local = getWheelLocal(values, index, -wheelRadius * SKID_CONTACT_RADIUS_SCALE);
+			local.x -= tireHeight;
+			const slingRight = surface.slingMud;
+			const slingLeft = -surface.slingMud;
+			const firstOffset = speed >= 0 ? (slingRight + 1) * wheelWidth * 0.5 : (slingLeft - 1) * wheelWidth * 0.5;
+			const secondOffset = speed >= 0 ? (slingLeft - 1) * wheelWidth * 0.5 : (slingRight + 1) * wheelWidth * 0.5;
+			const first = worldFromCarLocal(car, local.clone().add(new THREE.Vector3(0, 0, firstOffset)));
+			const second = worldFromCarLocal(car, local.clone().add(new THREE.Vector3(0, 0, secondOffset)));
+			first.y += SKID_Z_OFFSET;
+			second.y += SKID_Z_OFFSET;
+
+			const u = state.texState;
+			appendSkidPoint(strip, first, [u, 0.75 + slingRight * 0.25], color, intensity);
+			appendSkidPoint(strip, second, [u, 0.25 + slingLeft * 0.25], color, intensity);
+			strip.state = SKID_RUNNING;
+			state.timeStrip = time;
+			const wheelSpinVelocity = values[SNAPSHOT.wheelSpinVelocity0 + index] || 0;
+			state.texState += SKID_TEXTURE_ADVANCE * wheelSpinVelocity;
+			if (startingSkid) {
+				state.texState = 0;
+			}
+			this.skidGeometryDirty = true;
 		}
-		this.rebuildSkidGeometry();
+		if (this.skidGeometryDirty) {
+			this.rebuildSkidGeometry();
+			this.skidGeometryDirty = false;
+		}
 	}
 
 	rebuildSkidGeometry() {
 		const positions = [];
 		const colors = [];
-		for (const segment of this.skidSegments) {
-			const alpha = segment.alpha * 0.72;
-			for (const point of [segment.left0, segment.right0, segment.left1, segment.right0, segment.right1, segment.left1]) {
-				positions.push(point.x, point.y, point.z);
-				colors.push(segment.color.r, segment.color.g, segment.color.b, alpha);
+		const uvs = [];
+		for (const wheel of this.skidWheels) {
+			for (const strip of wheel.strips) {
+				if (strip.state === SKID_UNUSED || strip.points.length < 4) {
+					continue;
+				}
+				for (let pointIndex = 0; pointIndex <= strip.points.length - 4; pointIndex += 2) {
+					const first0 = strip.points[pointIndex];
+					const second0 = strip.points[pointIndex + 1];
+					const first1 = strip.points[pointIndex + 2];
+					const second1 = strip.points[pointIndex + 3];
+					for (const point of [first0, second0, first1, first1, second0, second1]) {
+						positions.push(point.position.x, point.position.y, point.position.z);
+						colors.push(point.color.r, point.color.g, point.color.b, point.alpha);
+						uvs.push(point.uv[0], point.uv[1]);
+					}
+				}
 			}
 		}
 		this.skidMarks.geometry.dispose();
 		this.skidMarks.geometry = new THREE.BufferGeometry();
 		this.skidMarks.geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
 		this.skidMarks.geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 4));
+		this.skidMarks.geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+		if (positions.length > 0) {
+			this.skidMarks.geometry.computeBoundingSphere();
+		}
 	}
 
 	updateSmoke(values, car, time, deltaTime) {
@@ -669,8 +780,4 @@ export class TorcsEffects {
 			}
 		}
 	}
-}
-
-function timeSince(previous, now) {
-	return Number.isFinite(now) ? now - previous : Number.POSITIVE_INFINITY;
 }
