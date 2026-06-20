@@ -8,6 +8,7 @@ import { AssetManager } from "./assets.js";
 const DEFAULT_ENVIRONMENT_MAP = "./web/hdri/120_hdrmaps_com_free_2K.exr";
 const LOCAL_VW_PACK_URL = "./local-showroom-assets/vw/pack.json";
 const DEFAULT_DRACO_DECODER_PATH = "https://www.gstatic.com/draco/versioned/decoders/1.5.7/";
+const DEFAULT_BACKGROUND_PRESET_ID = "studio-dark";
 const TORCS_PROVIDER = "TORCS";
 const VW_PROVIDER = "VW local";
 const TORCS_WHEEL_ORDER = [0, 1, 2, 3];
@@ -15,6 +16,32 @@ const TORCS_RIGHT_WHEELS = new Set([0, 2]);
 const TEMP_BOX = new THREE.Box3();
 const TEMP_SIZE = new THREE.Vector3();
 const TEMP_CENTER = new THREE.Vector3();
+
+const SHOWROOM_BACKGROUND_PRESETS = Object.freeze({
+	"studio-dark": Object.freeze({
+		displayName: "Studio Dark",
+		clearColor: 0x080706,
+		sweepTop: "#15080a",
+		sweepUpper: "#37090d",
+		sweepCenter: "#681116",
+		sweepLower: "#230b0c",
+		sweepFloorNear: "#11181a",
+		sweepFloorFar: "#310b0d",
+		sweepWarmGlow: "rgba(231, 56, 47, 0.46)",
+		sweepAmberGlow: "rgba(221, 165, 79, 0.17)",
+		sweepCoolGlow: "rgba(111, 155, 178, 0.15)",
+		sweepVignette: "rgba(0, 0, 0, 0.58)",
+		floorColor: 0x14191a,
+		floorSheen: "rgba(178, 205, 213, 0.10)",
+		shadowCore: "rgba(0, 0, 0, 0.62)",
+		shadowPenumbra: "rgba(0, 0, 0, 0.26)",
+		environmentIntensity: 1.26,
+		toneMappingExposure: 0.9,
+		hemisphereIntensity: 1.36,
+		keyLightIntensity: 3.38,
+		rimLightIntensity: 1.52,
+	}),
+});
 
 const elements = {
 	canvas: document.getElementById("showroom"),
@@ -123,48 +150,277 @@ function loadJson(url, optional = false) {
 	});
 }
 
-function makeShadowTexture() {
+function getShowroomBackgroundPreset(id = DEFAULT_BACKGROUND_PRESET_ID) {
+	return SHOWROOM_BACKGROUND_PRESETS[id] || SHOWROOM_BACKGROUND_PRESETS[DEFAULT_BACKGROUND_PRESET_ID];
+}
+
+function makeCanvasTexture(width, height, paint) {
 	const canvas = document.createElement("canvas");
-	canvas.width = 512;
-	canvas.height = 512;
+	canvas.width = width;
+	canvas.height = height;
 	const context = canvas.getContext("2d");
-	const gradient = context.createRadialGradient(256, 256, 12, 256, 256, 246);
-	gradient.addColorStop(0, "rgba(0, 0, 0, 0.42)");
-	gradient.addColorStop(0.45, "rgba(0, 0, 0, 0.20)");
-	gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
-	context.fillStyle = gradient;
-	context.fillRect(0, 0, canvas.width, canvas.height);
+	paint(context, width, height);
 	const texture = new THREE.CanvasTexture(canvas);
 	texture.colorSpace = THREE.SRGBColorSpace;
+	texture.needsUpdate = true;
 	return texture;
 }
 
-function makeStudioFloor() {
+function makeSweepTexture(preset) {
+	return makeCanvasTexture(1536, 2048, (context, width, height) => {
+		const base = context.createLinearGradient(0, 0, 0, height);
+		base.addColorStop(0.0, preset.sweepTop);
+		base.addColorStop(0.27, preset.sweepUpper);
+		base.addColorStop(0.48, preset.sweepCenter);
+		base.addColorStop(0.72, preset.sweepLower);
+		base.addColorStop(1.0, preset.sweepFloorNear);
+		context.fillStyle = base;
+		context.fillRect(0, 0, width, height);
+
+		const warmGlow = context.createRadialGradient(
+			width * 0.5,
+			height * 0.43,
+			width * 0.05,
+			width * 0.5,
+			height * 0.43,
+			width * 0.48,
+		);
+		warmGlow.addColorStop(0, preset.sweepWarmGlow);
+		warmGlow.addColorStop(0.42, "rgba(159, 25, 25, 0.20)");
+		warmGlow.addColorStop(1, "rgba(0, 0, 0, 0)");
+		context.fillStyle = warmGlow;
+		context.fillRect(0, 0, width, height);
+
+		const floorSheen = context.createRadialGradient(
+			width * 0.5,
+			height * 0.8,
+			width * 0.04,
+			width * 0.5,
+			height * 0.8,
+			width * 0.6,
+		);
+		floorSheen.addColorStop(0, preset.floorSheen);
+		floorSheen.addColorStop(0.48, "rgba(255, 255, 255, 0.035)");
+		floorSheen.addColorStop(1, "rgba(0, 0, 0, 0)");
+		context.fillStyle = floorSheen;
+		context.fillRect(0, 0, width, height);
+
+		const floorBlend = context.createLinearGradient(0, height * 0.58, 0, height);
+		floorBlend.addColorStop(0, "rgba(0, 0, 0, 0)");
+		floorBlend.addColorStop(0.38, "rgba(0, 0, 0, 0)");
+		floorBlend.addColorStop(0.82, "rgba(49, 11, 13, 0.42)");
+		floorBlend.addColorStop(1, preset.sweepFloorNear);
+		context.fillStyle = floorBlend;
+		context.fillRect(0, 0, width, height);
+
+		const amberGlow = context.createRadialGradient(
+			width * 0.68,
+			height * 0.54,
+			width * 0.02,
+			width * 0.68,
+			height * 0.54,
+			width * 0.34,
+		);
+		amberGlow.addColorStop(0, preset.sweepAmberGlow);
+		amberGlow.addColorStop(1, "rgba(0, 0, 0, 0)");
+		context.fillStyle = amberGlow;
+		context.fillRect(0, 0, width, height);
+
+		const coolGlow = context.createRadialGradient(
+			width * 0.16,
+			height * 0.36,
+			width * 0.02,
+			width * 0.16,
+			height * 0.36,
+			width * 0.44,
+		);
+		coolGlow.addColorStop(0, preset.sweepCoolGlow);
+		coolGlow.addColorStop(1, "rgba(0, 0, 0, 0)");
+		context.fillStyle = coolGlow;
+		context.fillRect(0, 0, width, height);
+
+		const vignette = context.createRadialGradient(
+			width * 0.5,
+			height * 0.48,
+			width * 0.18,
+			width * 0.5,
+			height * 0.48,
+			width * 0.78,
+		);
+		vignette.addColorStop(0, "rgba(0, 0, 0, 0)");
+		vignette.addColorStop(0.66, "rgba(0, 0, 0, 0.08)");
+		vignette.addColorStop(1, preset.sweepVignette);
+		context.fillStyle = vignette;
+		context.fillRect(0, 0, width, height);
+
+		const grainCanvas = document.createElement("canvas");
+		grainCanvas.width = width;
+		grainCanvas.height = height;
+		const grainContext = grainCanvas.getContext("2d");
+		const grain = grainContext.createImageData(width, height);
+		for (let index = 0; index < grain.data.length; index += 4) {
+			const value = 118 + Math.floor(Math.random() * 38);
+			grain.data[index] = value;
+			grain.data[index + 1] = value;
+			grain.data[index + 2] = value;
+			grain.data[index + 3] = Math.random() < 0.14 ? 5 : 0;
+		}
+		grainContext.putImageData(grain, 0, 0);
+		context.globalCompositeOperation = "soft-light";
+		context.drawImage(grainCanvas, 0, 0);
+		context.globalCompositeOperation = "source-over";
+	});
+}
+
+function makeBackdropGlowTexture(preset) {
+	return makeCanvasTexture(1024, 512, (context, width, height) => {
+		const glow = context.createRadialGradient(
+			width * 0.5,
+			height * 0.5,
+			width * 0.03,
+			width * 0.5,
+			height * 0.5,
+			width * 0.52,
+		);
+		glow.addColorStop(0, preset.sweepWarmGlow);
+		glow.addColorStop(0.36, "rgba(205, 42, 36, 0.16)");
+		glow.addColorStop(1, "rgba(0, 0, 0, 0)");
+		context.fillStyle = glow;
+		context.fillRect(0, 0, width, height);
+	});
+}
+
+function makeShadowTexture(preset) {
+	return makeCanvasTexture(1024, 512, (context, width, height) => {
+		const gradient = context.createRadialGradient(
+			width * 0.5,
+			height * 0.5,
+			width * 0.03,
+			width * 0.5,
+			height * 0.5,
+			width * 0.46,
+		);
+		gradient.addColorStop(0, preset.shadowCore);
+		gradient.addColorStop(0.52, preset.shadowPenumbra);
+		gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+		context.fillStyle = gradient;
+		context.fillRect(0, 0, width, height);
+	});
+}
+
+function makeCycloramaGeometry() {
+	const width = 46;
+	const floorNear = 24;
+	const sweepStart = -3.6;
+	const radius = 6.4;
+	const wallHeight = 24;
+	const xSegments = 48;
+	const floorSegments = 36;
+	const curveSegments = 28;
+	const wallSegments = 38;
+	const crossSection = [];
+
+	for (let i = 0; i <= floorSegments; i++) {
+		const t = i / floorSegments;
+		crossSection.push({
+			z: floorNear + (sweepStart - floorNear) * t,
+			y: 0,
+			v: t * 0.48,
+		});
+	}
+	for (let i = 1; i <= curveSegments; i++) {
+		const t = i / curveSegments;
+		const angle = t * Math.PI * 0.5;
+		crossSection.push({
+			z: sweepStart - radius * Math.sin(angle),
+			y: radius * (1 - Math.cos(angle)),
+			v: 0.48 + t * 0.24,
+		});
+	}
+	for (let i = 1; i <= wallSegments; i++) {
+		const t = i / wallSegments;
+		crossSection.push({
+			z: sweepStart - radius,
+			y: radius + wallHeight * t,
+			v: 0.72 + t * 0.28,
+		});
+	}
+
+	const vertices = [];
+	const uvs = [];
+	const indices = [];
+	for (let yIndex = 0; yIndex < crossSection.length; yIndex++) {
+		const row = crossSection[yIndex];
+		for (let xIndex = 0; xIndex <= xSegments; xIndex++) {
+			const u = xIndex / xSegments;
+			vertices.push((u - 0.5) * width, row.y, row.z);
+			uvs.push(u, row.v);
+		}
+	}
+	for (let yIndex = 0; yIndex < crossSection.length - 1; yIndex++) {
+		for (let xIndex = 0; xIndex < xSegments; xIndex++) {
+			const a = yIndex * (xSegments + 1) + xIndex;
+			const b = a + 1;
+			const c = a + xSegments + 1;
+			const d = c + 1;
+			indices.push(a, c, b, b, c, d);
+		}
+	}
+
+	const geometry = new THREE.BufferGeometry();
+	geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+	geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+	geometry.setIndex(indices);
+	geometry.computeVertexNormals();
+	return geometry;
+}
+
+function makeStudioStage(preset) {
 	const group = new THREE.Group();
-	const floor = new THREE.Mesh(
-		new THREE.CircleGeometry(18, 96),
-		new THREE.MeshStandardMaterial({
-			color: 0x1a1d1d,
-			metalness: 0.0,
-			roughness: 0.72,
+	group.name = "showroom studio stage";
+
+	const sweep = new THREE.Mesh(
+		makeCycloramaGeometry(),
+		new THREE.MeshBasicMaterial({
+			map: makeSweepTexture(preset),
+			side: THREE.DoubleSide,
+			depthWrite: false,
+			toneMapped: false,
 		}),
 	);
-	floor.rotation.x = -Math.PI / 2;
-	floor.position.y = -0.015;
-	group.add(floor);
+	sweep.name = "showroom studio backdrop and showroom studio floor";
+	sweep.renderOrder = -120;
+	group.add(sweep);
 
-	const shadow = new THREE.Mesh(
-		new THREE.PlaneGeometry(8, 8),
+	const glow = new THREE.Mesh(
+		new THREE.PlaneGeometry(18, 7.2),
 		new THREE.MeshBasicMaterial({
-			map: makeShadowTexture(),
+			map: makeBackdropGlowTexture(preset),
 			transparent: true,
 			depthWrite: false,
+			toneMapped: false,
 		}),
 	);
+	glow.name = "showroom studio backdrop glow";
+	glow.position.set(0, 3.6, -9.92);
+	glow.renderOrder = -110;
+	group.add(glow);
+
+	const shadow = new THREE.Mesh(
+		new THREE.PlaneGeometry(11.5, 5.8),
+		new THREE.MeshBasicMaterial({
+			map: makeShadowTexture(preset),
+			transparent: true,
+			depthWrite: false,
+			toneMapped: false,
+		}),
+	);
+	shadow.name = "showroom studio contact shadow";
 	shadow.rotation.x = -Math.PI / 2;
-	shadow.position.y = 0.005;
+	shadow.position.set(0, 0.008, 0.32);
 	shadow.renderOrder = 5;
 	group.add(shadow);
+
 	return group;
 }
 
@@ -178,6 +434,7 @@ class ShowroomScene {
 		this.carRoot = new THREE.Group();
 		this.activeModel = null;
 		this.clock = new THREE.Clock();
+		this.backgroundPreset = getShowroomBackgroundPreset();
 		this.configureScene();
 		this.configureControls();
 		window.addEventListener("resize", () => this.resize());
@@ -197,20 +454,25 @@ class ShowroomScene {
 		renderer.outputColorSpace = THREE.SRGBColorSpace;
 		if ("toneMapping" in renderer) {
 			renderer.toneMapping = THREE.ACESFilmicToneMapping;
-			renderer.toneMappingExposure = 0.82;
+			renderer.toneMappingExposure = getShowroomBackgroundPreset().toneMappingExposure;
 		}
 		return new ShowroomScene(canvas, renderer);
 	}
 
 	configureScene() {
-		this.scene.add(makeStudioFloor());
+		this.scene.background = new THREE.Color(this.backgroundPreset.clearColor);
+		this.scene.add(makeStudioStage(this.backgroundPreset));
 		this.scene.add(this.carRoot);
-		const hemisphere = new THREE.HemisphereLight(0xf3f5ff, 0x252019, 1.4);
+		const hemisphere = new THREE.HemisphereLight(
+			0xf3f5ff,
+			0x252019,
+			this.backgroundPreset.hemisphereIntensity,
+		);
 		this.scene.add(hemisphere);
-		const key = new THREE.DirectionalLight(0xffffff, 3.0);
+		const key = new THREE.DirectionalLight(0xffffff, this.backgroundPreset.keyLightIntensity);
 		key.position.set(-4, 7, 8);
 		this.scene.add(key);
-		const rim = new THREE.DirectionalLight(0x9fc7ff, 1.2);
+		const rim = new THREE.DirectionalLight(0x9fc7ff, this.backgroundPreset.rimLightIntensity);
 		rim.position.set(5, 3, -6);
 		this.scene.add(rim);
 		this.loadEnvironmentMap(DEFAULT_ENVIRONMENT_MAP);
@@ -235,7 +497,7 @@ class ShowroomScene {
 			texture.mapping = THREE.EquirectangularReflectionMapping;
 			this.scene.environment = texture;
 			if ("environmentIntensity" in this.scene) {
-				this.scene.environmentIntensity = 1.1;
+				this.scene.environmentIntensity = this.backgroundPreset.environmentIntensity;
 			}
 		} catch (error) {
 			console.warn("TORCS showroom failed to load studio environment", { path, error });
@@ -248,6 +510,7 @@ class ShowroomScene {
 		}
 		this.activeModel = root;
 		this.carRoot.add(root);
+		this.resize();
 		this.fitModel(root);
 	}
 
@@ -273,13 +536,19 @@ class ShowroomScene {
 		TEMP_BOX.getSize(TEMP_SIZE);
 		const span = Math.max(TEMP_SIZE.x, TEMP_SIZE.z, 1.0);
 		const targetY = Math.max(0.45, TEMP_SIZE.y * 0.42);
+		const aspect = this.camera.aspect || 1;
+		const portraitFraming = aspect < 0.75 ? clamp(0.92 / Math.max(aspect, 0.45), 1.0, 2.05) : 1.0;
 		this.controls.target.set(0, targetY, 0);
-		this.controls.minDistance = Math.max(2.2, span * 0.82);
-		this.controls.maxDistance = Math.max(7.5, span * 3.8);
+		this.controls.minDistance = Math.max(2.2, span * 0.82 * portraitFraming);
+		this.controls.maxDistance = Math.max(7.5, span * 3.8 * portraitFraming);
 		this.camera.near = Math.max(0.03, span / 80);
 		this.camera.far = Math.max(80, span * 18);
 		this.camera.fov = 26;
-		this.camera.position.set(-span * 0.92, targetY + span * 0.24, span * 1.62);
+		this.camera.position.set(
+			-span * 0.92 * portraitFraming,
+			targetY + span * 0.24,
+			span * 1.62 * portraitFraming,
+		);
 		this.camera.updateProjectionMatrix();
 		this.controls.update();
 	}
