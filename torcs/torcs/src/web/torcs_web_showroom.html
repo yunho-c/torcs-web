@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>TORCS Web Showroom</title>
+	<style>
+		:root {
+			color-scheme: dark;
+			--ink: #f7f4eb;
+			--muted: #aeb6b0;
+			--panel: rgba(5, 8, 9, 0.56);
+			--line: rgba(255, 255, 255, 0.18);
+			--accent: #d8b56a;
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
+		html,
+		body {
+			margin: 0;
+			width: 100%;
+			height: 100%;
+			overflow: hidden;
+			background:
+				linear-gradient(145deg, #090b0d 0%, #161a1b 48%, #050506 100%);
+			color: var(--ink);
+			font-family: "Aptos", "Segoe UI", system-ui, sans-serif;
+			letter-spacing: 0;
+		}
+
+		button,
+		select {
+			font: inherit;
+		}
+
+		#showroom {
+			position: fixed;
+			inset: 0;
+			width: 100vw;
+			height: 100vh;
+			display: block;
+		}
+
+		.model-title {
+			position: fixed;
+			top: 34px;
+			left: 42px;
+			right: 42px;
+			pointer-events: none;
+			text-transform: uppercase;
+		}
+
+		.eyebrow {
+			margin-bottom: 6px;
+			color: var(--accent);
+			font-size: 0.78rem;
+			font-weight: 700;
+		}
+
+		h1 {
+			margin: 0;
+			max-width: min(780px, 70vw);
+			font-size: clamp(3rem, 9vw, 8.8rem);
+			font-weight: 800;
+			line-height: 0.86;
+			text-wrap: balance;
+		}
+
+		.status {
+			position: fixed;
+			right: 34px;
+			top: 34px;
+			max-width: min(360px, calc(100vw - 68px));
+			padding: 10px 13px;
+			border: 1px solid var(--line);
+			background: var(--panel);
+			backdrop-filter: blur(14px);
+			color: var(--muted);
+			font-size: 0.76rem;
+			text-transform: uppercase;
+		}
+
+		.nav-button {
+			position: fixed;
+			top: 50%;
+			width: 64px;
+			height: 92px;
+			border: 1px solid var(--line);
+			background: rgba(255, 255, 255, 0.08);
+			color: var(--ink);
+			transform: translateY(-50%);
+			cursor: pointer;
+			font-size: 3rem;
+			line-height: 1;
+			backdrop-filter: blur(10px);
+		}
+
+		.nav-button:hover {
+			background: rgba(255, 255, 255, 0.15);
+		}
+
+		.nav-button:disabled {
+			opacity: 0.35;
+			cursor: not-allowed;
+		}
+
+		#previous-car {
+			left: 24px;
+		}
+
+		#next-car {
+			right: 24px;
+		}
+
+		.bottom-strip {
+			position: fixed;
+			left: 34px;
+			right: 34px;
+			bottom: 28px;
+			display: grid;
+			grid-template-columns: minmax(0, 1fr) auto;
+			gap: 18px;
+			align-items: end;
+			pointer-events: none;
+		}
+
+		.car-select {
+			width: min(360px, 100%);
+			min-height: 42px;
+			border: 1px solid var(--line);
+			background: rgba(8, 10, 11, 0.78);
+			color: var(--ink);
+			padding: 0 12px;
+			pointer-events: auto;
+		}
+
+		.counter {
+			color: var(--muted);
+			font-size: 0.82rem;
+			text-transform: uppercase;
+		}
+
+		.studio-mark {
+			justify-self: end;
+			color: var(--muted);
+			font-size: 0.78rem;
+			text-transform: uppercase;
+		}
+
+		.fade {
+			opacity: 0;
+			transition: opacity 180ms ease;
+		}
+
+		@media (max-width: 720px) {
+			.model-title {
+				top: 24px;
+				left: 22px;
+				right: 22px;
+			}
+
+			h1 {
+				max-width: 86vw;
+				font-size: clamp(2.4rem, 15vw, 5.6rem);
+			}
+
+			.status {
+				top: auto;
+				left: 22px;
+				right: 22px;
+				bottom: 92px;
+			}
+
+			.nav-button {
+				width: 48px;
+				height: 72px;
+				font-size: 2.2rem;
+			}
+
+			#previous-car {
+				left: 10px;
+			}
+
+			#next-car {
+				right: 10px;
+			}
+
+			.bottom-strip {
+				left: 22px;
+				right: 22px;
+				bottom: 20px;
+				grid-template-columns: 1fr;
+			}
+
+			.studio-mark {
+				display: none;
+			}
+		}
+	</style>
+</head>
+<body>
+	<canvas id="showroom"></canvas>
+	<header class="model-title">
+		<div class="eyebrow" id="provider">TORCS Web Showroom</div>
+		<h1 id="model-name">Loading</h1>
+		<div class="counter" id="counter">0 / 0</div>
+	</header>
+	<div class="status" id="status">Loading generated assets</div>
+	<button class="nav-button" id="previous-car" type="button" aria-label="Previous car">&lsaquo;</button>
+	<button class="nav-button" id="next-car" type="button" aria-label="Next car">&rsaquo;</button>
+	<footer class="bottom-strip">
+		<select class="car-select" id="car-select" aria-label="Select car"></select>
+		<div class="studio-mark">TORCS Studio</div>
+	</footer>
+	<script type="importmap">
+		{
+			"imports": {
+				"three": "https://cdn.jsdelivr.net/npm/three@0.183.0/build/three.webgpu.js",
+				"three/webgpu": "https://cdn.jsdelivr.net/npm/three@0.183.0/build/three.webgpu.js",
+				"three/tsl": "https://cdn.jsdelivr.net/npm/three@0.183.0/build/three.tsl.js",
+				"three/addons/": "https://cdn.jsdelivr.net/npm/three@0.183.0/examples/jsm/"
+			}
+		}
+	</script>
+	<script type="module" src="./renderer/showroom.js"></script>
+</body>
+</html>

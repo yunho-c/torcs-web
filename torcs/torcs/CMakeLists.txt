@@ -261,9 +261,17 @@ if(EMSCRIPTEN)
 			"${TORCS_ROOT}/src/web/torcs_web_renderer.html"
 			"$<TARGET_FILE_DIR:torcs_web_probe>/torcs_web_renderer.html"
 		COMMAND
+			"${CMAKE_COMMAND}" -E copy_if_different
+			"${TORCS_ROOT}/src/web/torcs_web_showroom.html"
+			"$<TARGET_FILE_DIR:torcs_web_probe>/torcs_web_showroom.html"
+		COMMAND
 			"${CMAKE_COMMAND}" -E copy_directory
 			"${TORCS_ROOT}/src/web/renderer"
 			"$<TARGET_FILE_DIR:torcs_web_probe>/renderer"
+		COMMAND
+			"${CMAKE_COMMAND}" -E copy_directory
+			"${TORCS_ROOT}/src/web/local-showroom-assets"
+			"$<TARGET_FILE_DIR:torcs_web_probe>/local-showroom-assets"
 		COMMAND
 			"${CMAKE_COMMAND}" -E copy_directory
 			"${TORCS_ROOT}/data/web/hdri"
@@ -273,6 +281,9 @@ if(EMSCRIPTEN)
 			"${TORCS_ROOT}/data/web/skybox"
 			"$<TARGET_FILE_DIR:torcs_web_probe>/web/skybox"
 		DEPENDS torcs_web_probe
+			"${TORCS_ROOT}/src/web/torcs_web_renderer.html"
+			"${TORCS_ROOT}/src/web/torcs_web_showroom.html"
+			"${TORCS_ROOT}/src/web/local-showroom-assets/README.md"
 			"${TORCS_ROOT}/data/web/hdri/120_hdrmaps_com_free_2K.exr"
 			"${TORCS_ROOT}/data/web/skybox/arid2_bk.jpg"
 			"${TORCS_ROOT}/data/web/skybox/arid2_dn.jpg"

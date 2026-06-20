@@ -1212,9 +1212,11 @@ async function checkMultiCarModelMetadata() {
 const files = [
 	"../CMakeLists.txt",
 	"torcs_web_renderer.html",
+	"torcs_web_showroom.html",
 	"renderer/main.js",
 	"renderer/diagnostics.js",
 	"renderer/assets.js",
+	"renderer/showroom.js",
 	"renderer/runtime.js",
 	"renderer/scene.js",
 	"renderer/effects.js",
@@ -1279,6 +1281,13 @@ requireText(byPath["torcs_web_renderer.html"], "id=\"track-glb-status\"", "custo
 requireText(byPath["torcs_web_renderer.html"], "id=\"skybox\"", "skybox cubemap checkbox");
 requireText(byPath["torcs_web_renderer.html"], "<option value=\"legacy\" selected>Legacy</option>", "legacy render profile default");
 requireText(byPath["torcs_web_renderer.html"], "<option value=\"modern\">Modern</option>", "modern render profile option");
+requireText(byPath["torcs_web_showroom.html"], "./renderer/showroom.js", "showroom module entrypoint");
+requireText(byPath["torcs_web_showroom.html"], "\"three/webgpu\"", "showroom Three.js WebGPU import map");
+requireText(byPath["torcs_web_showroom.html"], "\"three/addons/\"", "showroom Three.js addons import map");
+requireText(byPath["torcs_web_showroom.html"], "id=\"showroom\"", "showroom canvas");
+requireText(byPath["torcs_web_showroom.html"], "id=\"previous-car\"", "showroom previous car button");
+requireText(byPath["torcs_web_showroom.html"], "id=\"next-car\"", "showroom next car button");
+requireText(byPath["torcs_web_showroom.html"], "id=\"car-select\"", "showroom car selector");
 for (const id of ["position", "fuel", "current-lap", "last-lap", "best-lap", "top-speed"]) {
 	requireText(byPath["torcs_web_renderer.html"], `id="${id}"`, `Phase 5 HUD field ${id}`);
 }
@@ -1366,6 +1375,21 @@ requireText(byPath["renderer/runtime.js"], "shadowY0: 181", "native shadow Y sna
 requireText(byPath["renderer/runtime.js"], "shadowZ0: 187", "native shadow Z snapshot offset");
 requireText(byPath["renderer/runtime.js"], "export class TorcsRuntime", "runtime adapter export");
 
+requireText(byPath["renderer/showroom.js"], "new THREE.WebGPURenderer", "showroom WebGPU renderer creation");
+requireText(byPath["renderer/showroom.js"], "forceWebGL: params.get(\"renderer\") === \"webgl\"", "showroom forced WebGL fallback option");
+requireText(byPath["renderer/showroom.js"], "new AssetManager(\"./web-assets/\", scene.renderer, \"modern\")", "showroom modern TORCS asset profile");
+requireText(byPath["renderer/showroom.js"], "class TorcsShowroomSource", "showroom TORCS asset source");
+requireText(byPath["renderer/showroom.js"], "class LocalVwPackSource", "showroom local VW asset source");
+requireText(byPath["renderer/showroom.js"], "LOCAL_VW_PACK_URL", "showroom local VW pack constant");
+requireText(byPath["renderer/showroom.js"], "./local-showroom-assets/vw/pack.json", "showroom ignored local VW pack path");
+requireText(byPath["renderer/showroom.js"], "OrbitControls", "showroom orbit controls");
+requireText(byPath["renderer/showroom.js"], "DRACOLoader", "showroom Draco loader");
+requireText(byPath["renderer/showroom.js"], "GLTFLoader", "showroom GLTF loader");
+if (byPath["renderer/showroom.js"].content.includes("vw.com.mx") ||
+	byPath["renderer/showroom.js"].content.includes("prod.threed.studio")) {
+	fail("TORCS web renderer smoke test found production VW URLs in committed showroom code");
+}
+
 requireText(byPath["../CMakeLists.txt"], "'_torcs_web_runtime_start_multi_with_files'", "Phase 6 multi-car Emscripten export");
 requireText(byPath["../CMakeLists.txt"], "'_torcs_web_runtime_get_car_count'", "Phase 6 car-count Emscripten export");
 requireText(byPath["../CMakeLists.txt"], "'_torcs_web_runtime_get_car_name_by_index'", "Phase 6 car-name Emscripten export");
@@ -1386,6 +1410,8 @@ requireText(byPath["../CMakeLists.txt"], "TORCS_WEB_TRACK_CONFIGS", "dynamic tra
 requireText(byPath["../CMakeLists.txt"], "TORCS_WEB_CAR_CONFIGS", "dynamic car XML preload discovery");
 requireText(byPath["../CMakeLists.txt"], "data/web/skybox", "skybox asset copy source");
 requireText(byPath["../CMakeLists.txt"], "web/skybox", "skybox asset copy destination");
+requireText(byPath["../CMakeLists.txt"], "torcs_web_showroom.html", "showroom HTML copy target");
+requireText(byPath["../CMakeLists.txt"], "local-showroom-assets", "ignored local showroom asset copy");
 
 requireText(byPath["renderer/runtime.js"], "wheelSkidIntensity0: 116", "Phase 4 skid snapshot field");
 requireText(byPath["renderer/runtime.js"], "wheelSurfaceKind0: 120", "Phase 5 wheel surface snapshot field");
