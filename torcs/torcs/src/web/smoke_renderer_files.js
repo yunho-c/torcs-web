@@ -1314,13 +1314,16 @@ requireText(byPath["torcs_web_renderer.html"], "id=\"standings\"", "Phase 6 stan
 requireText(byPath["torcs_web_renderer.html"], "id=\"render-profile\"", "render profile selector");
 requireText(byPath["torcs_web_renderer.html"], "id=\"light-intensity\"", "light intensity slider");
 requireText(byPath["torcs_web_renderer.html"], "id=\"light-intensity-value\"", "light intensity value readout");
+requireText(byPath["torcs_web_renderer.html"], "id=\"aces-tone-mapping\"", "ACES tone mapping checkbox");
 requireText(byPath["torcs_web_renderer.html"], "id=\"track-glb\"", "custom track GLB load button");
 requireText(byPath["torcs_web_renderer.html"], "id=\"clear-track-glb\"", "custom track GLB clear button");
 requireText(byPath["torcs_web_renderer.html"], "id=\"track-glb-file\"", "custom track GLB file input");
-requireText(byPath["torcs_web_renderer.html"], "id=\"track-glb-status\"", "custom track GLB status readout");
 requireText(byPath["torcs_web_renderer.html"], "id=\"skybox\"", "skybox cubemap checkbox");
 requireText(byPath["torcs_web_renderer.html"], "<option value=\"legacy\" selected>Legacy</option>", "legacy render profile default");
 requireText(byPath["torcs_web_renderer.html"], "<option value=\"modern\">Modern</option>", "modern render profile option");
+if (byPath["torcs_web_renderer.html"].content.includes("Converted track")) {
+	fail("TORCS web renderer smoke test found removed converted-track UI");
+}
 requireText(byPath["torcs_web_showroom.html"], "./renderer/showroom.js", "showroom module entrypoint");
 requireText(byPath["torcs_web_showroom.html"], "\"three/webgpu\"", "showroom Three.js WebGPU import map");
 requireText(byPath["torcs_web_showroom.html"], "\"three/addons/\"", "showroom Three.js addons import map");
@@ -1492,6 +1495,8 @@ requireText(byPath["renderer/main.js"], "applySkybox(elements.skybox.checked)", 
 requireText(byPath["renderer/main.js"], "elements.renderProfile.addEventListener", "render profile selector binding");
 requireText(byPath["renderer/main.js"], "applyRenderProfile(elements.renderProfile.value, true)", "render profile visual asset reload");
 requireText(byPath["renderer/main.js"], "elements.lightIntensity.addEventListener", "light intensity slider binding");
+requireText(byPath["renderer/main.js"], "applyAcesToneMapping(elements.acesToneMapping.checked)", "ACES tone mapping checkbox handoff");
+requireText(byPath["renderer/main.js"], "scene.setAcesToneMappingEnabled(elements.acesToneMapping.checked)", "ACES tone mapping scene binding");
 requireText(byPath["renderer/main.js"], "elements.skybox.addEventListener", "skybox checkbox binding");
 requireText(byPath["renderer/main.js"], "runtime.readTrackSamples()", "track sample ingestion");
 requireText(byPath["renderer/main.js"], "runtime.readSnapshots()", "Phase 6 snapshot array ingestion");
@@ -1634,6 +1639,12 @@ requireText(byPath["renderer/scene.js"], "makeRoadMesh(track)", "sampled track r
 requireText(byPath["renderer/scene.js"], "setTrackVisual(model)", "converted track mesh hook");
 requireText(byPath["renderer/scene.js"], "setTrackAtmosphere(entry, backgroundTexture = null)", "track atmosphere hook");
 requireText(byPath["renderer/scene.js"], "setRenderProfile(profile)", "scene render profile setter");
+requireText(byPath["renderer/scene.js"], "setAcesToneMappingEnabled(enabled)", "scene ACES tone mapping toggle");
+requireText(byPath["renderer/scene.js"], "applyToneMappingProfile()", "scene tone mapping profile application");
+requireText(byPath["renderer/scene.js"], "THREE.ACESFilmicToneMapping", "modern ACES tone mapping");
+requireText(byPath["renderer/scene.js"], "THREE.NoToneMapping", "legacy no-tone-mapping baseline");
+requireText(byPath["renderer/scene.js"], "this.renderProfile === \"modern\" && this.acesToneMappingEnabled", "modern ACES tone mapping gate");
+requireText(byPath["renderer/scene.js"], "MODERN_TONE_MAPPING_EXPOSURE = 0.82", "modern tone mapping exposure");
 requireText(byPath["renderer/scene.js"], "setLightIntensityScale(scale)", "interactive light intensity setter");
 requireText(byPath["renderer/scene.js"], "DEFAULT_AMBIENT_INTENSITY * this.lightIntensityScale", "scaled ambient intensity");
 requireText(byPath["renderer/scene.js"], "DEFAULT_SUN_INTENSITY * this.lightIntensityScale", "scaled sun intensity");
@@ -1700,6 +1711,9 @@ if (byPath["renderer/scene.js"].content.includes("this.car.rotation.set(values[S
 }
 if (byPath["renderer/scene.js"].content.includes("WebGLRenderer")) {
 	fail("TORCS web renderer smoke test found legacy WebGLRenderer creation");
+}
+if (byPath["renderer/scene.js"].content.includes("EffectComposer")) {
+	fail("TORCS web renderer smoke test found premature composer post-processing path");
 }
 if (byPath["renderer/scene.js"].content.includes("LineLoop")) {
 	fail("TORCS web renderer smoke test found unsupported WebGPU LineLoop usage");

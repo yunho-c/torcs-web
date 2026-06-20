@@ -105,7 +105,7 @@
 			}
 
 			.render-row {
-				grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(130px, auto) auto;
+				grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.9fr) minmax(130px, auto) auto;
 			}
 
 			.track-override-row {
@@ -634,7 +634,10 @@
 		<div class="row assets track-override-row">
 			<button id="track-glb" type="button">Load GLB</button>
 			<button id="clear-track-glb" type="button" disabled>Clear GLB</button>
-			<span class="track-override-status" id="track-glb-status">Converted track</span>
+			<label class="toggle-label">
+				<input id="aces-tone-mapping" type="checkbox" checked>
+				<span>ACES tone mapping</span>
+			</label>
 			<input id="track-glb-file" type="file" accept=".glb,model/gltf-binary" hidden>
 		</div>
 			<div class="row assets render-row">

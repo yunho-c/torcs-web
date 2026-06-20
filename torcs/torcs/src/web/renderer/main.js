@@ -45,6 +45,7 @@ const elements = {
 		renderProfile: document.getElementById("render-profile"),
 		lightIntensity: document.getElementById("light-intensity"),
 		lightIntensityValue: document.getElementById("light-intensity-value"),
+		acesToneMapping: document.getElementById("aces-tone-mapping"),
 		skybox: document.getElementById("skybox"),
 		track: document.getElementById("track"),
 		trackGlb: document.getElementById("track-glb"),
@@ -610,8 +611,12 @@ function setEnabled(enabled) {
 	elements.audio.disabled = !runtime;
 	elements.haptics.disabled = !runtime;
 	elements.rumbleConfigOpen.disabled = !runtime;
-	elements.trackGlb.disabled = !assets || !scene;
-	elements.clearTrackGlb.disabled = !customTrackFile;
+	if (elements.trackGlb) {
+		elements.trackGlb.disabled = !assets || !scene;
+	}
+	if (elements.clearTrackGlb) {
+		elements.clearTrackGlb.disabled = !customTrackFile;
+	}
 }
 
 function applyControls(controls = input.getControls()) {
@@ -692,11 +697,15 @@ function getVisualTrackPath() {
 
 function updateCustomTrackUi(status = "") {
 	const hasOverride = Boolean(customTrackFile);
-	elements.clearTrackGlb.disabled = !hasOverride;
-	elements.trackGlbStatus.textContent = status || (hasOverride ? customTrackVisualName : "Converted track");
-	elements.trackGlbStatus.title = hasOverride
-		? `Using custom track visual: ${customTrackVisualName}`
-		: "Using converted TORCS track visual";
+	if (elements.clearTrackGlb) {
+		elements.clearTrackGlb.disabled = !hasOverride;
+	}
+	if (elements.trackGlbStatus) {
+		elements.trackGlbStatus.textContent = status || (hasOverride ? customTrackVisualName : "Converted track");
+		elements.trackGlbStatus.title = hasOverride
+			? `Using custom track visual: ${customTrackVisualName}`
+			: "Using converted TORCS track visual";
+	}
 }
 
 async function applyCustomTrackFile(file) {
@@ -729,7 +738,9 @@ async function applyCustomTrackFile(file) {
 async function clearCustomTrackFile(restoreConverted = true) {
 	customTrackFile = null;
 	customTrackVisualName = "";
-	elements.trackGlbFile.value = "";
+	if (elements.trackGlbFile) {
+		elements.trackGlbFile.value = "";
+	}
 	updateCustomTrackUi();
 	if (restoreConverted && assets && scene) {
 		const hasAssets = await loadVisualAssets();
@@ -905,6 +916,16 @@ function applyLightIntensity(value) {
 	elements.lightIntensityValue.textContent = formatLightIntensity(activeLightIntensity);
 	if (scene) {
 		scene.setLightIntensityScale(activeLightIntensity);
+	}
+	if (snapshot) {
+		readAndRender();
+	}
+}
+
+function applyAcesToneMapping(enabled) {
+	elements.acesToneMapping.checked = Boolean(enabled);
+	if (scene) {
+		scene.setAcesToneMappingEnabled(elements.acesToneMapping.checked);
 	}
 	if (snapshot) {
 		readAndRender();
@@ -1126,26 +1147,28 @@ function bindUi() {
 			readAndRender();
 		}
 	});
-	elements.trackGlb.addEventListener("click", () => {
-		elements.trackGlbFile.value = "";
-		elements.trackGlbFile.click();
-	});
-	elements.trackGlbFile.addEventListener("change", () => {
-		const file = elements.trackGlbFile.files && elements.trackGlbFile.files[0];
-		if (!file) {
-			return;
-		}
-		applyCustomTrackFile(file).catch((error) => {
-			console.warn("TORCS web renderer custom track GLB apply failed", error);
-			hud.setState("debug");
+	if (elements.trackGlb && elements.trackGlbFile && elements.clearTrackGlb) {
+		elements.trackGlb.addEventListener("click", () => {
+			elements.trackGlbFile.value = "";
+			elements.trackGlbFile.click();
 		});
-	});
-	elements.clearTrackGlb.addEventListener("click", () => {
-		clearCustomTrackFile(true).catch((error) => {
-			console.warn("TORCS web renderer custom track GLB clear failed", error);
-			hud.setState("debug");
+		elements.trackGlbFile.addEventListener("change", () => {
+			const file = elements.trackGlbFile.files && elements.trackGlbFile.files[0];
+			if (!file) {
+				return;
+			}
+			applyCustomTrackFile(file).catch((error) => {
+				console.warn("TORCS web renderer custom track GLB apply failed", error);
+				hud.setState("debug");
+			});
 		});
-	});
+		elements.clearTrackGlb.addEventListener("click", () => {
+			clearCustomTrackFile(true).catch((error) => {
+				console.warn("TORCS web renderer custom track GLB clear failed", error);
+				hud.setState("debug");
+			});
+		});
+	}
 	elements.track.addEventListener("change", () => {
 		if (!customTrackFile) {
 			return;
@@ -1163,6 +1186,9 @@ function bindUi() {
 		});
 		elements.lightIntensity.addEventListener("input", () => {
 			applyLightIntensity(Number(elements.lightIntensity.value));
+		});
+		elements.acesToneMapping.addEventListener("change", () => {
+			applyAcesToneMapping(elements.acesToneMapping.checked);
 		});
 		elements.skybox.addEventListener("change", () => {
 			applySkybox(elements.skybox.checked).catch((error) => {
@@ -1196,6 +1222,7 @@ async function main() {
 		try {
 			scene = await TorcsScene.create(elements.canvas);
 			scene.setRenderProfile(activeRenderProfile);
+			applyAcesToneMapping(elements.acesToneMapping.checked);
 			applyLightIntensity(activeLightIntensity);
 			elements.skybox.checked = false;
 			cameras = new CameraRig(elements.canvas);

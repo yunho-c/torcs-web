@@ -27,6 +27,8 @@ const DEFAULT_SKYBOX_FACES = ["rt", "lf", "up", "dn", "ft", "bk"];
 const DEFAULT_ENVIRONMENT_INTENSITY = 0.8;
 const DEFAULT_AMBIENT_INTENSITY = 2.4;
 const DEFAULT_SUN_INTENSITY = 2.3;
+const LEGACY_TONE_MAPPING_EXPOSURE = 1.0;
+const MODERN_TONE_MAPPING_EXPOSURE = 0.82;
 const TORCS_TO_THREE_BASIS = new THREE.Matrix4().set(
 	1, 0, 0, 0,
 	0, 0, 1, 0,
@@ -263,6 +265,9 @@ export class TorcsScene {
 		this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 		this.renderer.setClearColor(DEFAULT_BACKGROUND, 1);
 		this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+		this.renderProfile = "legacy";
+		this.acesToneMappingEnabled = true;
+		this.applyToneMappingProfile();
 
 		this.scene = new THREE.Scene();
 		this.scene.background = DEFAULT_BACKGROUND.clone();
@@ -307,7 +312,6 @@ export class TorcsScene {
 			this.useSkybox = false;
 			this.trackBackgroundColor = DEFAULT_BACKGROUND.clone();
 			this.trackBackgroundTexture = null;
-			this.renderProfile = "legacy";
 			this.lightIntensityScale = 1.0;
 			this.carEffects = [];
 			this.effects = this.createCarEffects(0);
@@ -315,6 +319,26 @@ export class TorcsScene {
 
 	setRenderProfile(profile) {
 		this.renderProfile = normalizeRenderProfile(profile);
+		this.applyToneMappingProfile();
+	}
+
+	setAcesToneMappingEnabled(enabled) {
+		this.acesToneMappingEnabled = Boolean(enabled);
+		this.applyToneMappingProfile();
+	}
+
+	applyToneMappingProfile() {
+		if (!("toneMapping" in this.renderer)) {
+			return;
+		}
+		// Keep fullscreen post effects on a future RenderPipeline; the baseline tone curve is renderer-level.
+		if (this.renderProfile === "modern" && this.acesToneMappingEnabled) {
+			this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+			this.renderer.toneMappingExposure = MODERN_TONE_MAPPING_EXPOSURE;
+			return;
+		}
+		this.renderer.toneMapping = THREE.NoToneMapping;
+		this.renderer.toneMappingExposure = LEGACY_TONE_MAPPING_EXPOSURE;
 	}
 
 	setLightIntensityScale(scale) {
