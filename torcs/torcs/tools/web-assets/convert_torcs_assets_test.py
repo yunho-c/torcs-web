@@ -344,6 +344,52 @@ kids 0
 <section name="Sound">
 <attstr name="engine sample" val="engine.wav"/>
 </section>
+<section name="Front Axle">
+<attnum name="xpos" val="1.31"/>
+</section>
+<section name="Rear Axle">
+<attnum name="xpos" val="-1.36"/>
+</section>
+<section name="Front Right Wheel">
+<attnum name="ypos" unit="m" val="-0.72"/>
+<attnum name="rim diameter" unit="in" val="18"/>
+<attnum name="tire width" unit="mm" val="255"/>
+<attnum name="tire height-width ratio" unit="%" val="35"/>
+</section>
+<section name="Front Left Wheel">
+<attnum name="ypos" unit="m" val="0.72"/>
+<attnum name="rim diameter" unit="in" val="18"/>
+<attnum name="tire width" unit="mm" val="255"/>
+<attnum name="tire height-width ratio" unit="%" val="35"/>
+</section>
+<section name="Rear Right Wheel">
+<attnum name="ypos" unit="m" val="-0.74"/>
+<attnum name="rim diameter" unit="in" val="18"/>
+<attnum name="tire width" unit="mm" val="275"/>
+<attnum name="tire height-width ratio" val="0.32"/>
+</section>
+<section name="Rear Left Wheel">
+<attnum name="ypos" unit="m" val="0.74"/>
+<attnum name="rim diameter" unit="in" val="18"/>
+<attnum name="tire width" unit="mm" val="275"/>
+<attnum name="tire height-width ratio" val="0.32"/>
+</section>
+<section name="Front Right Suspension">
+<attnum name="packers" unit="mm" val="50"/>
+<attnum name="bellcrank" val="1"/>
+</section>
+<section name="Front Left Suspension">
+<attnum name="packers" unit="mm" val="50"/>
+<attnum name="bellcrank" val="1"/>
+</section>
+<section name="Rear Right Suspension">
+<attnum name="packers" unit="cm" val="2"/>
+<attnum name="bellcrank" val="2"/>
+</section>
+<section name="Rear Left Suspension">
+<attnum name="packers" unit="cm" val="2"/>
+<attnum name="bellcrank" val="2"/>
+</section>
 </params>
 """
 		asset = """AC3Db
@@ -405,6 +451,52 @@ kids 0
 <section name="Sound">
 <attstr name="engine sample" val="engine.wav"/>
 </section>
+<section name="Front Axle">
+<attnum name="xpos" val="1.31"/>
+</section>
+<section name="Rear Axle">
+<attnum name="xpos" val="-1.36"/>
+</section>
+<section name="Front Right Wheel">
+<attnum name="ypos" unit="m" val="-0.72"/>
+<attnum name="rim diameter" unit="in" val="18"/>
+<attnum name="tire width" unit="mm" val="255"/>
+<attnum name="tire height-width ratio" unit="%" val="35"/>
+</section>
+<section name="Front Left Wheel">
+<attnum name="ypos" unit="m" val="0.72"/>
+<attnum name="rim diameter" unit="in" val="18"/>
+<attnum name="tire width" unit="mm" val="255"/>
+<attnum name="tire height-width ratio" unit="%" val="35"/>
+</section>
+<section name="Rear Right Wheel">
+<attnum name="ypos" unit="m" val="-0.74"/>
+<attnum name="rim diameter" unit="in" val="18"/>
+<attnum name="tire width" unit="mm" val="275"/>
+<attnum name="tire height-width ratio" val="0.32"/>
+</section>
+<section name="Rear Left Wheel">
+<attnum name="ypos" unit="m" val="0.74"/>
+<attnum name="rim diameter" unit="in" val="18"/>
+<attnum name="tire width" unit="mm" val="275"/>
+<attnum name="tire height-width ratio" val="0.32"/>
+</section>
+<section name="Front Right Suspension">
+<attnum name="packers" unit="mm" val="50"/>
+<attnum name="bellcrank" val="1"/>
+</section>
+<section name="Front Left Suspension">
+<attnum name="packers" unit="mm" val="50"/>
+<attnum name="bellcrank" val="1"/>
+</section>
+<section name="Rear Right Suspension">
+<attnum name="packers" unit="cm" val="2"/>
+<attnum name="bellcrank" val="2"/>
+</section>
+<section name="Rear Left Suspension">
+<attnum name="packers" unit="cm" val="2"/>
+<attnum name="bellcrank" val="2"/>
+</section>
 </params>
 """
 		asset = """AC3Db
@@ -465,6 +557,22 @@ kids 0
 			self.assertEqual(entry["wheelAsset"]["speedThresholds"], [20.0, 40.0, 70.0])
 			self.assertEqual([state["speedIndex"] for state in entry["wheelAsset"]["states"]], [0, 1, 2, 3])
 			self.assertEqual(entry["wheelAsset"]["states"][0]["materialClasses"], ["wheelTire"])
+			self.assertEqual([wheel["section"] for wheel in entry["wheelLayout"]], [
+				"Front Right Wheel",
+				"Front Left Wheel",
+				"Rear Right Wheel",
+				"Rear Left Wheel",
+			])
+			self.assertAlmostEqual(entry["wheelLayout"][0]["position"][0], 1.31)
+			self.assertAlmostEqual(entry["wheelLayout"][0]["position"][1], -0.72)
+			self.assertAlmostEqual(entry["wheelLayout"][0]["position"][2], 0.26785)
+			self.assertAlmostEqual(entry["wheelLayout"][0]["radius"], 0.31785)
+			self.assertAlmostEqual(entry["wheelLayout"][0]["width"], 0.255)
+			self.assertAlmostEqual(entry["wheelLayout"][2]["position"][0], -1.36)
+			self.assertAlmostEqual(entry["wheelLayout"][2]["position"][1], -0.74)
+			self.assertAlmostEqual(entry["wheelLayout"][2]["position"][2], 0.3066)
+			self.assertAlmostEqual(entry["wheelLayout"][2]["radius"], 0.3166)
+			self.assertAlmostEqual(entry["wheelLayout"][2]["width"], 0.275)
 			for index, state in enumerate(entry["wheelAsset"]["states"]):
 				self.assertEqual(state["asset"], f"cars/demo-car/demo-wheel-wheel{index}.glb")
 				self.assertTrue((output_dir / state["asset"]).exists())

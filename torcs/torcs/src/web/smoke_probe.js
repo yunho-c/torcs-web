@@ -1,9 +1,15 @@
 #!/usr/bin/env node
 
 const path = require("node:path");
+const fs = require("node:fs");
 
 const modulePath = path.resolve(process.argv[2] || "torcs_web_probe.js");
+const moduleDir = path.dirname(modulePath);
 const createModule = require(modulePath);
+
+const DEFAULT_CAR_MANIFEST_PATH = "data/cars/models/kc-2000gt/kc-2000gt.xml";
+const WHEEL_LAYOUT_TOLERANCE = 0.0001;
+const WHEEL_LAYOUT_Z_TOLERANCE = 0.005;
 
 function fail(message, details) {
 	console.error(message);
@@ -11,6 +17,56 @@ function fail(message, details) {
 		console.error(JSON.stringify(details));
 	}
 	process.exit(1);
+}
+
+function readManifest() {
+	const candidates = [
+		path.resolve(process.cwd(), "web-assets", "manifest.json"),
+		path.resolve(moduleDir, "web-assets", "manifest.json"),
+	];
+	for (const candidate of candidates) {
+		if (fs.existsSync(candidate)) {
+			return JSON.parse(fs.readFileSync(candidate, "utf8"));
+		}
+	}
+	fail("TORCS WASM probe smoke test could not find generated web asset manifest", { candidates });
+	return null;
+}
+
+function compareWheelLayoutToSnapshot(layout, values, tolerance = WHEEL_LAYOUT_TOLERANCE) {
+	const failures = [];
+	if (!Array.isArray(layout) || layout.length !== 4) {
+		failures.push({ field: "wheelLayout", expected: "4 wheel records", actual: layout });
+		return failures;
+	}
+	for (let i = 0; i < 4; i += 1) {
+		const wheel = layout[i];
+		if (!wheel || !Array.isArray(wheel.position) || wheel.position.length !== 3) {
+			failures.push({ wheel: i, field: "position", expected: "3 numeric values", actual: wheel });
+			continue;
+		}
+		const expected = [
+			["relX", wheel.position[0], values[SNAPSHOT.wheelRelX0 + i], tolerance],
+			["relY", wheel.position[1], values[SNAPSHOT.wheelRelY0 + i], tolerance],
+			["relZ", wheel.position[2], values[SNAPSHOT.wheelRelZ0 + i], WHEEL_LAYOUT_Z_TOLERANCE],
+			["radius", wheel.radius, values[SNAPSHOT.wheelRadius0 + i], tolerance],
+			["width", wheel.width, values[SNAPSHOT.wheelWidth0 + i], tolerance],
+		];
+		for (const [field, manifestValue, snapshotValue, fieldTolerance] of expected) {
+			const delta = Math.abs(manifestValue - snapshotValue);
+			if (!Number.isFinite(manifestValue) || !Number.isFinite(snapshotValue) || delta > fieldTolerance) {
+				failures.push({
+					wheel: i,
+					field,
+					manifest: manifestValue,
+					snapshot: snapshotValue,
+					delta,
+					tolerance: fieldTolerance,
+				});
+			}
+		}
+	}
+	return failures;
 }
 
 const SNAPSHOT = {
@@ -132,6 +188,9 @@ function readCarSnapshot(module, carIndex) {
 
 createModule()
 	.then((module) => {
+		const manifest = readManifest();
+		const manifestCar = manifest.cars && manifest.cars[DEFAULT_CAR_MANIFEST_PATH];
+		const manifestWheelLayout = manifestCar && manifestCar.wheelLayout;
 		const runtime = {
 			start: module.ccall("torcs_web_runtime_start", "number", [], []),
 		};
@@ -241,6 +300,8 @@ createModule()
 			[0, 2],
 		);
 		runtime.snapshot = readSnapshot(module);
+		runtime.wheelLayoutSource = DEFAULT_CAR_MANIFEST_PATH;
+		runtime.wheelLayoutDiffs = compareWheelLayoutToSnapshot(manifestWheelLayout, runtime.snapshot.values);
 		module.ccall("torcs_web_runtime_shutdown", null, [], []);
 
 		const drive = {
@@ -525,6 +586,7 @@ createModule()
 			runtime.snapshot.values[SNAPSHOT.trackWidth] !== runtime.trackWidth ||
 			runtime.snapshot.values[SNAPSHOT.trackSegments] !== runtime.trackSegments ||
 			runtime.snapshot.values[SNAPSHOT.trackSamples] !== runtime.trackSamples ||
+			runtime.wheelLayoutDiffs.length !== 0 ||
 			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.wheelRelX0]) ||
 			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.wheelRelY0]) ||
 			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.wheelRelZ0]) ||

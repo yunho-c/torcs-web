@@ -194,6 +194,22 @@ def check_car_lights(car):
 			raise ValueError(f"{light_label} has non-positive size")
 
 
+def check_car_wheel_layout(car):
+	wheels = car.get("wheelLayout")
+	label = car.get("name", "car")
+	if not isinstance(wheels, list) or len(wheels) != 4:
+		raise ValueError(f"{label} has malformed wheel layout metadata")
+	for index, wheel in enumerate(wheels):
+		wheel_label = f"{label} wheel {index}"
+		if not isinstance(wheel, dict):
+			raise ValueError(f"{wheel_label} has malformed wheel layout metadata")
+		check_number_triplet(wheel, "position", wheel_label)
+		check_number(wheel, "radius", wheel_label)
+		check_number(wheel, "width", wheel_label)
+		if wheel["radius"] <= 0 or wheel["width"] <= 0:
+			raise ValueError(f"{wheel_label} has non-positive wheel dimensions")
+
+
 def main():
 	args = parse_args()
 	manifest_path = args.manifest.resolve()
@@ -231,6 +247,7 @@ def main():
 				check_texture(require(root, texture))
 		for car in cars.values():
 			check_car_lights(car)
+			check_car_wheel_layout(car)
 			wheel_fallback = car.get("wheelFallback") or {}
 			wheel_texture = wheel_fallback.get("texture")
 			if wheel_fallback.get("source") != "runtime-snapshot" or not wheel_texture:

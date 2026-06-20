@@ -101,6 +101,12 @@ TRACK_SIGN_TEXTURE_PATTERNS = ["SIGN", "ADVER", "BANNER", "PANEL", "BILLBOARD", 
 TRACK_TERRAIN_OBJECT_PREFIXES = ["TERR", "TKLS", "TKRS", "T0LB", "T0RB"]
 TRACK_BARRIER_OBJECT_PREFIXES = ["B0LT", "B0RT", "B1LT", "B1RT", "B2LT", "B2RT", "BRLT", "BRRT"]
 TRACK_TREE_OBJECT_PREFIXES = ["TREE", "ARB"]
+WHEEL_SECTIONS = [
+	("Front Right Wheel", "Front Axle", "Front Right Suspension"),
+	("Front Left Wheel", "Front Axle", "Front Left Suspension"),
+	("Rear Right Wheel", "Rear Axle", "Rear Right Suspension"),
+	("Rear Left Wheel", "Rear Axle", "Rear Left Suspension"),
+]
 
 
 @dataclass
@@ -156,6 +162,25 @@ def attnum(section, name, default=0.0):
 	for child in section:
 		if child.tag == "attnum" and child.attrib.get("name") == name:
 			return float(child.attrib.get("val", default))
+	return default
+
+
+def attnum_si(section, name, default=0.0):
+	for child in section:
+		if child.tag == "attnum" and child.attrib.get("name") == name:
+			value = float(child.attrib.get("val", default))
+			unit = child.attrib.get("unit", "")
+			if unit == "mm":
+				return value / 1000.0
+			if unit == "cm":
+				return value / 100.0
+			if unit == "in":
+				return value * 0.0254
+			if unit == "ft":
+				return value * 0.3048
+			if unit == "%":
+				return value / 100.0
+			return value
 	return default
 
 
@@ -260,6 +285,32 @@ def parse_car_lights(objects):
 	return result
 
 
+def parse_car_wheel_layout(root):
+	wheels = []
+	for wheel_name, axle_name, suspension_name in WHEEL_SECTIONS:
+		wheel = find_section(root, wheel_name)
+		axle = find_section(root, axle_name)
+		if wheel is None or axle is None:
+			return []
+		suspension = find_section(root, suspension_name)
+		xpos = attnum_si(axle, "xpos")
+		ypos = attnum_si(wheel, "ypos")
+		rim_diameter = attnum_si(wheel, "rim diameter", 0.33)
+		tire_width = attnum_si(wheel, "tire width", 0.145)
+		tire_ratio = attnum_si(wheel, "tire height-width ratio", 0.75)
+		packers = attnum_si(suspension, "packers") if suspension is not None else 0.0
+		bellcrank = attnum_si(suspension, "bellcrank", 1.0) if suspension is not None else 1.0
+		radius = rim_diameter / 2.0 + tire_width * tire_ratio
+		center_z = radius - packers / max(bellcrank, 0.0001)
+		wheels.append({
+			"section": wheel_name,
+			"position": [xpos, ypos, center_z],
+			"radius": radius,
+			"width": tire_width,
+		})
+	return wheels
+
+
 def parse_car_metadata(source_root, car_xml):
 	root = ElementTree.fromstring(clean_xml(source_root / car_xml))
 	objects = find_section(root, "Graphic Objects")
@@ -283,6 +334,7 @@ def parse_car_metadata(source_root, car_xml):
 		"wheelTexture": attstr(objects, "wheel texture"),
 		"wheel3dBasename": attstr(objects, "3d wheel basename"),
 		"wheel3dDirectory": attstr(objects, "3d wheel directory"),
+		"wheelLayout": parse_car_wheel_layout(root),
 		"shadowTexture": attstr(objects, "shadow texture"),
 		"lights": parse_car_lights(objects),
 		"sound": {
@@ -1258,6 +1310,7 @@ def convert_car(source_root, output_dir, car_xml):
 			"widthScale": 1.0,
 		},
 		"wheelAsset": wheel_asset,
+		"wheelLayout": car_meta["wheelLayout"],
 		"sound": {
 			"engineSample": car_meta["sound"]["engineSample"],
 			"engineAsset": engine_sample_output,

@@ -10,6 +10,8 @@ const LOCAL_VW_PACK_URL = "./local-showroom-assets/vw/pack.json";
 const DEFAULT_DRACO_DECODER_PATH = "https://www.gstatic.com/draco/versioned/decoders/1.5.7/";
 const TORCS_PROVIDER = "TORCS";
 const VW_PROVIDER = "VW local";
+const TORCS_WHEEL_ORDER = [0, 1, 2, 3];
+const TORCS_RIGHT_WHEELS = new Set([0, 2]);
 const TEMP_BOX = new THREE.Box3();
 const TEMP_SIZE = new THREE.Vector3();
 const TEMP_CENTER = new THREE.Vector3();
@@ -48,6 +50,65 @@ function basename(path) {
 function displayNameForCar(source, entry) {
 	const name = entry && entry.name ? entry.name : basename(source).replace(/\.xml$/i, "");
 	return name.replace(/[-_]+/g, " ").trim() || "Unknown car";
+}
+
+function visibleClone(root) {
+	const clone = root.clone(true);
+	clone.visible = true;
+	clone.traverse((object) => {
+		object.visible = true;
+	});
+	return clone;
+}
+
+function makeGeneratedWheel(radius, width) {
+	const group = new THREE.Group();
+	const tire = new THREE.Mesh(
+		new THREE.CylinderGeometry(radius, radius, width, 32, 1, false),
+		new THREE.MeshStandardMaterial({
+			color: 0x111111,
+			metalness: 0.05,
+			roughness: 0.62,
+		}),
+	);
+	tire.rotation.x = Math.PI / 2;
+	const rim = new THREE.Mesh(
+		new THREE.CylinderGeometry(radius * 0.54, radius * 0.54, width * 1.05, 24, 1, false),
+		new THREE.MeshStandardMaterial({
+			color: 0xcac2b0,
+			metalness: 0.72,
+			roughness: 0.22,
+		}),
+	);
+	rim.rotation.x = Math.PI / 2;
+	group.add(tire, rim);
+	return group;
+}
+
+function makeDetailedWheel(wheelAsset, wheelIndex, radius, width) {
+	const state = wheelAsset && Array.isArray(wheelAsset.states)
+		? wheelAsset.states.find((candidate) => candidate.speedIndex === 0) || wheelAsset.states[0]
+		: null;
+	const wheel = new THREE.Group();
+	if (!state || !state.scene) {
+		wheel.add(makeGeneratedWheel(radius, width));
+		return wheel;
+	}
+	const sideFlip = new THREE.Group();
+	const scale = new THREE.Group();
+	const scene = visibleClone(state.scene);
+	if (TORCS_RIGHT_WHEELS.has(wheelIndex)) {
+		sideFlip.rotation.y = Math.PI;
+	}
+	sideFlip.add(scene);
+	scale.add(sideFlip);
+	scale.scale.set(radius * 2, radius * 2, width);
+	wheel.add(scale);
+	return wheel;
+}
+
+function torcsToShowroom(x, y, z = 0, target = new THREE.Vector3()) {
+	return target.set(x, z, -y);
 }
 
 function loadJson(url, optional = false) {
@@ -270,9 +331,68 @@ class TorcsShowroomSource {
 		if (!asset || !asset.lods || !asset.lods.length) {
 			throw new Error(`missing TORCS car visual for ${car.source}`);
 		}
-		const lod = asset.lods[0].scene;
-		lod.visible = true;
-		return lod;
+		const lod = asset.lods[0];
+		const root = new THREE.Group();
+		const body = visibleClone(lod.scene);
+		root.name = car.displayName;
+		root.add(body);
+		if (!lod.lod || lod.lod.wheels !== false) {
+			this.addStaticWheels(root, body, asset);
+		}
+		return root;
+	}
+
+	addStaticWheels(root, body, asset) {
+		body.updateWorldMatrix(true, true);
+		TEMP_BOX.setFromObject(body);
+		if (TEMP_BOX.isEmpty()) {
+			return;
+		}
+		TEMP_BOX.getSize(TEMP_SIZE);
+		const length = Math.max(TEMP_SIZE.x, 0.1);
+		const height = Math.max(TEMP_SIZE.y, 0.1);
+		const width = Math.max(TEMP_SIZE.z, 0.1);
+		const fallbackRadius = clamp(Math.min(length * 0.078, width * 0.22, height * 0.34), 0.22, 0.46);
+		const fallbackWidth = clamp(width * 0.14, 0.16, 0.34);
+		const fallbackLayout = [
+			{
+				position: [TEMP_BOX.max.x - length * 0.18, -TEMP_BOX.max.z + fallbackWidth * 0.56, fallbackRadius],
+				radius: fallbackRadius,
+				width: fallbackWidth,
+			},
+			{
+				position: [TEMP_BOX.max.x - length * 0.18, -TEMP_BOX.min.z - fallbackWidth * 0.56, fallbackRadius],
+				radius: fallbackRadius,
+				width: fallbackWidth,
+			},
+			{
+				position: [TEMP_BOX.min.x + length * 0.24, -TEMP_BOX.max.z + fallbackWidth * 0.56, fallbackRadius],
+				radius: fallbackRadius,
+				width: fallbackWidth,
+			},
+			{
+				position: [TEMP_BOX.min.x + length * 0.24, -TEMP_BOX.min.z - fallbackWidth * 0.56, fallbackRadius],
+				radius: fallbackRadius,
+				width: fallbackWidth,
+			},
+		];
+		const layout = Array.isArray(asset.entry && asset.entry.wheelLayout) &&
+			asset.entry.wheelLayout.length === TORCS_WHEEL_ORDER.length
+			? asset.entry.wheelLayout
+			: fallbackLayout;
+		const wheels = new THREE.Group();
+		wheels.name = "showroom wheels";
+		for (const index of TORCS_WHEEL_ORDER) {
+			const wheelRecord = layout[index] || fallbackLayout[index];
+			const radius = clamp(wheelRecord.radius || fallbackRadius, 0.05, 0.7);
+			const wheelWidth = clamp(wheelRecord.width || fallbackWidth, 0.04, 0.5);
+			const position = Array.isArray(wheelRecord.position) ? wheelRecord.position : fallbackLayout[index].position;
+			const wheelCenterZ = Number.isFinite(position[2]) ? position[2] : radius;
+			const wheel = makeDetailedWheel(asset.wheelAsset, index, radius, wheelWidth);
+			torcsToShowroom(position[0], position[1], wheelCenterZ, wheel.position);
+			wheels.add(wheel);
+		}
+		root.add(wheels);
 	}
 }
 
