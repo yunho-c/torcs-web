@@ -640,10 +640,47 @@
 			<div class="row assets render-row">
 				<label>Camera
 					<select id="camera">
-						<option value="chase">Chase</option>
-					<option value="onboard">Onboard</option>
-					<option value="trackside">Trackside</option>
-					<option value="top">Top</option>
+						<optgroup label="F2 - Driver">
+							<option value="f2-behind-very-near">Behind Very Near</option>
+							<option value="f2-behind-near" selected>Behind Near</option>
+							<option value="f2-bonnet-fixed">Bonnet With Car</option>
+							<option value="f2-driver-inside">Driver Inside</option>
+							<option value="f2-road-no-car">Road View No Car</option>
+						</optgroup>
+						<optgroup label="F3 - Chase">
+							<option value="f3-behind-far">Behind Far</option>
+							<option value="f3-track-behind">Track Behind</option>
+							<option value="f3-low-behind">Low Behind</option>
+							<option value="f3-front">Reverse Front</option>
+						</optgroup>
+						<optgroup label="F4 - Side">
+							<option value="f4-side-left-20">Side Left 20</option>
+							<option value="f4-side-right-20">Side Right 20</option>
+							<option value="f4-side-back-20">Side Back 20</option>
+							<option value="f4-side-front-20">Side Front 20</option>
+							<option value="f4-side-left-40">Side Left 40</option>
+							<option value="f4-side-right-40">Side Right 40</option>
+							<option value="f4-side-back-40">Side Back 40</option>
+							<option value="f4-side-front-40">Side Front 40</option>
+						</optgroup>
+						<optgroup label="F5 - Overhead">
+							<option value="f5-up-200">Overhead 200</option>
+							<option value="f5-up-250">Overhead 250</option>
+							<option value="f5-up-350">Overhead 350</option>
+							<option value="f5-up-400">Overhead 400</option>
+						</optgroup>
+						<optgroup label="F6-F11 - Track">
+							<option value="f6-circuit-center">Circuit Center</option>
+							<option value="f7-panorama-top">Panorama Top</option>
+							<option value="f7-panorama-nw">Panorama NW</option>
+							<option value="f7-panorama-sw">Panorama SW</option>
+							<option value="f7-panorama-se">Panorama SE</option>
+							<option value="f7-panorama-ne">Panorama NE</option>
+							<option value="f8-road-fixed">Road Fixed FOV</option>
+							<option value="f9-road-zoom">Road Zoom</option>
+							<option value="f10-road-fly">Road Fly</option>
+							<option value="f11-tv-director">TV Director</option>
+						</optgroup>
 				</select>
 			</label>
 			<label>Render

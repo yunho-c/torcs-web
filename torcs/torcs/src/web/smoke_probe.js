@@ -87,6 +87,17 @@ const SNAPSHOT = {
 	shadowX0: 175,
 	shadowY0: 181,
 	shadowZ0: 187,
+	driverX: 193,
+	driverY: 194,
+	driverZ: 195,
+	bonnetX: 196,
+	bonnetY: 197,
+	bonnetZ: 198,
+	roadCamX: 199,
+	roadCamY: 200,
+	roadCamZ: 201,
+	roadCamAvailable: 202,
+	trackTangentAngle: 203,
 };
 
 function readSnapshot(module) {
@@ -478,10 +489,10 @@ createModule()
 			runtime.trackWidth <= 0 ||
 			runtime.trackSegments <= 0 ||
 			runtime.trackSamples !== runtime.trackSegments * 12 ||
-			runtime.snapshot.version !== 7 ||
-			runtime.snapshot.size !== 193 * 8 ||
+			runtime.snapshot.version !== 8 ||
+			runtime.snapshot.size !== 204 * 8 ||
 			runtime.snapshot.write !== 0 ||
-			runtime.snapshot.values.length !== 193 ||
+			runtime.snapshot.values.length !== 204 ||
 			Math.abs(runtime.snapshot.values[SNAPSHOT.time] - runtime.time) > 0.000001 ||
 			Math.abs(runtime.snapshot.values[SNAPSHOT.x] - runtime.x) > 0.000001 ||
 			Math.abs(runtime.snapshot.values[SNAPSHOT.y] - runtime.y) > 0.000001 ||
@@ -554,6 +565,18 @@ createModule()
 			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.shadowZ0]) ||
 			Math.abs(runtime.snapshot.values[SNAPSHOT.shadowZ0] - 0.075) < 0.0001 ||
 			Math.abs(runtime.snapshot.values[SNAPSHOT.shadowZ0] - 0.01) > 2.0 ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.driverX]) ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.driverY]) ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.driverZ]) ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.bonnetX]) ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.bonnetY]) ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.bonnetZ]) ||
+			runtime.snapshot.values[SNAPSHOT.bonnetZ] <= 0 ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.roadCamX]) ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.roadCamY]) ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.roadCamZ]) ||
+			![0, 1].includes(runtime.snapshot.values[SNAPSHOT.roadCamAvailable]) ||
+			!Number.isFinite(runtime.snapshot.values[SNAPSHOT.trackTangentAngle]) ||
 			!Number.isFinite(runtime.trackCenterX) ||
 			!Number.isFinite(runtime.trackCenterY) ||
 			!Number.isFinite(runtime.trackRightX) ||

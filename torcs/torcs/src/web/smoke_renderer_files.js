@@ -302,7 +302,7 @@ async function findDualsenseAudioDevices() {
 }
 
 function makeAudioSnapshot(SNAPSHOT, overrides = {}) {
-	const values = new Array(193).fill(0);
+	const values = new Array(204).fill(0);
 	values[SNAPSHOT.x] = 10;
 	values[SNAPSHOT.y] = 20;
 	values[SNAPSHOT.z] = 1.5;
@@ -355,7 +355,7 @@ function makeInputElements() {
 }
 
 function makeInputSnapshot(time, speed) {
-	const values = new Array(193).fill(0);
+	const values = new Array(204).fill(0);
 	values[0] = time;
 	values[7] = speed;
 	return values;
@@ -1242,7 +1242,9 @@ requireText(byPath["torcs_web_renderer.html"], "three@0.183.0/build/three.webgpu
 requireText(byPath["torcs_web_renderer.html"], "\"three/webgpu\"", "Three.js WebGPU import map");
 requireText(byPath["torcs_web_renderer.html"], "\"three/tsl\"", "Three.js TSL import map");
 requireText(byPath["torcs_web_renderer.html"], "\"three/addons/\"", "Three.js addons import map");
-requireText(byPath["torcs_web_renderer.html"], "<option value=\"trackside\">Trackside</option>", "trackside camera UI option");
+requireText(byPath["torcs_web_renderer.html"], "<optgroup label=\"F2 - Driver\">", "native F2 camera UI group");
+requireText(byPath["torcs_web_renderer.html"], "<option value=\"f2-bonnet-fixed\">Bonnet With Car</option>", "native bonnet camera UI option");
+requireText(byPath["torcs_web_renderer.html"], "<option value=\"f11-tv-director\">TV Director</option>", "native TV director camera UI option");
 requireText(byPath["torcs_web_renderer.html"], "id=\"audio\"", "audio unlock button");
 requireText(byPath["torcs_web_renderer.html"], "id=\"volume\"", "audio volume slider");
 requireText(byPath["torcs_web_renderer.html"], "id=\"audio-state\"", "audio status readout");
@@ -1370,6 +1372,10 @@ requireText(byPath["renderer/runtime.js"], "driverLabel", "browser driver metada
 requireText(byPath["renderer/runtime.js"], "readSnapshots()", "Phase 6 multi-car snapshot reader");
 requireText(byPath["renderer/runtime.js"], "Float64Array.from(values)", "Phase 6 copied per-car snapshot buffer");
 requireText(byPath["renderer/runtime.js"], "export const SNAPSHOT", "snapshot layout export");
+requireText(byPath["renderer/runtime.js"], "driverX: 193", "snapshot driver camera anchor field");
+requireText(byPath["renderer/runtime.js"], "bonnetX: 196", "snapshot bonnet camera anchor field");
+requireText(byPath["renderer/runtime.js"], "roadCamAvailable: 202", "snapshot road camera availability field");
+requireText(byPath["renderer/runtime.js"], "trackTangentAngle: 203", "snapshot track tangent camera field");
 requireText(byPath["renderer/runtime.js"], "shadowX0: 175", "native shadow X snapshot offset");
 requireText(byPath["renderer/runtime.js"], "shadowY0: 181", "native shadow Y snapshot offset");
 requireText(byPath["renderer/runtime.js"], "shadowZ0: 187", "native shadow Z snapshot offset");
@@ -1451,7 +1457,7 @@ requireText(byPath["renderer/main.js"], "elements.lightIntensity.addEventListene
 requireText(byPath["renderer/main.js"], "elements.skybox.addEventListener", "skybox checkbox binding");
 requireText(byPath["renderer/main.js"], "runtime.readTrackSamples()", "track sample ingestion");
 requireText(byPath["renderer/main.js"], "runtime.readSnapshots()", "Phase 6 snapshot array ingestion");
-requireText(byPath["renderer/main.js"], "scene.updateCars(snapshots, cameras.camera, selectedCarIndex, carAssets)", "Phase 6 selected-car scene update with per-car visual assets");
+requireText(byPath["renderer/main.js"], "scene.updateCars(snapshots, cameras.camera, selectedCarIndex, carAssets, cameras.getSceneOptions())", "Phase 6 selected-car scene update with per-car visual assets");
 requireText(byPath["renderer/main.js"], "loadCarAssetsForSnapshots(snapshots, elements.car.value)", "runtime car model visual asset loading");
 requireText(byPath["renderer/main.js"], "TORCS web renderer using selected car visual fallback for runtime car model", "per-car visual fallback warning");
 requireText(byPath["renderer/main.js"], "findSnapshotByCarIndex(selectedCarIndex)", "Phase 6 selected-car snapshot lookup");
@@ -1607,7 +1613,8 @@ requireText(byPath["renderer/scene.js"], "torcsToThree(entry.lightPosition[0], e
 requireText(byPath["renderer/scene.js"], "setCarVisual(asset)", "converted car LOD hook");
 requireText(byPath["renderer/scene.js"], "setCarVisualAssets(assetsByCarIndex = new Map(), fallbackAsset = null)", "per-car visual asset map hook");
 requireText(byPath["renderer/scene.js"], "getCarAssetForIndex(carIndex)", "car-index visual asset lookup");
-requireText(byPath["renderer/scene.js"], "updateCars(snapshots, camera = null, selectedCarIndex = 0, assetsByCarIndex = this.carAssets)", "Phase 6 multi-car scene update");
+requireText(byPath["renderer/scene.js"], "updateCars(snapshots, camera = null, selectedCarIndex = 0, assetsByCarIndex = this.carAssets, cameraOptions = {})", "Phase 6 multi-car scene update");
+requireText(byPath["renderer/scene.js"], "cameraOptions = {}", "camera visibility options");
 requireText(byPath["renderer/scene.js"], "createOpponentCar(values, carIndex)", "Phase 6 opponent car creation");
 requireText(byPath["renderer/scene.js"], "getOpponentColor(carIndex)", "Phase 6 car-zero opponent color");
 requireText(byPath["renderer/scene.js"], "getSnapshotCarIndex(values, index) === selectedCarIndex", "Phase 6 selected car primary visual");
@@ -1699,20 +1706,23 @@ if (byPath["renderer/effects.js"].content.includes("headL: [dimX * 0.52") &&
 }
 
 requireText(byPath["renderer/cameras.js"], "getTorcsPoseQuaternion(values, this.carRotation)", "camera pose matrix conversion");
-requireText(byPath["renderer/cameras.js"], "fov: 40", "TORCS chase camera FOV");
-requireText(byPath["renderer/cameras.js"], "fov: 67.5", "TORCS onboard camera FOV");
-requireText(byPath["renderer/cameras.js"], "trackside: {", "fixed trackside camera mode");
-requireText(byPath["renderer/cameras.js"], "fov: 30", "TORCS road camera FOV");
-requireText(byPath["renderer/cameras.js"], "this.tracksideViews = this.makeTracksideViews(min, max, center, span)", "generated trackside camera placement");
-requireText(byPath["renderer/cameras.js"], "selectTracksideView(car)", "nearest trackside camera selection");
-requireText(byPath["renderer/cameras.js"], "this.trackView = { center, height: span * 0.78 }", "fixed top alignment camera framing");
+requireText(byPath["renderer/cameras.js"], "getCameraModeGroups()", "native camera catalog export");
+requireText(byPath["renderer/cameras.js"], "f2-bonnet-fixed", "native bonnet camera mode");
+requireText(byPath["renderer/cameras.js"], "f11-tv-director", "native TV director camera mode");
+requireText(byPath["renderer/cameras.js"], "SNAPSHOT.bonnetX", "snapshot bonnet anchor use");
+requireText(byPath["renderer/cameras.js"], "SNAPSHOT.driverX", "snapshot driver anchor use");
+requireText(byPath["renderer/cameras.js"], "SNAPSHOT.roadCamAvailable", "native road camera availability use");
+requireText(byPath["renderer/cameras.js"], "SNAPSHOT.trackTangentAngle", "native track tangent camera use");
+requireText(byPath["renderer/cameras.js"], "drawSelectedCar", "camera draw-current-car scene option");
 requireText(byPath["renderer/cameras.js"], "CAMERA_LOOKAROUNDS", "temporary camera lookaround modes");
 requireText(byPath["renderer/cameras.js"], "backLeft: { side: DIAGONAL_LOOKAROUND, forward: -DIAGONAL_LOOKAROUND }", "rear-left diagonal camera lookaround mode");
 requireText(byPath["renderer/cameras.js"], "backRight: { side: -DIAGONAL_LOOKAROUND, forward: -DIAGONAL_LOOKAROUND }", "rear-right diagonal camera lookaround mode");
 requireText(byPath["renderer/cameras.js"], "updateLookaround(values, car, lookaround, analogLookaround = null)", "temporary car-relative lookaround camera");
 requireText(byPath["renderer/cameras.js"], "applyAnalogLookTarget(values, lookaround)", "right stick analog camera look target");
 requireText(byPath["renderer/cameras.js"], "analogLookaround && analogLookaround.front", "right stick press front camera override");
+requireText(byPath["renderer/main.js"], "populateCameraOptions()", "native camera selector population");
 requireText(byPath["renderer/main.js"], "cameras.setTrack(trackSamples)", "camera track-sample alignment handoff");
+requireText(byPath["renderer/main.js"], "cameras.getSceneOptions()", "camera draw-current handoff");
 if (byPath["renderer/cameras.js"].content.includes("Math.cos(yaw)")) {
 	fail("TORCS web renderer smoke test found scalar-yaw camera direction");
 }

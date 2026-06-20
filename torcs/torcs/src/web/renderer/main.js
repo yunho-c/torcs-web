@@ -1,4 +1,4 @@
-import { CameraRig } from "./cameras.js";
+import { CameraRig, getCameraModeGroups } from "./cameras.js";
 import { Hud } from "./hud.js";
 import { InputController } from "./input.js";
 import { AssetManager } from "./assets.js";
@@ -376,6 +376,26 @@ function updateRumbleSignalUi() {
 	rumbleSignalFrame = requestAnimationFrame(updateRumbleSignalUi);
 }
 
+function populateCameraOptions() {
+	if (!elements.camera || elements.camera.dataset.nativeCatalog === "true") {
+		return;
+	}
+	elements.camera.textContent = "";
+	for (const group of getCameraModeGroups()) {
+		const optgroup = document.createElement("optgroup");
+		optgroup.label = group.label;
+		for (const mode of group.modes) {
+			const option = document.createElement("option");
+			option.value = mode.id;
+			option.textContent = mode.label;
+			optgroup.append(option);
+		}
+		elements.camera.append(optgroup);
+	}
+	elements.camera.value = "f2-behind-near";
+	elements.camera.dataset.nativeCatalog = "true";
+}
+
 function startRumbleSignalUi() {
 	buildRumbleSignalUi();
 	if (!rumbleSignalFrame) {
@@ -681,8 +701,8 @@ function readAndRender(deltaTime = 0) {
 		return;
 	}
 	hud.update(snapshot, snapshots, selectedCarIndex);
-	cameras.update(snapshot, input ? input.getCameraLookaround() : "");
-	scene.updateCars(snapshots, cameras.camera, selectedCarIndex, carAssets);
+	cameras.update(snapshot, input ? input.getCameraLookaround() : "", snapshots);
+	scene.updateCars(snapshots, cameras.camera, selectedCarIndex, carAssets, cameras.getSceneOptions());
 	audio.update(snapshot, cameras.camera, deltaTime);
 	haptics.update(snapshot, deltaTime);
 	scene.render(cameras.camera);
@@ -885,8 +905,8 @@ async function startSession() {
 	snapshots = runtime.readSnapshots();
 	snapshot = findSnapshotByCarIndex(selectedCarIndex) || snapshots[0] || null;
 	syncCurrentCarOptions();
-	cameras.update(snapshot, input ? input.getCameraLookaround() : "");
-	scene.updateCars(snapshots, cameras.camera, selectedCarIndex, carAssets);
+	cameras.update(snapshot, input ? input.getCameraLookaround() : "", snapshots);
+	scene.updateCars(snapshots, cameras.camera, selectedCarIndex, carAssets, cameras.getSceneOptions());
 	hud.setState("ready");
 	setEnabled(true);
 	const hasAssets = await loadVisualAssets();
@@ -896,6 +916,7 @@ async function startSession() {
 }
 
 function bindUi() {
+	populateCameraOptions();
 	elements.start.addEventListener("click", startSession);
 	elements.step.addEventListener("click", () => step());
 	elements.run.addEventListener("click", () => {

@@ -84,6 +84,17 @@ export const SNAPSHOT = {
 	shadowX0: 175,
 	shadowY0: 181,
 	shadowZ0: 187,
+	driverX: 193,
+	driverY: 194,
+	driverZ: 195,
+	bonnetX: 196,
+	bonnetY: 197,
+	bonnetZ: 198,
+	roadCamX: 199,
+	roadCamY: 200,
+	roadCamZ: 201,
+	roadCamAvailable: 202,
+	trackTangentAngle: 203,
 };
 
 export const DRIVER_KIND = {

@@ -50,8 +50,8 @@ extern "C" int inferno2(tModInfo *modInfo);
 #define TORCS_WEB_SIM_IDENT 0
 #define TORCS_WEB_TRACK_SAMPLES_PER_SEG 12
 #define TORCS_WEB_RUNTIME_MAX_CARS 4
-#define TORCS_WEB_RUNTIME_SNAPSHOT_VERSION 7
-#define TORCS_WEB_RUNTIME_SNAPSHOT_DOUBLE_COUNT 193
+#define TORCS_WEB_RUNTIME_SNAPSHOT_VERSION 8
+#define TORCS_WEB_RUNTIME_SNAPSHOT_DOUBLE_COUNT 204
 #define TORCS_WEB_RUNTIME_SHADOW_POINTS 6
 
 enum TorcsWebRuntimeSnapshotField {
@@ -139,7 +139,12 @@ enum TorcsWebRuntimeSnapshotField {
 	TORCS_WEB_SNAPSHOT_WHEEL_OTHER_SURFACE_STYLE_0 = 171,
 	TORCS_WEB_SNAPSHOT_SHADOW_X_0 = 175,
 	TORCS_WEB_SNAPSHOT_SHADOW_Y_0 = 181,
-	TORCS_WEB_SNAPSHOT_SHADOW_Z_0 = 187
+	TORCS_WEB_SNAPSHOT_SHADOW_Z_0 = 187,
+	TORCS_WEB_SNAPSHOT_DRIVER_X_0 = 193,
+	TORCS_WEB_SNAPSHOT_BONNET_X_0 = 196,
+	TORCS_WEB_SNAPSHOT_ROAD_CAM_X_0 = 199,
+	TORCS_WEB_SNAPSHOT_ROAD_CAM_AVAILABLE = 202,
+	TORCS_WEB_SNAPSHOT_TRACK_TANGENT_ANGLE = 203
 };
 
 struct CarElt;
@@ -756,6 +761,12 @@ writeRuntimeSnapshotValues(double *values, int carIndex)
 	values[TORCS_WEB_SNAPSHOT_CAR_DIMENSION_X] = car->_dimension_x;
 	values[TORCS_WEB_SNAPSHOT_CAR_DIMENSION_Y] = car->_dimension_y;
 	values[TORCS_WEB_SNAPSHOT_CAR_DIMENSION_Z] = car->_dimension_z;
+	values[TORCS_WEB_SNAPSHOT_DRIVER_X_0 + 0] = car->_drvPos_x;
+	values[TORCS_WEB_SNAPSHOT_DRIVER_X_0 + 1] = car->_drvPos_y;
+	values[TORCS_WEB_SNAPSHOT_DRIVER_X_0 + 2] = car->_drvPos_z;
+	values[TORCS_WEB_SNAPSHOT_BONNET_X_0 + 0] = car->_bonnetPos_x;
+	values[TORCS_WEB_SNAPSHOT_BONNET_X_0 + 1] = car->_bonnetPos_y;
+	values[TORCS_WEB_SNAPSHOT_BONNET_X_0 + 2] = car->_bonnetPos_z;
 	values[TORCS_WEB_SNAPSHOT_CAR_STATE] = car->_state;
 	values[TORCS_WEB_SNAPSHOT_CAR_GEAR] = car->_gear;
 	values[TORCS_WEB_SNAPSHOT_ENGINE_RPM] = car->_enginerpm;
@@ -772,6 +783,13 @@ writeRuntimeSnapshotValues(double *values, int carIndex)
 	values[TORCS_WEB_SNAPSHOT_TRACK_TO_RIGHT] = car->_trkPos.toRight;
 	values[TORCS_WEB_SNAPSHOT_TRACK_TO_MIDDLE] = car->_trkPos.toMiddle;
 	values[TORCS_WEB_SNAPSHOT_TRACK_DISTANCE_FROM_START] = getCarTrackDistanceFromStart(car);
+	if (car->_trkPos.seg && car->_trkPos.seg->cam) {
+		values[TORCS_WEB_SNAPSHOT_ROAD_CAM_X_0 + 0] = car->_trkPos.seg->cam->pos.x;
+		values[TORCS_WEB_SNAPSHOT_ROAD_CAM_X_0 + 1] = car->_trkPos.seg->cam->pos.y;
+		values[TORCS_WEB_SNAPSHOT_ROAD_CAM_X_0 + 2] = car->_trkPos.seg->cam->pos.z;
+		values[TORCS_WEB_SNAPSHOT_ROAD_CAM_AVAILABLE] = 1.0;
+	}
+	values[TORCS_WEB_SNAPSHOT_TRACK_TANGENT_ANGLE] = car->_trkPos.seg ? RtTrackSideTgAngleL(&(car->_trkPos)) : car->_yaw;
 	values[TORCS_WEB_SNAPSHOT_RACE_STATE] = Runtime.situation._raceState;
 	values[TORCS_WEB_SNAPSHOT_RACE_POSITION] = car->_pos;
 	values[TORCS_WEB_SNAPSHOT_LAP_COUNT] = car->_laps;

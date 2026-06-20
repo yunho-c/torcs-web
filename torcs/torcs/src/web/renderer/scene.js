@@ -37,8 +37,8 @@ const THREE_TO_TORCS_BASIS = new THREE.Matrix4().copy(TORCS_TO_THREE_BASIS).inve
 const TORCS_POS_MATRIX = new THREE.Matrix4();
 const CAR_ROTATION_MATRIX = new THREE.Matrix4();
 
-function torcsToThree(x, y, z = 0) {
-	return new THREE.Vector3(x, z, -y);
+function torcsToThree(x, y, z = 0, target = new THREE.Vector3()) {
+	return target.set(x, z, -y);
 }
 
 function normalizeRenderProfile(profile) {
@@ -1075,7 +1075,7 @@ export class TorcsScene {
 		opponent.effects.update(values, opponent.root, camera);
 	}
 
-	updateCars(snapshots, camera = null, selectedCarIndex = 0, assetsByCarIndex = this.carAssets) {
+	updateCars(snapshots, camera = null, selectedCarIndex = 0, assetsByCarIndex = this.carAssets, cameraOptions = {}) {
 		if (!snapshots || !snapshots.length) {
 			return;
 		}
@@ -1085,7 +1085,7 @@ export class TorcsScene {
 		const selected = snapshots.find((values, index) =>
 			getSnapshotCarIndex(values, index) === selectedCarIndex) || snapshots[0];
 		const selectedIndex = getSnapshotCarIndex(selected, snapshots.indexOf(selected));
-		this.updateCar(selected, camera, this.getCarAssetForIndex(selectedIndex));
+		this.updateCar(selected, camera, this.getCarAssetForIndex(selectedIndex), cameraOptions);
 		const activeOpponentIndexes = new Set();
 		for (let i = 0; i < snapshots.length; i += 1) {
 			const carIndex = getSnapshotCarIndex(snapshots[i], i);
@@ -1106,7 +1106,7 @@ export class TorcsScene {
 		}
 	}
 
-	updateCar(values, camera = null, asset = null) {
+	updateCar(values, camera = null, asset = null, cameraOptions = {}) {
 		if (!this.car) {
 			this.createCar(values);
 		}
@@ -1124,7 +1124,12 @@ export class TorcsScene {
 		this.setSelectedCarVisual(asset);
 		this.effects = this.getCarEffects(carIndex);
 		this.effects.setCarAsset(asset);
-		this.effects.setVisible(true);
+		const drawSelectedCar = cameraOptions.drawSelectedCar !== false;
+		this.car.visible = drawSelectedCar;
+		if (this.footprint) {
+			this.footprint.visible = drawSelectedCar;
+		}
+		this.effects.setVisible(drawSelectedCar);
 		this.ensureSelectedWheels(values);
 		this.selectCarLod(camera);
 		this.updateGeneratedWheels(values);
@@ -1142,6 +1147,7 @@ export class TorcsScene {
 		this.footprint.geometry.dispose();
 		this.footprint.geometry = new THREE.BufferGeometry().setFromPoints(footprintPoints);
 		this.effects.update(values, this.car, camera);
+		this.effects.setVisible(drawSelectedCar);
 	}
 
 	resize() {
