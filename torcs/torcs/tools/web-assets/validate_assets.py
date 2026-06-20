@@ -159,6 +159,24 @@ def check_track_shadow_overlays(root, track):
 		check_texture(require(root, overlay["texture"]))
 
 
+def check_track_skid_overlays(root, track):
+	overlays = track.get("trackSkidOverlays", [])
+	if not isinstance(overlays, list):
+		raise ValueError(f"{track.get('source', 'track')} has malformed track skid overlays")
+	for overlay in overlays:
+		if not isinstance(overlay, dict):
+			raise ValueError(f"{track.get('source', 'track')} has malformed track skid overlay")
+		if overlay.get("role") != "trackSkid":
+			raise ValueError(f"{track.get('source', 'track')} has unsupported track skid overlay role")
+		if overlay.get("layer") != "skids":
+			raise ValueError(f"{track.get('source', 'track')} has unsupported track skid overlay layer")
+		if not isinstance(overlay.get("sourceTexture"), str) or not overlay["sourceTexture"]:
+			raise ValueError(f"{track.get('source', 'track')} has track skid overlay without source texture")
+		if not isinstance(overlay.get("texture"), str) or not overlay["texture"]:
+			raise ValueError(f"{track.get('source', 'track')} has track skid overlay without texture")
+		check_texture(require(root, overlay["texture"]))
+
+
 def check_car_lights(car):
 	lights = car.get("lights")
 	label = car.get("name", "car")
@@ -208,6 +226,7 @@ def main():
 				check_texture(require(root, track["backgroundTexture"]))
 			check_material_metadata(track)
 			check_track_shadow_overlays(root, track)
+			check_track_skid_overlays(root, track)
 			for texture in track.get("textures", {}).values():
 				check_texture(require(root, texture))
 		for car in cars.values():

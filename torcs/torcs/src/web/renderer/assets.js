@@ -136,6 +136,10 @@ export class AssetManager {
 		return material && material.userData && material.userData.torcsOverlayRole === "trackShadow";
 	}
 
+	isTrackSkidOverlayMaterial(material) {
+		return material && material.userData && material.userData.torcsOverlayRole === "trackSkid";
+	}
+
 	makeTrackShadowOverlayMaterial(material) {
 		this.configureMaterialTextureSampling(material);
 		const overlay = new THREE.MeshBasicMaterial({
@@ -156,6 +160,37 @@ export class AssetManager {
 		overlay.userData = { ...material.userData };
 		material.dispose();
 		return overlay;
+	}
+
+	makeTrackSkidOverlayMaterial(material) {
+		this.configureMaterialTextureSampling(material);
+		const overlay = new THREE.MeshBasicMaterial({
+			name: material.name,
+			color: new THREE.Color(0xffffff),
+			map: material.map || null,
+			transparent: true,
+			opacity: 1.0,
+			side: material.side,
+			depthWrite: false,
+			depthTest: true,
+			polygonOffset: true,
+			polygonOffsetFactor: -2,
+			polygonOffsetUnits: -2,
+			fog: material.fog,
+		});
+		overlay.userData = { ...material.userData };
+		material.dispose();
+		return overlay;
+	}
+
+	trackOverlayRenderOrder(material) {
+		if (this.isTrackSkidOverlayMaterial(material)) {
+			return 3;
+		}
+		if (this.isTrackShadowOverlayMaterial(material)) {
+			return 2;
+		}
+		return 0;
 	}
 
 	withPbrDefaults(parameters, defaults) {
@@ -375,6 +410,9 @@ export class AssetManager {
 		if (this.isTrackShadowOverlayMaterial(material)) {
 			return this.makeTrackShadowOverlayMaterial(material);
 		}
+		if (this.isTrackSkidOverlayMaterial(material)) {
+			return this.makeTrackSkidOverlayMaterial(material);
+		}
 		if (this.renderProfile === "modern") {
 			return this.makeModernMaterial(material, context);
 		}
@@ -392,8 +430,9 @@ export class AssetManager {
 				object.material = this.convertMaterial(object.material, context);
 			}
 			const materials = Array.isArray(object.material) ? object.material : [object.material];
-			if (materials.some((material) => this.isTrackShadowOverlayMaterial(material))) {
-				object.renderOrder = 2;
+			const renderOrder = Math.max(...materials.map((material) => this.trackOverlayRenderOrder(material)));
+			if (renderOrder > 0) {
+				object.renderOrder = renderOrder;
 			}
 		});
 	}

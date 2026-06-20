@@ -430,6 +430,10 @@ def make_shadow_overlay_texture_name(texture):
 	return f"{Path(texture).stem}-shadow-overlay.png"
 
 
+def make_skid_overlay_texture_name(texture):
+	return f"{Path(texture).stem}-skid-overlay.png"
+
+
 def is_track_shadow_overlay_texture(texture):
 	return bool(texture) and Path(texture).stem.lower().startswith("shadow")
 
@@ -632,12 +636,13 @@ def add_triangle_to_primitive(target, obj, triangle, texture_layer=0, normal_off
 		target["uvs"].append([u, 1.0 - v])
 
 
-def convert_ac_to_glb(source_root, source_path, output_path, object_classifier=None, include_track_shadow_overlays=False):
+def convert_ac_to_glb(source_root, source_path, output_path, object_classifier=None, include_track_shadow_overlays=False, include_track_skid_overlays=False):
 	objects = parse_ac3d(source_path)
 	primitives = {}
 	asset_source_dir = source_path.parent
 	texture_sources = {}
 	shadow_overlay_sources = {}
+	skid_overlay_sources = {}
 
 	for obj in objects:
 		texture = obj.texture
@@ -682,11 +687,33 @@ def convert_ac_to_glb(source_root, source_path, output_path, object_classifier=N
 					"indices": [],
 					"objects": set(),
 				})
+		skid_texture = obj.texture_layers.get("skids", "")
+		skid_target = None
+		if include_track_skid_overlays and skid_texture:
+			resolved_skid = resolve_texture(source_root, asset_source_dir, skid_texture)
+			if resolved_skid:
+				skid_overlay_sources[skid_texture] = resolved_skid
+				skid_key = make_overlay_primitive_key(skid_texture, material_class, "skids", "trackSkid")
+				skid_target = primitives.setdefault(skid_key, {
+					"texture": skid_texture,
+					"materialClass": material_class,
+					"role": "trackSkid",
+					"layer": "skids",
+					"imageUri": make_skid_overlay_texture_name(skid_texture),
+					"sourceTexture": skid_texture,
+					"positions": [],
+					"normals": [],
+					"uvs": [],
+					"indices": [],
+					"objects": set(),
+				})
 		for surface in obj.surfaces:
 			for triangle in triangulate_surface(surface["refs"], surface["flags"]):
 				add_triangle_to_primitive(target, obj, triangle)
 				if shadow_target:
 					add_triangle_to_primitive(shadow_target, obj, triangle, texture_layer=1, normal_offset=0.01)
+				if skid_target:
+					add_triangle_to_primitive(skid_target, obj, triangle, texture_layer=2, normal_offset=0.015)
 
 	gltf = {
 		"asset": {"version": "2.0", "generator": "TORCS web asset prototype"},
@@ -767,6 +794,7 @@ def convert_ac_to_glb(source_root, source_path, output_path, object_classifier=N
 		"textures": sorted({data["texture"] for data in primitives.values() if data["texture"] and data["role"] == "base"}),
 		"textureSources": texture_sources,
 		"shadowOverlayTextureSources": shadow_overlay_sources,
+		"skidOverlayTextureSources": skid_overlay_sources,
 		"trackShadowOverlays": [
 			{
 				"sourceTexture": data["sourceTexture"],
@@ -777,6 +805,17 @@ def convert_ac_to_glb(source_root, source_path, output_path, object_classifier=N
 			}
 			for _, data in sorted(primitives.items(), key=lambda item: item[0])
 			if data["positions"] and data["role"] == "trackShadow"
+		],
+		"trackSkidOverlays": [
+			{
+				"sourceTexture": data["sourceTexture"],
+				"layer": data["layer"],
+				"role": data["role"],
+				"primitiveCount": len(data["indices"]) // 3,
+				"objectNames": sorted(data["objects"]),
+			}
+			for _, data in sorted(primitives.items(), key=lambda item: item[0])
+			if data["positions"] and data["role"] == "trackSkid"
 		],
 		"objects": sorted({name for data in primitives.values() for name in data["objects"]}),
 		"materials": [
@@ -867,6 +906,98 @@ def read_sgi_rgb(path):
 	return width, height, bytes(pixels)
 
 
+def paeth_predictor(left, up, upper_left):
+	p = left + up - upper_left
+	pa = abs(p - left)
+	pb = abs(p - up)
+	pc = abs(p - upper_left)
+	if pa <= pb and pa <= pc:
+		return left
+	if pb <= pc:
+		return up
+	return upper_left
+
+
+def unfilter_png_scanlines(path, data, width, height, bytes_per_pixel, row_bytes):
+	rows = []
+	offset = 0
+	previous = bytearray(row_bytes)
+	for _ in range(height):
+		if offset + 1 + row_bytes > len(data):
+			raise ValueError(f"{path} has truncated PNG scanline data")
+		filter_type = data[offset]
+		offset += 1
+		row = bytearray(data[offset:offset + row_bytes])
+		offset += row_bytes
+		for i, value in enumerate(row):
+			left = row[i - bytes_per_pixel] if i >= bytes_per_pixel else 0
+			up = previous[i]
+			upper_left = previous[i - bytes_per_pixel] if i >= bytes_per_pixel else 0
+			if filter_type == 0:
+				continue
+			if filter_type == 1:
+				row[i] = (value + left) & 0xFF
+			elif filter_type == 2:
+				row[i] = (value + up) & 0xFF
+			elif filter_type == 3:
+				row[i] = (value + ((left + up) // 2)) & 0xFF
+			elif filter_type == 4:
+				row[i] = (value + paeth_predictor(left, up, upper_left)) & 0xFF
+			else:
+				raise ValueError(f"{path} has unsupported PNG filter {filter_type}")
+		rows.append(bytes(row))
+		previous = row
+	return rows
+
+
+def read_png_rgba(path):
+	data = path.read_bytes()
+	if data[:8] != b"\x89PNG\r\n\x1a\n":
+		raise ValueError(f"{path} is not a PNG file")
+	offset = 8
+	width = height = bit_depth = color_type = interlace = None
+	idat = bytearray()
+	while offset + 8 <= len(data):
+		length = struct.unpack(">I", data[offset:offset + 4])[0]
+		kind = data[offset + 4:offset + 8]
+		payload = data[offset + 8:offset + 8 + length]
+		offset += 12 + length
+		if kind == b"IHDR":
+			width, height, bit_depth, color_type, compression, filter_method, interlace = struct.unpack(">IIBBBBB", payload)
+			if compression != 0 or filter_method != 0 or interlace != 0:
+				raise ValueError(f"{path} has unsupported PNG header")
+		elif kind == b"IDAT":
+			idat.extend(payload)
+		elif kind == b"IEND":
+			break
+	if width is None or height is None:
+		raise ValueError(f"{path} missing PNG IHDR")
+	if bit_depth != 8:
+		raise ValueError(f"{path} has unsupported PNG bit depth {bit_depth}")
+	channels_by_color_type = {0: 1, 2: 3, 4: 2, 6: 4}
+	if color_type not in channels_by_color_type:
+		raise ValueError(f"{path} has unsupported PNG color type {color_type}")
+	channels = channels_by_color_type[color_type]
+	row_bytes = width * channels
+	rows = unfilter_png_scanlines(path, zlib.decompress(bytes(idat)), width, height, channels, row_bytes)
+	pixels = bytearray(width * height * 4)
+	for y, row in enumerate(rows):
+		for x in range(width):
+			source = x * channels
+			target = (y * width + x) * 4
+			if color_type == 0:
+				value = row[source]
+				pixels[target:target + 4] = bytes([value, value, value, 255])
+			elif color_type == 2:
+				pixels[target:target + 4] = bytes([row[source], row[source + 1], row[source + 2], 255])
+			elif color_type == 4:
+				value = row[source]
+				pixels[target:target + 4] = bytes([value, value, value, row[source + 1]])
+			elif color_type == 6:
+				pixels[target:target + 4] = row[source:source + 4]
+	return width, height, bytes(pixels)
+
+
 def write_png(path, width, height, rgba):
 	def chunk(kind, payload):
 		return (
@@ -895,7 +1026,9 @@ def make_shadow_overlay_rgba(rgba):
 		overlay[offset] = 0
 		overlay[offset + 1] = 0
 		overlay[offset + 2] = 0
-		overlay[offset + 3] = max(0, min(255, 255 - luminance))
+		source_alpha = rgba[offset + 3]
+		overlay_alpha = max(0, min(255, 255 - luminance))
+		overlay[offset + 3] = round(overlay_alpha * source_alpha / 255)
 	return bytes(overlay)
 
 
@@ -914,6 +1047,20 @@ def convert_shadow_overlay_texture(source, output_dir):
 	output = output_dir / make_shadow_overlay_texture_name(source.name)
 	if source.suffix.lower() == ".rgb":
 		width, height, rgba = read_sgi_rgb(source)
+		write_png(output, width, height, make_shadow_overlay_rgba(rgba))
+	else:
+		output.parent.mkdir(parents=True, exist_ok=True)
+		output.write_bytes(source.read_bytes())
+	return output
+
+
+def convert_skid_overlay_texture(source, output_dir):
+	output = output_dir / make_skid_overlay_texture_name(source.name)
+	if source.suffix.lower() == ".rgb":
+		width, height, rgba = read_sgi_rgb(source)
+		write_png(output, width, height, make_shadow_overlay_rgba(rgba))
+	elif source.suffix.lower() == ".png":
+		width, height, rgba = read_png_rgba(source)
 		write_png(output, width, height, make_shadow_overlay_rgba(rgba))
 	else:
 		output.parent.mkdir(parents=True, exist_ok=True)
@@ -964,6 +1111,7 @@ def convert_track(source_root, output_dir, track_xml):
 		track_glb,
 		classify_track_object,
 		include_track_shadow_overlays=True,
+		include_track_skid_overlays=True,
 	)
 	track_texture_outputs = {
 		name: relative_to_output(convert_texture(source, track_dir), output_dir)
@@ -972,6 +1120,10 @@ def convert_track(source_root, output_dir, track_xml):
 	track_shadow_overlay_outputs = {
 		name: relative_to_output(convert_shadow_overlay_texture(source, track_dir), output_dir)
 		for name, source in sorted(track_result["shadowOverlayTextureSources"].items())
+	}
+	track_skid_overlay_outputs = {
+		name: relative_to_output(convert_skid_overlay_texture(source, track_dir), output_dir)
+		for name, source in sorted(track_result["skidOverlayTextureSources"].items())
 	}
 	track_background_output = ""
 	track_background_source = resolve_texture(
@@ -1004,6 +1156,13 @@ def convert_track(source_root, output_dir, track_xml):
 			}
 			for overlay in track_result["trackShadowOverlays"]
 		],
+		"trackSkidOverlays": [
+			{
+				**overlay,
+				"texture": track_skid_overlay_outputs.get(overlay["sourceTexture"], ""),
+			}
+			for overlay in track_result["trackSkidOverlays"]
+		],
 		"primitiveCount": track_result["primitives"],
 		"objectNames": track_result["objects"],
 		"materialClasses": sorted({material["class"] for material in track_result["materials"]}),
@@ -1011,6 +1170,7 @@ def convert_track(source_root, output_dir, track_xml):
 	}
 	texture_outputs = set(track_texture_outputs.values())
 	texture_outputs.update(track_shadow_overlay_outputs.values())
+	texture_outputs.update(track_skid_overlay_outputs.values())
 	if track_background_output:
 		texture_outputs.add(track_background_output)
 	return track_meta["xml"], entry, texture_outputs

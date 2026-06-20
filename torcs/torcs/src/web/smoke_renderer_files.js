@@ -1322,6 +1322,8 @@ requireText(byPath["renderer/assets.js"], "clearcoatMap: remasterMaterialMask", 
 requireText(byPath["renderer/assets.js"], "roughnessMap: remasterMaterialMask", "paint roughness mask binding");
 requireText(byPath["renderer/assets.js"], "torcsOverlayRole === \"trackShadow\"", "track shadow overlay material detection");
 requireText(byPath["renderer/assets.js"], "makeTrackShadowOverlayMaterial(material)", "track shadow overlay material adapter");
+requireText(byPath["renderer/assets.js"], "torcsOverlayRole === \"trackSkid\"", "track skid overlay material detection");
+requireText(byPath["renderer/assets.js"], "makeTrackSkidOverlayMaterial(material)", "track skid overlay material adapter");
 requireText(byPath["renderer/assets.js"], "new THREE.MeshBasicMaterial", "unlit track shadow overlay material");
 requireText(byPath["renderer/assets.js"], "polygonOffset: true", "track shadow overlay z-fighting guard");
 requireText(byPath["renderer/assets.js"], "const source = normalizeRuntimePath(carPath)", "car asset source path annotation");
@@ -1728,7 +1730,18 @@ if (!track.backgroundTexture) {
 if (typeof track.backgroundType !== "number") {
 	fail("TORCS web renderer smoke test found missing background type metadata");
 }
+if (!Array.isArray(track.trackSkidOverlays) || track.trackSkidOverlays.length === 0) {
+	fail("TORCS web renderer smoke test found missing track skid overlay metadata");
+}
+const eTrackSkidOverlay = track.trackSkidOverlays.find((overlay) =>
+	overlay.sourceTexture === "raceline.png" && overlay.role === "trackSkid" && overlay.layer === "skids");
+if (!eTrackSkidOverlay || eTrackSkidOverlay.texture !== "tracks/e-track-1/raceline-skid-overlay.png") {
+	fail("TORCS web renderer smoke test found unexpected track skid overlay metadata", {
+		trackSkidOverlays: track.trackSkidOverlays,
+	});
+}
 checkPng(track.backgroundTexture);
+checkPng(eTrackSkidOverlay.texture);
 checkPng(car7Trb1.materialMask);
 for (const [index, state] of car7Trb1.wheelAsset.states.entries()) {
 	if (state.speedIndex !== index || !state.asset ||

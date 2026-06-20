@@ -136,6 +136,24 @@ kids 0
 		self.assertEqual(overlay[0:4], b"\x00\x00\x00\x00")
 		self.assertEqual(overlay[4:8], b"\x00\x00\x00\x64")
 
+	def test_skid_overlay_png_converts_luminance_to_transparent_black(self):
+		with tempfile.TemporaryDirectory() as tmp_dir:
+			source = Path(tmp_dir) / "raceline.png"
+			output_dir = Path(tmp_dir) / "out"
+			convert.write_png(source, 3, 1, bytes([
+				255, 255, 255, 255,
+				155, 155, 155, 255,
+				0, 0, 0, 128,
+			]))
+
+			output = convert.convert_skid_overlay_texture(source, output_dir)
+			width, height, rgba = convert.read_png_rgba(output)
+
+		self.assertEqual((width, height), (3, 1))
+		self.assertEqual(rgba[0:4], b"\x00\x00\x00\x00")
+		self.assertEqual(rgba[4:8], b"\x00\x00\x00\x64")
+		self.assertEqual(rgba[8:12], b"\x00\x00\x00\x80")
+
 	def test_tree_textures_use_masked_alpha(self):
 		material = {}
 
@@ -501,6 +519,7 @@ OBJECT poly
 name "TKMN0"
 texture "tr-road1.png" base
 texture "shadow2.png" tiled
+texture "raceline.png" skids
 numvert 3
 0 0 0
 1 0 0
@@ -509,9 +528,9 @@ numsurf 1
 SURF 0x14
 mat 0
 refs 3
-0 0 0 0.1 0.2
-1 1 0 1.1 0.2
-2 0 1 0.1 1.2
+0 0 0 0.1 0.2 0.3 0.4
+1 1 0 1.1 0.2 1.3 0.4
+2 0 1 0.1 1.2 0.3 1.4
 kids 0
 OBJECT poly
 name "B0RT0"
@@ -551,7 +570,7 @@ kids 0
 			track_dir.mkdir(parents=True)
 			(track_dir / track_xml.name).write_text(content, encoding="utf-8")
 			(track_dir / "demo.acc").write_text(asset, encoding="latin-1")
-			for name in ["tr-road1.png", "armco.png", "treeg1.png", "background.png", "shadow2.png"]:
+			for name in ["tr-road1.png", "armco.png", "treeg1.png", "background.png", "shadow2.png", "raceline.png"]:
 				convert.write_png(track_dir / name, 1, 1, b"\xff\0\0\xff")
 
 			_, entry, textures = convert.convert_track(source_root, output_dir, track_xml)
@@ -564,13 +583,24 @@ kids 0
 		self.assertEqual(entry["trackShadowOverlays"][0]["sourceTexture"], "shadow2.png")
 		self.assertEqual(entry["trackShadowOverlays"][0]["texture"], "tracks/road/demo/shadow2-shadow-overlay.png")
 		self.assertIn("tracks/road/demo/shadow2-shadow-overlay.png", textures)
-		overlay_materials = [
+		self.assertEqual(len(entry["trackSkidOverlays"]), 1)
+		self.assertEqual(entry["trackSkidOverlays"][0]["sourceTexture"], "raceline.png")
+		self.assertEqual(entry["trackSkidOverlays"][0]["texture"], "tracks/road/demo/raceline-skid-overlay.png")
+		self.assertIn("tracks/road/demo/raceline-skid-overlay.png", textures)
+		shadow_overlay_materials = [
 			material for material in gltf["materials"]
 			if material.get("extras", {}).get("torcsOverlayRole") == "trackShadow"
 		]
-		self.assertEqual(len(overlay_materials), 1)
-		self.assertEqual(overlay_materials[0]["extras"]["torcsOverlayLayer"], "tiled")
+		self.assertEqual(len(shadow_overlay_materials), 1)
+		self.assertEqual(shadow_overlay_materials[0]["extras"]["torcsOverlayLayer"], "tiled")
+		skid_overlay_materials = [
+			material for material in gltf["materials"]
+			if material.get("extras", {}).get("torcsOverlayRole") == "trackSkid"
+		]
+		self.assertEqual(len(skid_overlay_materials), 1)
+		self.assertEqual(skid_overlay_materials[0]["extras"]["torcsOverlayLayer"], "skids")
 		self.assertIn({"uri": "shadow2-shadow-overlay.png"}, gltf["images"])
+		self.assertIn({"uri": "raceline-skid-overlay.png"}, gltf["images"])
 
 	def test_quick_mode_selects_golden_asset_pair(self):
 		with tempfile.TemporaryDirectory() as tmp_dir:
