@@ -400,6 +400,7 @@ async function checkHapticsModelBehavior() {
 		DirectionalRumbleMixer,
 		DualSenseHaptics,
 		DualSenseRumbleMapper,
+		DualSenseShiftLightModel,
 		DualSenseTelemetryModel,
 		SNAPSHOT,
 	} = await importHapticsModuleForSmoke();
@@ -432,6 +433,27 @@ async function checkHapticsModelBehavior() {
 	const mappedEqual = mapper.map({ left: 0.5, right: 0.5 }, 1);
 	assertHaptics(mappedEqual.right < 0.5 && mappedEqual.left < mappedEqual.right,
 		"DualSense mapper applies gamma curve and left/right compensation", mappedEqual);
+
+	const shiftLights = new DualSenseShiftLightModel();
+	const lowShift = shiftLights.update(makeAudioSnapshot(SNAPSHOT, { engineRpm: 3500, engineRedline: 7000 }));
+	assertHaptics(lowShift.state === "low" && lowShift.playerMask === 0 && lowShift.color.b > lowShift.color.r,
+		"low RPM produces no player LED mask and cool lightbar color", lowShift);
+	const earlyShift = shiftLights.update(makeAudioSnapshot(SNAPSHOT, { engineRpm: 5950, engineRedline: 7000 }));
+	assertHaptics(earlyShift.state === "early" && (earlyShift.playerMask & 0b00011) !== 0 && (earlyShift.playerMask & 0b11100) === 0,
+		"early RPM lights left-side player LEDs", earlyShift);
+	const idealShift = shiftLights.update(makeAudioSnapshot(SNAPSHOT, { engineRpm: 6440, engineRedline: 7000 }));
+	assertHaptics(idealShift.state === "ideal" && idealShift.playerMask === 0b00100,
+		"ideal shift RPM lights only the center player LED", idealShift);
+	const lateShift = shiftLights.update(makeAudioSnapshot(SNAPSHOT, { engineRpm: 6720, engineRedline: 7000 }));
+	assertHaptics(lateShift.state === "late" && (lateShift.playerMask & 0b11000) !== 0 && (lateShift.playerMask & 0b00111) === 0,
+		"late RPM lights right-side player LEDs", lateShift);
+	const redlineA = shiftLights.update(makeAudioSnapshot(SNAPSHOT, { time: 0, engineRpm: 6950, engineRedline: 7000 }));
+	const redlineB = shiftLights.update(makeAudioSnapshot(SNAPSHOT, { time: 0.07, engineRpm: 6950, engineRedline: 7000 }));
+	assertHaptics(redlineA.state === "redline" && redlineA.color.r > 200 && redlineA.playerMask !== redlineB.playerMask,
+		"redline RPM produces red lightbar and pulsed player LED state", { redlineA, redlineB });
+	const invalidShift = shiftLights.update(makeAudioSnapshot(SNAPSHOT, { engineRpm: 4200, engineRedline: 0 }));
+	assertHaptics(invalidShift.state === "neutral" && invalidShift.valid === false && invalidShift.playerMask === 0,
+		"invalid redline falls back to neutral active shift-light state", invalidShift);
 
 	const leftDirtValues = makeAudioSnapshot(SNAPSHOT, { speed: 44 });
 	for (const index of [1, 3]) {
@@ -481,6 +503,22 @@ async function checkHapticsModelBehavior() {
 	});
 
 	const haptics = new DualSenseHaptics();
+	const ledWrites = [];
+	const lightbarWrites = [];
+	haptics.controller = {
+		playerLeds: { set: (mask) => ledWrites.push(mask) },
+		lightbar: { set: (color) => lightbarWrites.push({ ...color }) },
+	};
+	haptics.enabled = true;
+	haptics.updateShiftLights(makeAudioSnapshot(SNAPSHOT, { engineRpm: 6440, engineRedline: 7000 }));
+	assertHaptics(ledWrites[0] === 0b00100 && lightbarWrites[0] && lightbarWrites[0].r > 200,
+		"DualSense shift-light output writes player LEDs and lightbar color", {
+			ledWrites,
+			lightbarWrites,
+			shiftLightOutput: haptics.getDiagnostics().shiftLightOutput,
+		});
+	haptics.enabled = false;
+	haptics.controller = null;
 	haptics.setRumbleConfig({ soloSource: "engine", engine: { gain: 1 } });
 	let engineRumble = haptics.rumbleSynth.update(highThrottle, 1, 1 / 30, haptics.getRumbleConfig());
 	haptics.setRumbleConfig({ soloSource: "engine", engine: { gain: 0.35 } });
@@ -1538,6 +1576,10 @@ requireText(byPath["renderer/haptics.js"], "export class DualSenseHaptics", "Dua
 requireText(byPath["renderer/haptics.js"], "export class DualSenseTelemetryModel", "DualSense telemetry model export");
 requireText(byPath["renderer/haptics.js"], "export class DirectionalRumbleMixer", "directional rumble mixer export");
 requireText(byPath["renderer/haptics.js"], "export class DualSenseRumbleMapper", "DualSense rumble mapper export");
+requireText(byPath["renderer/haptics.js"], "export class DualSenseShiftLightModel", "DualSense shift-light model export");
+requireText(byPath["renderer/haptics.js"], "SHIFT_LIGHT_THRESHOLDS", "DualSense shift-light thresholds");
+requireText(byPath["renderer/haptics.js"], "playerLeds.set", "DualSense player LED output");
+requireText(byPath["renderer/haptics.js"], "shiftLightOutput", "DualSense shift-light diagnostics");
 requireText(byPath["renderer/haptics.js"], "createRumbleLut", "DualSense rumble gamma LUT");
 requireText(byPath["renderer/haptics.js"], "findDualsenseAudioDevices", "DualSense speaker PCM debug discovery");
 requireText(byPath["renderer/haptics.js"], "getDiagnostics()", "DualSense haptics diagnostics getter");
