@@ -123,6 +123,11 @@
 				align-items: end;
 			}
 
+			.gear-row {
+				grid-template-columns: minmax(0, 1fr) auto;
+				align-items: end;
+			}
+
 		.race-row {
 			grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 		}
@@ -237,6 +242,78 @@
 			overflow: hidden;
 			text-overflow: ellipsis;
 			white-space: nowrap;
+		}
+
+		.settings-dialog {
+			width: min(820px, calc(100vw - 36px));
+			max-height: min(760px, calc(100vh - 36px));
+			display: grid;
+			grid-template-rows: auto minmax(0, 1fr);
+			border: 1px solid var(--line);
+			background: var(--panel);
+			backdrop-filter: blur(10px);
+		}
+
+		.settings-dialog header {
+			display: flex;
+			gap: 8px;
+			align-items: center;
+			justify-content: space-between;
+			padding: 10px;
+			border-bottom: 1px solid var(--line);
+		}
+
+		.settings-dialog h2,
+		.settings-section h3 {
+			margin: 0;
+			text-transform: uppercase;
+		}
+
+		.settings-dialog h2 {
+			font-size: 0.95rem;
+		}
+
+		.settings-body {
+			min-height: 0;
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 10px;
+			padding: 10px;
+			overflow: auto;
+		}
+
+		.settings-section {
+			display: grid;
+			gap: 8px;
+			align-content: start;
+			padding: 10px;
+			border: 1px solid var(--line);
+			background: rgba(10, 13, 11, 0.58);
+		}
+
+		.settings-section h3 {
+			color: var(--ink);
+			font-size: 0.78rem;
+		}
+
+		.settings-row {
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 8px;
+			align-items: end;
+		}
+
+		.settings-row.single {
+			grid-template-columns: 1fr;
+		}
+
+		.control-sliders {
+			display: grid;
+			gap: 10px;
+		}
+
+		.control-sliders[hidden] {
+			display: none;
 		}
 
 		.modal {
@@ -556,6 +633,7 @@
 			.controls > label,
 			.controls .assets,
 			.controls .race-row,
+			.controls .control-sliders,
 			.controls .audio-row,
 			.controls .haptics-row {
 				display: none;
@@ -599,6 +677,11 @@
 			.rumble-signal-meters {
 				grid-template-columns: 1fr;
 			}
+
+			.settings-body,
+			.settings-row {
+				grid-template-columns: 1fr;
+			}
 		}
 	</style>
 </head>
@@ -631,82 +714,11 @@
 				</select>
 			</label>
 		</div>
-		<div class="row assets track-override-row">
-			<button id="track-glb" type="button">Load GLB</button>
-			<button id="clear-track-glb" type="button" disabled>Clear GLB</button>
-			<label class="toggle-label">
-				<input id="aces-tone-mapping" type="checkbox" checked>
-				<span>ACES tone mapping</span>
-			</label>
-			<input id="track-glb-file" type="file" accept=".glb,model/gltf-binary" hidden>
-		</div>
-			<div class="row assets render-row">
-				<label>Camera
-					<select id="camera">
-						<optgroup label="F2 - Driver">
-							<option value="f2-behind-very-near">Behind Very Near</option>
-							<option value="f2-behind-near" selected>Behind Near</option>
-							<option value="f2-bonnet-fixed">Bonnet With Car</option>
-							<option value="f2-driver-inside">Driver Inside</option>
-							<option value="f2-road-no-car">Road View No Car</option>
-						</optgroup>
-						<optgroup label="F3 - Chase">
-							<option value="f3-behind-far">Behind Far</option>
-							<option value="f3-track-behind">Track Behind</option>
-							<option value="f3-low-behind">Low Behind</option>
-							<option value="f3-front">Reverse Front</option>
-						</optgroup>
-						<optgroup label="F4 - Side">
-							<option value="f4-side-left-20">Side Left 20</option>
-							<option value="f4-side-right-20">Side Right 20</option>
-							<option value="f4-side-back-20">Side Back 20</option>
-							<option value="f4-side-front-20">Side Front 20</option>
-							<option value="f4-side-left-40">Side Left 40</option>
-							<option value="f4-side-right-40">Side Right 40</option>
-							<option value="f4-side-back-40">Side Back 40</option>
-							<option value="f4-side-front-40">Side Front 40</option>
-						</optgroup>
-						<optgroup label="F5 - Overhead">
-							<option value="f5-up-200">Overhead 200</option>
-							<option value="f5-up-250">Overhead 250</option>
-							<option value="f5-up-350">Overhead 350</option>
-							<option value="f5-up-400">Overhead 400</option>
-						</optgroup>
-						<optgroup label="F6-F11 - Track">
-							<option value="f6-circuit-center">Circuit Center</option>
-							<option value="f7-panorama-top">Panorama Top</option>
-							<option value="f7-panorama-nw">Panorama NW</option>
-							<option value="f7-panorama-sw">Panorama SW</option>
-							<option value="f7-panorama-se">Panorama SE</option>
-							<option value="f7-panorama-ne">Panorama NE</option>
-							<option value="f8-road-fixed">Road Fixed FOV</option>
-							<option value="f9-road-zoom">Road Zoom</option>
-							<option value="f10-road-fly">Road Fly</option>
-							<option value="f11-tv-director">TV Director</option>
-						</optgroup>
-				</select>
-			</label>
-			<label>Render
-				<select id="render-profile">
-					<option value="legacy" selected>Legacy</option>
-						<option value="modern">Modern</option>
-					</select>
-				</label>
-				<label>Light
-					<span class="inline-range">
-						<input id="light-intensity" type="range" min="0" max="3" step="0.05" value="1.5">
-						<span id="light-intensity-value" class="inline-value">1.50</span>
-					</span>
-				</label>
-				<label class="toggle-label">
-					<input id="skybox" type="checkbox">
-					<span>Skybox</span>
-				</label>
-			</div>
-		<div class="row assets">
+		<div class="row assets gear-row">
 			<label>Gear
 				<input id="gear-input" type="number" min="-1" max="5" step="1" value="1">
 			</label>
+			<button id="settings-open" type="button" aria-haspopup="dialog" aria-controls="settings-modal">Settings</button>
 		</div>
 		<div class="row race-row">
 			<label>Cars
@@ -718,37 +730,154 @@
 				</select>
 			</label>
 		</div>
-		<div class="row audio-row">
-			<button id="audio" type="button">Audio</button>
-			<label>Volume
-				<input id="volume" type="range" min="0" max="1" step="0.01" value="0.7">
+		<div class="control-sliders" id="control-sliders">
+			<label>Steer
+				<input id="steer" type="range" min="-1" max="1" step="0.01" value="0">
 			</label>
-			<div class="audio-state" id="audio-state">locked</div>
+			<label>Throttle
+				<input id="accel" type="range" min="0" max="1" step="0.01" value="0">
+			</label>
+			<label>Brake
+				<input id="brake" type="range" min="0" max="1" step="0.01" value="0">
+			</label>
+			<label>Clutch
+				<input id="clutch" type="range" min="0" max="1" step="0.01" value="0">
+			</label>
 		</div>
-		<div class="row haptics-row">
-			<button id="haptics" type="button">Haptics</button>
-			<button id="rumble-config-open" type="button">Config</button>
-			<label>Force
-				<input id="haptics-intensity" type="range" min="0" max="1" step="0.01" value="0.65">
-			</label>
-			<label>Triggers
-				<input id="haptics-trigger-strength" type="range" min="0" max="1" step="0.01" value="1">
-			</label>
-			<div class="audio-state" id="haptics-state">locked</div>
-		</div>
-		<label>Steer
-			<input id="steer" type="range" min="-1" max="1" step="0.01" value="0">
-		</label>
-		<label>Throttle
-			<input id="accel" type="range" min="0" max="1" step="0.01" value="0">
-		</label>
-		<label>Brake
-			<input id="brake" type="range" min="0" max="1" step="0.01" value="0">
-		</label>
-		<label>Clutch
-			<input id="clutch" type="range" min="0" max="1" step="0.01" value="0">
-		</label>
 	</form>
+
+	<div class="modal" id="settings-modal" aria-hidden="true">
+		<section class="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+			<header>
+				<h2 id="settings-title">Settings</h2>
+				<button id="settings-close" type="button">Close</button>
+			</header>
+			<div class="settings-body">
+				<section class="settings-section" aria-label="Audio settings">
+					<h3>Audio</h3>
+					<div class="settings-row">
+						<button id="audio" type="button">Audio</button>
+						<div class="audio-state" id="audio-state">locked</div>
+					</div>
+					<label>Volume
+						<input id="volume" type="range" min="0" max="1" step="0.01" value="0.7">
+					</label>
+				</section>
+				<section class="settings-section" aria-label="Haptics settings">
+					<h3>Haptics</h3>
+					<div class="settings-row">
+						<button id="haptics" type="button">Haptics</button>
+						<button id="rumble-config-open" type="button">Config</button>
+					</div>
+					<label>Force
+						<input id="haptics-intensity" type="range" min="0" max="1" step="0.01" value="0.65">
+					</label>
+					<label>Triggers
+						<input id="haptics-trigger-strength" type="range" min="0" max="1" step="0.01" value="1">
+					</label>
+					<div class="audio-state" id="haptics-state">locked</div>
+				</section>
+				<section class="settings-section" aria-label="Control display settings">
+					<h3>Controls</h3>
+					<label class="toggle-label">
+						<input id="show-control-sliders" type="checkbox" checked>
+						<span>Show sliders</span>
+					</label>
+				</section>
+				<section class="settings-section" aria-label="Renderer settings">
+					<h3>Graphics</h3>
+					<label>Camera
+						<select id="camera">
+							<optgroup label="F2 - Driver">
+								<option value="f2-behind-very-near">Behind Very Near</option>
+								<option value="f2-behind-near" selected>Behind Near</option>
+								<option value="f2-bonnet-fixed">Bonnet With Car</option>
+								<option value="f2-driver-inside">Driver Inside</option>
+								<option value="f2-road-no-car">Road View No Car</option>
+							</optgroup>
+							<optgroup label="F3 - Chase">
+								<option value="f3-behind-far">Behind Far</option>
+								<option value="f3-track-behind">Track Behind</option>
+								<option value="f3-low-behind">Low Behind</option>
+								<option value="f3-front">Reverse Front</option>
+							</optgroup>
+							<optgroup label="F4 - Side">
+								<option value="f4-side-left-20">Side Left 20</option>
+								<option value="f4-side-right-20">Side Right 20</option>
+								<option value="f4-side-back-20">Side Back 20</option>
+								<option value="f4-side-front-20">Side Front 20</option>
+								<option value="f4-side-left-40">Side Left 40</option>
+								<option value="f4-side-right-40">Side Right 40</option>
+								<option value="f4-side-back-40">Side Back 40</option>
+								<option value="f4-side-front-40">Side Front 40</option>
+							</optgroup>
+							<optgroup label="F5 - Overhead">
+								<option value="f5-up-200">Overhead 200</option>
+								<option value="f5-up-250">Overhead 250</option>
+								<option value="f5-up-350">Overhead 350</option>
+								<option value="f5-up-400">Overhead 400</option>
+							</optgroup>
+							<optgroup label="F6-F11 - Track">
+								<option value="f6-circuit-center">Circuit Center</option>
+								<option value="f7-panorama-top">Panorama Top</option>
+								<option value="f7-panorama-nw">Panorama NW</option>
+								<option value="f7-panorama-sw">Panorama SW</option>
+								<option value="f7-panorama-se">Panorama SE</option>
+								<option value="f7-panorama-ne">Panorama NE</option>
+								<option value="f8-road-fixed">Road Fixed FOV</option>
+								<option value="f9-road-zoom">Road Zoom</option>
+								<option value="f10-road-fly">Road Fly</option>
+								<option value="f11-tv-director">TV Director</option>
+							</optgroup>
+						</select>
+					</label>
+					<div class="settings-row">
+						<label>Render
+							<select id="render-profile">
+								<option value="legacy" selected>Legacy</option>
+								<option value="modern">Modern</option>
+							</select>
+						</label>
+						<label>Light
+							<span class="inline-range">
+								<input id="light-intensity" type="range" min="0" max="3" step="0.05" value="1.5">
+								<span id="light-intensity-value" class="inline-value">1.50</span>
+							</span>
+						</label>
+					</div>
+					<label>Wetness
+						<span class="inline-range">
+							<input id="material-wetness" type="range" min="0" max="1" step="0.01" value="0">
+							<span id="material-wetness-value" class="inline-value">0.00</span>
+						</span>
+					</label>
+					<div class="settings-row">
+						<label class="toggle-label">
+							<input id="skybox" type="checkbox">
+							<span>Skybox</span>
+						</label>
+						<label class="toggle-label">
+							<input id="aces-tone-mapping" type="checkbox" checked>
+							<span>ACES tone mapping</span>
+						</label>
+					</div>
+					<label class="toggle-label">
+						<input id="material-debug" type="checkbox">
+						<span>Material classes</span>
+					</label>
+				</section>
+				<section class="settings-section" aria-label="Asset override settings">
+					<h3>Assets</h3>
+					<div class="settings-row">
+						<button id="track-glb" type="button">Load GLB</button>
+						<button id="clear-track-glb" type="button" disabled>Clear GLB</button>
+					</div>
+					<div class="track-override-status" id="track-glb-status">No override</div>
+					<input id="track-glb-file" type="file" accept=".glb,model/gltf-binary" hidden>
+				</section>
+			</div>
+		</section>
+	</div>
 
 	<div class="modal" id="rumble-config-modal" aria-hidden="true">
 		<section class="rumble-config" role="dialog" aria-modal="true" aria-labelledby="rumble-config-title">

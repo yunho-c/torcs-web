@@ -15,44 +15,52 @@ const elements = {
 	run: document.getElementById("run"),
 	step: document.getElementById("step"),
 	reset: document.getElementById("reset"),
+	settingsOpen: document.getElementById("settings-open"),
+	settingsModal: document.getElementById("settings-modal"),
+	settingsClose: document.getElementById("settings-close"),
 	audio: document.getElementById("audio"),
 	volume: document.getElementById("volume"),
-		audioState: document.getElementById("audio-state"),
-		haptics: document.getElementById("haptics"),
-		rumbleConfigOpen: document.getElementById("rumble-config-open"),
-		hapticsIntensity: document.getElementById("haptics-intensity"),
-		hapticsTriggerStrength: document.getElementById("haptics-trigger-strength"),
-		hapticsState: document.getElementById("haptics-state"),
-		rumbleConfigModal: document.getElementById("rumble-config-modal"),
-		rumbleConfigClose: document.getElementById("rumble-config-close"),
-		rumbleConfigSourcesTab: document.getElementById("rumble-config-sources-tab"),
-		rumbleConfigSignalTab: document.getElementById("rumble-config-signal-tab"),
-		rumbleConfigSourcesPanel: document.getElementById("rumble-config-sources-panel"),
-		rumbleConfigSignalPanel: document.getElementById("rumble-config-signal-panel"),
-		rumbleConfigBody: document.getElementById("rumble-config-body"),
-		rumbleConfigJson: document.getElementById("rumble-config-json"),
-		rumbleConfigReset: document.getElementById("rumble-config-reset"),
-		rumbleConfigCopy: document.getElementById("rumble-config-copy"),
-		rumbleConfigPaste: document.getElementById("rumble-config-paste"),
-		rumbleSignalStatus: document.getElementById("rumble-signal-status"),
-		rumbleSignalLeftFill: document.getElementById("rumble-signal-left-fill"),
-		rumbleSignalLeftValue: document.getElementById("rumble-signal-left-value"),
-		rumbleSignalRightFill: document.getElementById("rumble-signal-right-fill"),
-		rumbleSignalRightValue: document.getElementById("rumble-signal-right-value"),
-		rumbleSignalScope: document.getElementById("rumble-signal-scope"),
-		rumbleSignalContributions: document.getElementById("rumble-signal-contributions"),
-		camera: document.getElementById("camera"),
-		renderProfile: document.getElementById("render-profile"),
-		lightIntensity: document.getElementById("light-intensity"),
-		lightIntensityValue: document.getElementById("light-intensity-value"),
-		acesToneMapping: document.getElementById("aces-tone-mapping"),
-		skybox: document.getElementById("skybox"),
-		track: document.getElementById("track"),
-		trackGlb: document.getElementById("track-glb"),
-		clearTrackGlb: document.getElementById("clear-track-glb"),
-		trackGlbFile: document.getElementById("track-glb-file"),
-		trackGlbStatus: document.getElementById("track-glb-status"),
-		car: document.getElementById("car"),
+	audioState: document.getElementById("audio-state"),
+	haptics: document.getElementById("haptics"),
+	rumbleConfigOpen: document.getElementById("rumble-config-open"),
+	hapticsIntensity: document.getElementById("haptics-intensity"),
+	hapticsTriggerStrength: document.getElementById("haptics-trigger-strength"),
+	hapticsState: document.getElementById("haptics-state"),
+	rumbleConfigModal: document.getElementById("rumble-config-modal"),
+	rumbleConfigClose: document.getElementById("rumble-config-close"),
+	rumbleConfigSourcesTab: document.getElementById("rumble-config-sources-tab"),
+	rumbleConfigSignalTab: document.getElementById("rumble-config-signal-tab"),
+	rumbleConfigSourcesPanel: document.getElementById("rumble-config-sources-panel"),
+	rumbleConfigSignalPanel: document.getElementById("rumble-config-signal-panel"),
+	rumbleConfigBody: document.getElementById("rumble-config-body"),
+	rumbleConfigJson: document.getElementById("rumble-config-json"),
+	rumbleConfigReset: document.getElementById("rumble-config-reset"),
+	rumbleConfigCopy: document.getElementById("rumble-config-copy"),
+	rumbleConfigPaste: document.getElementById("rumble-config-paste"),
+	rumbleSignalStatus: document.getElementById("rumble-signal-status"),
+	rumbleSignalLeftFill: document.getElementById("rumble-signal-left-fill"),
+	rumbleSignalLeftValue: document.getElementById("rumble-signal-left-value"),
+	rumbleSignalRightFill: document.getElementById("rumble-signal-right-fill"),
+	rumbleSignalRightValue: document.getElementById("rumble-signal-right-value"),
+	rumbleSignalScope: document.getElementById("rumble-signal-scope"),
+	rumbleSignalContributions: document.getElementById("rumble-signal-contributions"),
+	controlSliders: document.getElementById("control-sliders"),
+	showControlSliders: document.getElementById("show-control-sliders"),
+	camera: document.getElementById("camera"),
+	renderProfile: document.getElementById("render-profile"),
+	lightIntensity: document.getElementById("light-intensity"),
+	lightIntensityValue: document.getElementById("light-intensity-value"),
+	acesToneMapping: document.getElementById("aces-tone-mapping"),
+	skybox: document.getElementById("skybox"),
+	materialWetness: document.getElementById("material-wetness"),
+	materialWetnessValue: document.getElementById("material-wetness-value"),
+	materialDebug: document.getElementById("material-debug"),
+	track: document.getElementById("track"),
+	trackGlb: document.getElementById("track-glb"),
+	clearTrackGlb: document.getElementById("clear-track-glb"),
+	trackGlbFile: document.getElementById("track-glb-file"),
+	trackGlbStatus: document.getElementById("track-glb-status"),
+	car: document.getElementById("car"),
 	carCount: document.getElementById("car-count"),
 	currentCar: document.getElementById("current-car"),
 	steer: document.getElementById("steer"),
@@ -82,7 +90,10 @@ const hud = new Hud(elements);
 const DEFAULT_TRACK_PATH = "/torcs/data/tracks/e-track-1/e-track-1.xml";
 const DEFAULT_CAR_PATH = "/torcs/data/cars/models/kc-2000gt/kc-2000gt.xml";
 const DEFAULT_LIGHT_INTENSITY = 1.5;
+const DEFAULT_CAMERA_MODE = "f2-behind-near";
+const SETTINGS_STORAGE_KEY = "torcs.web.renderer.settings";
 const RENDER_PROFILES = new Set(["legacy", "modern"]);
+let storedSettings = readStoredSettings();
 let scene = null;
 let cameras = null;
 let assets = null;
@@ -94,6 +105,9 @@ let activeRenderProfile = getInitialRenderProfile();
 let activeLightIntensity = getInitialLightIntensity();
 let activeMaterialWetness = getInitialMaterialWetness();
 let materialDebugEnabled = getInitialMaterialDebugEnabled();
+let activeCameraMode = getInitialCameraMode();
+let activeSkyboxEnabled = getInitialSkyboxEnabled();
+let acesToneMappingEnabled = getInitialAcesToneMappingEnabled();
 let activeTrackPath = DEFAULT_TRACK_PATH;
 let running = false;
 let lastTime = 0;
@@ -178,9 +192,52 @@ const RUMBLE_SIGNAL_HISTORY_LIMIT = 240;
 let activeRumbleConfigTab = "sources";
 let rumbleSignalFrame = 0;
 let rumbleSignalHistory = [];
+let materialSettingsReloadTimer = 0;
 
 function findSnapshotByCarIndex(carIndex) {
 	return snapshots.find((values, index) => (values.carIndex ?? index) === carIndex) || null;
+}
+
+function readStoredSettings() {
+	try {
+		const raw = window.localStorage ? window.localStorage.getItem(SETTINGS_STORAGE_KEY) : "";
+		const parsed = raw ? JSON.parse(raw) : {};
+		return parsed && typeof parsed === "object" ? parsed : {};
+	} catch (error) {
+		console.warn("TORCS web renderer settings storage read failed", error);
+		return {};
+	}
+}
+
+function writeStoredSetting(key, value) {
+	storedSettings = { ...storedSettings, [key]: value };
+	try {
+		if (window.localStorage) {
+			window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(storedSettings));
+		}
+	} catch (error) {
+		console.warn("TORCS web renderer settings storage write failed", error);
+	}
+}
+
+function getStoredNumber(key, fallback, min = Number.NEGATIVE_INFINITY, max = Number.POSITIVE_INFINITY) {
+	const value = Number(storedSettings[key]);
+	return Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
+}
+
+function getStoredBoolean(key, fallback) {
+	const value = storedSettings[key];
+	return typeof value === "boolean" ? value : fallback;
+}
+
+function getStoredString(key, fallback) {
+	const value = storedSettings[key];
+	return typeof value === "string" && value ? value : fallback;
+}
+
+function getQueryParam(name) {
+	const params = new URLSearchParams(window.location.search);
+	return params.has(name) ? params.get(name) : null;
 }
 
 function normalizeRenderProfile(profile) {
@@ -188,30 +245,87 @@ function normalizeRenderProfile(profile) {
 }
 
 function getInitialRenderProfile() {
-	const params = new URLSearchParams(window.location.search);
-	return normalizeRenderProfile(params.get("profile"));
+	const queryProfile = getQueryParam("profile");
+	return normalizeRenderProfile(queryProfile || getStoredString("renderProfile", "legacy"));
 }
 
 function getInitialLightIntensity() {
-	const params = new URLSearchParams(window.location.search);
-	const value = Number(params.get("lightIntensity"));
-	return Number.isFinite(value) ? Math.max(0, Math.min(3, value)) : DEFAULT_LIGHT_INTENSITY;
+	const queryLight = getQueryParam("lightIntensity");
+	if (queryLight !== null) {
+		const value = Number(queryLight);
+		return Number.isFinite(value) ? Math.max(0, Math.min(3, value)) : DEFAULT_LIGHT_INTENSITY;
+	}
+	return getStoredNumber("lightIntensity", DEFAULT_LIGHT_INTENSITY, 0, 3);
 }
 
 function getInitialMaterialWetness() {
-	const params = new URLSearchParams(window.location.search);
-	const value = Number(params.get("wetness"));
-	return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0;
+	const queryWetness = getQueryParam("wetness");
+	if (queryWetness !== null) {
+		const value = Number(queryWetness);
+		return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0;
+	}
+	return getStoredNumber("materialWetness", 0, 0, 1);
 }
 
 function getInitialMaterialDebugEnabled() {
-	const params = new URLSearchParams(window.location.search);
-	const value = params.get("materialDebug");
-	return value === "1" || value === "true";
+	const queryDebug = getQueryParam("materialDebug");
+	if (queryDebug !== null) {
+		return queryDebug === "1" || queryDebug === "true";
+	}
+	return getStoredBoolean("materialDebug", false);
+}
+
+function getInitialCameraMode() {
+	return getStoredString("camera", DEFAULT_CAMERA_MODE);
+}
+
+function getInitialSkyboxEnabled() {
+	return getStoredBoolean("skybox", false);
+}
+
+function getInitialAcesToneMappingEnabled() {
+	return getStoredBoolean("acesToneMapping", true);
 }
 
 function formatLightIntensity(value) {
 	return value.toFixed(2);
+}
+
+function formatWetness(value) {
+	return value.toFixed(2);
+}
+
+function setSettingsOpen(open) {
+	if (!elements.settingsModal) {
+		return;
+	}
+	elements.settingsModal.classList.toggle("open", open);
+	elements.settingsModal.setAttribute("aria-hidden", open ? "false" : "true");
+}
+
+function setControlSlidersVisible(visible, persist = false) {
+	const show = Boolean(visible);
+	if (elements.showControlSliders) {
+		elements.showControlSliders.checked = show;
+	}
+	if (elements.controlSliders) {
+		elements.controlSliders.hidden = !show;
+	}
+	if (persist) {
+		writeStoredSetting("showControlSliders", show);
+	}
+}
+
+function applyInitialControlValues() {
+	elements.volume.value = String(getStoredNumber("volume", 0.7, 0, 1));
+	elements.hapticsIntensity.value = String(getStoredNumber("hapticsIntensity", 0.65, 0, 1));
+	elements.hapticsTriggerStrength.value = String(getStoredNumber("hapticsTriggerStrength", 1, 0, 1));
+	elements.acesToneMapping.checked = acesToneMappingEnabled;
+	elements.skybox.checked = activeSkyboxEnabled;
+	elements.materialWetness.value = String(activeMaterialWetness);
+	elements.materialWetnessValue.textContent = formatWetness(activeMaterialWetness);
+	elements.materialDebug.checked = materialDebugEnabled;
+	setControlSlidersVisible(getStoredBoolean("showControlSliders", true), false);
 }
 
 function formatRumbleConfigJson(config = haptics?.getRumbleConfig?.()) {
@@ -454,7 +568,12 @@ function populateCameraOptions() {
 		}
 		elements.camera.append(optgroup);
 	}
-	elements.camera.value = "f2-behind-near";
+	if ([...elements.camera.options].some((option) => option.value === activeCameraMode)) {
+		elements.camera.value = activeCameraMode;
+	} else {
+		elements.camera.value = DEFAULT_CAMERA_MODE;
+		activeCameraMode = DEFAULT_CAMERA_MODE;
+	}
 	elements.camera.dataset.nativeCatalog = "true";
 }
 
@@ -715,7 +834,7 @@ function updateCustomTrackUi(status = "") {
 		elements.clearTrackGlb.disabled = !hasOverride;
 	}
 	if (elements.trackGlbStatus) {
-		elements.trackGlbStatus.textContent = status || (hasOverride ? customTrackVisualName : "Converted track");
+		elements.trackGlbStatus.textContent = status || (hasOverride ? customTrackVisualName : "No override");
 		elements.trackGlbStatus.title = hasOverride
 			? `Using custom track visual: ${customTrackVisualName}`
 			: "Using converted TORCS track visual";
@@ -936,8 +1055,70 @@ function applyLightIntensity(value) {
 	}
 }
 
+async function reloadVisualsForMaterialSettings() {
+	if (materialSettingsReloadTimer) {
+		clearTimeout(materialSettingsReloadTimer);
+		materialSettingsReloadTimer = 0;
+	}
+	if (!assets || !scene || !(customTrackFile || (runtime && runtime.active))) {
+		if (snapshot) {
+			readAndRender();
+		}
+		return;
+	}
+	hud.setState("loading");
+	const hasAssets = await loadVisualAssets();
+	const readyState = runtime && runtime.active ? (running ? "running" : "ready") : "loaded";
+	hud.setState(hasAssets ? readyState : "debug");
+	if (snapshot) {
+		readAndRender();
+	}
+}
+
+function scheduleMaterialSettingsReload() {
+	if (materialSettingsReloadTimer) {
+		clearTimeout(materialSettingsReloadTimer);
+	}
+	materialSettingsReloadTimer = setTimeout(() => {
+		materialSettingsReloadTimer = 0;
+		reloadVisualsForMaterialSettings().catch((error) => {
+			console.warn("TORCS web renderer material settings reload failed", error);
+			hud.setState("debug");
+		});
+	}, 180);
+}
+
+async function applyMaterialWetness(value, reloadVisuals = false) {
+	const nextWetness = Number(value);
+	activeMaterialWetness = Number.isFinite(nextWetness) ? Math.max(0, Math.min(1, nextWetness)) : 0;
+	elements.materialWetness.value = String(activeMaterialWetness);
+	elements.materialWetnessValue.textContent = formatWetness(activeMaterialWetness);
+	if (assets) {
+		assets.setWetness(activeMaterialWetness);
+	}
+	if (reloadVisuals) {
+		await reloadVisualsForMaterialSettings();
+	} else if (snapshot) {
+		readAndRender();
+	}
+}
+
+async function applyMaterialDebug(enabled, reloadVisuals = false) {
+	materialDebugEnabled = Boolean(enabled);
+	elements.materialDebug.checked = materialDebugEnabled;
+	if (assets) {
+		assets.setMaterialDebugEnabled(materialDebugEnabled);
+	}
+	if (reloadVisuals) {
+		await reloadVisualsForMaterialSettings();
+	} else if (snapshot) {
+		readAndRender();
+	}
+}
+
 function applyAcesToneMapping(enabled) {
-	elements.acesToneMapping.checked = Boolean(enabled);
+	acesToneMappingEnabled = Boolean(enabled);
+	elements.acesToneMapping.checked = acesToneMappingEnabled;
 	if (scene) {
 		scene.setAcesToneMappingEnabled(elements.acesToneMapping.checked);
 	}
@@ -950,12 +1131,16 @@ async function applySkybox(enabled) {
 	if (!scene) {
 		return;
 	}
-	elements.skybox.checked = Boolean(enabled);
+	activeSkyboxEnabled = Boolean(enabled);
+	elements.skybox.checked = activeSkyboxEnabled;
 	try {
 		await scene.setUseSkybox(elements.skybox.checked);
+		writeStoredSetting("skybox", elements.skybox.checked);
 	} catch (error) {
 		console.warn("TORCS web renderer skybox switch failed", error);
+		activeSkyboxEnabled = false;
 		elements.skybox.checked = false;
+		writeStoredSetting("skybox", false);
 		await scene.setUseSkybox(false);
 		hud.setState("debug");
 	}
@@ -1003,6 +1188,9 @@ async function startSession() {
 
 function bindUi() {
 	populateCameraOptions();
+	if (cameras) {
+		cameras.setMode(elements.camera.value);
+	}
 	window.addEventListener("keydown", (event) => {
 		if (DEBUG_FPS_TOGGLE_CODES.has(event.code) && !isEditableTarget(event.target)) {
 			event.preventDefault();
@@ -1069,6 +1257,13 @@ function bindUi() {
 		hud.setState(running ? "running" : "ready");
 	});
 	elements.reset.addEventListener("click", startSession);
+	elements.settingsOpen.addEventListener("click", () => setSettingsOpen(true));
+	elements.settingsClose.addEventListener("click", () => setSettingsOpen(false));
+	elements.settingsModal.addEventListener("click", (event) => {
+		if (event.target === elements.settingsModal) {
+			setSettingsOpen(false);
+		}
+	});
 	elements.audio.addEventListener("click", async () => {
 		if (audio.enabled) {
 			audio.disable();
@@ -1084,7 +1279,9 @@ function bindUi() {
 		}
 	});
 	elements.volume.addEventListener("input", () => {
-		audio.setVolume(Number(elements.volume.value));
+		const volume = Number(elements.volume.value);
+		audio.setVolume(volume);
+		writeStoredSetting("volume", volume);
 	});
 	elements.haptics.addEventListener("click", async () => {
 		if (haptics.enabled) {
@@ -1101,12 +1298,22 @@ function bindUi() {
 		}
 	});
 	elements.hapticsIntensity.addEventListener("input", () => {
-		haptics.setIntensity(Number(elements.hapticsIntensity.value));
+		const intensity = Number(elements.hapticsIntensity.value);
+		haptics.setIntensity(intensity);
+		writeStoredSetting("hapticsIntensity", intensity);
 	});
 	elements.hapticsTriggerStrength.addEventListener("input", () => {
-		haptics.setTriggerStrength(Number(elements.hapticsTriggerStrength.value));
+		const strength = Number(elements.hapticsTriggerStrength.value);
+		haptics.setTriggerStrength(strength);
+		writeStoredSetting("hapticsTriggerStrength", strength);
 	});
-	elements.rumbleConfigOpen.addEventListener("click", () => setRumbleConfigOpen(true));
+	elements.showControlSliders.addEventListener("change", () => {
+		setControlSlidersVisible(elements.showControlSliders.checked, true);
+	});
+	elements.rumbleConfigOpen.addEventListener("click", () => {
+		setSettingsOpen(false);
+		setRumbleConfigOpen(true);
+	});
 	elements.rumbleConfigClose.addEventListener("click", () => setRumbleConfigOpen(false));
 	elements.rumbleConfigSourcesTab.addEventListener("click", () => setRumbleConfigTab("sources"));
 	elements.rumbleConfigSignalTab.addEventListener("click", () => setRumbleConfigTab("signal"));
@@ -1152,11 +1359,14 @@ function bindUi() {
 	});
 	window.addEventListener("keydown", (event) => {
 		if (event.key === "Escape") {
+			setSettingsOpen(false);
 			setRumbleConfigOpen(false);
 		}
 	});
 	elements.camera.addEventListener("change", () => {
-		cameras.setMode(elements.camera.value);
+		activeCameraMode = elements.camera.value;
+		cameras.setMode(activeCameraMode);
+		writeStoredSetting("camera", activeCameraMode);
 		if (snapshot) {
 			readAndRender();
 		}
@@ -1193,20 +1403,37 @@ function bindUi() {
 		});
 	});
 		elements.renderProfile.addEventListener("change", () => {
+			writeStoredSetting("renderProfile", normalizeRenderProfile(elements.renderProfile.value));
 			applyRenderProfile(elements.renderProfile.value, true).catch((error) => {
 				console.warn("TORCS web renderer render profile switch failed", error);
 				hud.setState("debug");
 			});
 		});
 		elements.lightIntensity.addEventListener("input", () => {
-			applyLightIntensity(Number(elements.lightIntensity.value));
+			const intensity = Number(elements.lightIntensity.value);
+			writeStoredSetting("lightIntensity", intensity);
+			applyLightIntensity(intensity);
 		});
 		elements.acesToneMapping.addEventListener("change", () => {
+			writeStoredSetting("acesToneMapping", elements.acesToneMapping.checked);
 			applyAcesToneMapping(elements.acesToneMapping.checked);
 		});
 		elements.skybox.addEventListener("change", () => {
 			applySkybox(elements.skybox.checked).catch((error) => {
 				console.warn("TORCS web renderer skybox checkbox failed", error);
+				hud.setState("debug");
+			});
+		});
+		elements.materialWetness.addEventListener("input", () => {
+			const wetness = Number(elements.materialWetness.value);
+			writeStoredSetting("materialWetness", wetness);
+			applyMaterialWetness(wetness, false);
+			scheduleMaterialSettingsReload();
+		});
+		elements.materialDebug.addEventListener("change", () => {
+			writeStoredSetting("materialDebug", elements.materialDebug.checked);
+			applyMaterialDebug(elements.materialDebug.checked, true).catch((error) => {
+				console.warn("TORCS web renderer material debug update failed", error);
 				hud.setState("debug");
 			});
 		});
@@ -1232,13 +1459,13 @@ function bindUi() {
 async function main() {
 	setEnabled(false);
 	hud.setState("loading");
+	applyInitialControlValues();
 
 		try {
 			scene = await TorcsScene.create(elements.canvas);
 			scene.setRenderProfile(activeRenderProfile);
-			applyAcesToneMapping(elements.acesToneMapping.checked);
+			applyAcesToneMapping(acesToneMappingEnabled);
 			applyLightIntensity(activeLightIntensity);
-			elements.skybox.checked = false;
 			cameras = new CameraRig(elements.canvas);
 			assets = new AssetManager("./web-assets/", scene.renderer, activeRenderProfile);
 			assets.setWetness(activeMaterialWetness);
@@ -1248,6 +1475,7 @@ async function main() {
 			elements.audioState.textContent = status;
 			elements.audio.textContent = audio.enabled ? "Stop" : "Audio";
 		});
+		audio.setVolume(Number(elements.volume.value));
 		haptics = new DualSenseHaptics((status, diagnostics = {}) => {
 			elements.hapticsState.textContent = status;
 			elements.hapticsState.title = diagnostics.summary || "";
@@ -1265,6 +1493,7 @@ async function main() {
 			gear: elements.gearInput,
 		}, applyControls);
 		bindUi();
+		await applySkybox(activeSkyboxEnabled);
 
 		const [loadedRuntime] = await Promise.all([createTorcsRuntime(), populateAssetSelects()]);
 		runtime = loadedRuntime;
