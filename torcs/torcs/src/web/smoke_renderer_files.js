@@ -1359,12 +1359,14 @@ requireText(byPath["renderer/assets.js"], "setRenderProfile(profile)", "asset re
 requireText(byPath["renderer/assets.js"], "makeModernMaterial(material, context = {})", "modern material adapter entrypoint");
 requireText(byPath["renderer/assets.js"], "torcsMaterialClass", "remaster material metadata lookup");
 requireText(byPath["renderer/assets.js"], "makeModernClassMaterial(material, materialClass, context = {})", "modern material class adapter");
-requireText(byPath["renderer/assets.js"], "CAR_PBR_DEFAULTS", "car PBR material defaults");
-requireText(byPath["renderer/assets.js"], "body: Object.freeze({ metalness: 0.75, roughness: 0.1, ior: 1.5, opacity: 1.0 })", "body PBR defaults");
-requireText(byPath["renderer/assets.js"], "glass: Object.freeze({ metalness: 0.75, roughness: 0.025, ior: 1.5, opacity: 0.5 })", "glass PBR defaults");
-requireText(byPath["renderer/assets.js"], "headlamp: Object.freeze({ metalness: 0.0, roughness: 0.025, ior: 1.5, opacity: 0.05 })", "headlamp PBR defaults");
-requireText(byPath["renderer/assets.js"], "taillamp: Object.freeze({ metalness: 0.0, roughness: 0.1, ior: 1.5, opacity: 1.0 })", "taillamp PBR defaults");
-requireText(byPath["renderer/assets.js"], "exhaust: Object.freeze({ metalness: 0.9, roughness: 0.1, ior: 1.5, opacity: 1.0 })", "exhaust PBR defaults");
+requireText(byPath["renderer/assets.js"], "MODERN_MATERIAL_PRESETS", "modern material preset table");
+requireText(byPath["renderer/assets.js"], "MATERIAL_DEBUG_COLORS", "material debug color table");
+requireText(byPath["renderer/assets.js"], "setWetness(value)", "material wetness setter");
+requireText(byPath["renderer/assets.js"], "setMaterialDebugEnabled(enabled)", "material debug setter");
+requireText(byPath["renderer/assets.js"], "applyModernPreset(parameters, preset, materialClass)", "modern material preset application");
+requireText(byPath["renderer/assets.js"], "wettable = materialClass === \"road\" || materialClass === \"curb\"", "road-only wetness gate");
+requireText(byPath["renderer/assets.js"], "wetRoughness", "wet road roughness preset");
+requireText(byPath["renderer/assets.js"], "makeMaterialDebugMaterial(material, materialClass, parameters)", "material debug material builder");
 requireText(byPath["renderer/assets.js"], "case \"road\":", "modern track road material class");
 requireText(byPath["renderer/assets.js"], "case \"treeFoliage\":", "modern track tree material class");
 requireText(byPath["renderer/assets.js"], "MeshPhysicalMaterial", "modern physical material support");
@@ -1398,6 +1400,10 @@ requireText(byPath["renderer/main.js"], "getInitialRenderProfile()", "query-stri
 requireText(byPath["renderer/main.js"], "params.get(\"profile\")", "render profile query parameter");
 requireText(byPath["renderer/main.js"], "getInitialLightIntensity()", "query-string light intensity initialization");
 requireText(byPath["renderer/main.js"], "params.get(\"lightIntensity\")", "light intensity query parameter");
+requireText(byPath["renderer/main.js"], "getInitialMaterialWetness()", "query-string wetness initialization");
+requireText(byPath["renderer/main.js"], "params.get(\"wetness\")", "material wetness query parameter");
+requireText(byPath["renderer/main.js"], "getInitialMaterialDebugEnabled()", "query-string material debug initialization");
+requireText(byPath["renderer/main.js"], "params.get(\"materialDebug\")", "material debug query parameter");
 
 requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_get_snapshot_size", "snapshot size export");
 requireText(byPath["renderer/runtime.js"], "torcs_web_runtime_write_snapshot", "snapshot write export");
@@ -1491,6 +1497,8 @@ requireText(byPath["renderer/main.js"], "getVisualTrackPath()", "runtime track p
 requireText(byPath["renderer/main.js"], "scene = await TorcsScene.create(elements.canvas)", "async WebGPU scene creation");
 requireText(byPath["renderer/main.js"], "scene.setRenderProfile(activeRenderProfile)", "scene render profile handoff");
 requireText(byPath["renderer/main.js"], "scene.setLightIntensityScale(activeLightIntensity)", "scene light intensity handoff");
+requireText(byPath["renderer/main.js"], "assets.setWetness(activeMaterialWetness)", "asset wetness handoff");
+requireText(byPath["renderer/main.js"], "assets.setMaterialDebugEnabled(materialDebugEnabled)", "asset material debug handoff");
 requireText(byPath["renderer/main.js"], "applySkybox(elements.skybox.checked)", "skybox checkbox handoff");
 requireText(byPath["renderer/main.js"], "elements.renderProfile.addEventListener", "render profile selector binding");
 requireText(byPath["renderer/main.js"], "applyRenderProfile(elements.renderProfile.value, true)", "render profile visual asset reload");

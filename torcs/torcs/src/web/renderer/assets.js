@@ -20,12 +20,101 @@ const TEXTURE_MAP_KEYS = [
 const RENDER_PROFILES = new Set(["legacy", "modern"]);
 const HEADLAMP_EMISSIVE = new THREE.Color(0xfff0c8);
 const TAILLAMP_EMISSIVE = new THREE.Color(0xff2424);
-const CAR_PBR_DEFAULTS = Object.freeze({
-	body: Object.freeze({ metalness: 0.75, roughness: 0.1, ior: 1.5, opacity: 1.0 }),
-	glass: Object.freeze({ metalness: 0.75, roughness: 0.025, ior: 1.5, opacity: 0.5 }),
-	headlamp: Object.freeze({ metalness: 0.0, roughness: 0.025, ior: 1.5, opacity: 0.05 }),
-	taillamp: Object.freeze({ metalness: 0.0, roughness: 0.1, ior: 1.5, opacity: 1.0 }),
-	exhaust: Object.freeze({ metalness: 0.9, roughness: 0.1, ior: 1.5, opacity: 1.0 }),
+const MODERN_MATERIAL_PRESETS = Object.freeze({
+	body: Object.freeze({
+		metalness: 0.08,
+		roughness: 0.34,
+		ior: 1.5,
+		opacity: 1.0,
+		clearcoat: 0.72,
+		clearcoatRoughness: 0.26,
+		envMapIntensity: 1.08,
+	}),
+	glass: Object.freeze({
+		metalness: 0.0,
+		roughness: 0.08,
+		ior: 1.5,
+		opacity: 0.42,
+		transmission: 0.22,
+		clearcoat: 1.0,
+		clearcoatRoughness: 0.05,
+		envMapIntensity: 1.2,
+	}),
+	mirrorGlass: Object.freeze({
+		metalness: 0.02,
+		roughness: 0.04,
+		ior: 1.5,
+		opacity: 0.62,
+		transmission: 0.08,
+		clearcoat: 1.0,
+		clearcoatRoughness: 0.03,
+		envMapIntensity: 1.35,
+	}),
+	headlamp: Object.freeze({ metalness: 0.0, roughness: 0.12, ior: 1.5, opacity: 0.16, envMapIntensity: 1.25 }),
+	taillamp: Object.freeze({ metalness: 0.0, roughness: 0.22, ior: 1.5, opacity: 0.92, envMapIntensity: 0.95 }),
+	exhaust: Object.freeze({ metalness: 0.75, roughness: 0.38, ior: 1.5, opacity: 1.0, color: 0x5c5750, envMapIntensity: 0.85 }),
+	blackTrim: Object.freeze({ metalness: 0.04, roughness: 0.78, color: 0x202020, envMapIntensity: 0.45 }),
+	interior: Object.freeze({ metalness: 0.02, roughness: 0.84, envMapIntensity: 0.35 }),
+	driver: Object.freeze({ metalness: 0.0, roughness: 0.9, envMapIntensity: 0.25 }),
+	wheelTire: Object.freeze({ metalness: 0.0, roughness: 0.94, colorScalar: 0.55, envMapIntensity: 0.25 }),
+	wheelRim: Object.freeze({ metalness: 0.48, roughness: 0.42, envMapIntensity: 0.85 }),
+	wheelBrake: Object.freeze({ metalness: 0.64, roughness: 0.5, envMapIntensity: 0.7 }),
+	road: Object.freeze({
+		metalness: 0.0,
+		roughness: 0.92,
+		colorScalar: 0.78,
+		envMapIntensity: 0.18,
+		wetColorScalar: 0.5,
+		wetRoughness: 0.32,
+		wetEnvMapIntensity: 0.72,
+	}),
+	grass: Object.freeze({ metalness: 0.0, roughness: 0.98, colorScalar: 0.88, envMapIntensity: 0.12 }),
+	sand: Object.freeze({ metalness: 0.0, roughness: 0.98, colorScalar: 0.95, envMapIntensity: 0.1 }),
+	terrain: Object.freeze({ metalness: 0.0, roughness: 0.98, colorScalar: 0.9, envMapIntensity: 0.1 }),
+	curb: Object.freeze({
+		metalness: 0.0,
+		roughness: 0.74,
+		colorScalar: 0.9,
+		envMapIntensity: 0.22,
+		wetColorScalar: 0.64,
+		wetRoughness: 0.4,
+		wetEnvMapIntensity: 0.62,
+	}),
+	barrier: Object.freeze({ metalness: 0.18, roughness: 0.66, envMapIntensity: 0.45 }),
+	fence: Object.freeze({ metalness: 0.22, roughness: 0.72, envMapIntensity: 0.38 }),
+	tireWall: Object.freeze({ metalness: 0.0, roughness: 0.94, colorScalar: 0.7, envMapIntensity: 0.18 }),
+	treeFoliage: Object.freeze({ metalness: 0.0, roughness: 1.0, colorScalar: 0.84, envMapIntensity: 0.08 }),
+	concrete: Object.freeze({ metalness: 0.0, roughness: 0.88, colorScalar: 0.86, envMapIntensity: 0.16 }),
+	building: Object.freeze({ metalness: 0.0, roughness: 0.82, envMapIntensity: 0.22 }),
+	sign: Object.freeze({ metalness: 0.0, roughness: 0.55, emissive: 0xffffff, emissiveIntensity: 0.08, envMapIntensity: 0.25 }),
+});
+const CAR_PBR_DEFAULTS = MODERN_MATERIAL_PRESETS;
+const MATERIAL_DEBUG_COLORS = Object.freeze({
+	body: 0x3182bd,
+	glass: 0x8dd3ff,
+	mirrorGlass: 0x4cc9f0,
+	headlamp: 0xfff3a3,
+	taillamp: 0xff4d6d,
+	exhaust: 0x6c757d,
+	blackTrim: 0x222222,
+	interior: 0x7f5539,
+	driver: 0xffc857,
+	wheelTire: 0x111111,
+	wheelRim: 0xa7c7e7,
+	wheelBrake: 0xb8b8b8,
+	road: 0xd1495b,
+	grass: 0x6ab04c,
+	sand: 0xf2cc8f,
+	terrain: 0x8f7a4f,
+	curb: 0x4361ee,
+	barrier: 0xf77f00,
+	fence: 0xb08968,
+	tireWall: 0x2f2f2f,
+	treeFoliage: 0x2d6a4f,
+	concrete: 0xadb5bd,
+	building: 0x845ec2,
+	sign: 0xffbe0b,
+	unclassified: 0xff00ff,
 });
 
 function normalizeRuntimePath(path) {
@@ -34,6 +123,14 @@ function normalizeRuntimePath(path) {
 
 function normalizeRenderProfile(profile) {
 	return RENDER_PROFILES.has(profile) ? profile : "legacy";
+}
+
+function clamp01(value) {
+	return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0;
+}
+
+function lerp(from, to, amount) {
+	return from + (to - from) * amount;
 }
 
 export class AssetManager {
@@ -45,6 +142,8 @@ export class AssetManager {
 		this.textureLoader = new THREE.TextureLoader();
 		this.manifest = null;
 		this.carCache = new Map();
+		this.wetness = 0;
+		this.materialDebugEnabled = false;
 	}
 
 	setRenderProfile(profile) {
@@ -53,6 +152,22 @@ export class AssetManager {
 			this.carCache.clear();
 		}
 		this.renderProfile = nextProfile;
+	}
+
+	setWetness(value) {
+		const nextWetness = clamp01(Number(value));
+		if (nextWetness !== this.wetness) {
+			this.carCache.clear();
+		}
+		this.wetness = nextWetness;
+	}
+
+	setMaterialDebugEnabled(enabled) {
+		const nextEnabled = Boolean(enabled);
+		if (nextEnabled !== this.materialDebugEnabled) {
+			this.carCache.clear();
+		}
+		this.materialDebugEnabled = nextEnabled;
 	}
 
 	async loadManifest() {
@@ -132,6 +247,28 @@ export class AssetManager {
 		return new THREE.MeshStandardMaterial(parameters);
 	}
 
+	makeMaterialDebugMaterial(material, materialClass, parameters) {
+		const debugClass = materialClass || "unclassified";
+		const needsAlphaMap = parameters.alphaTest > 0 || parameters.transparent || parameters.opacity < 1;
+		const debug = new THREE.MeshBasicMaterial({
+			name: `debug:${debugClass}:${material.name || "material"}`,
+			color: new THREE.Color(MATERIAL_DEBUG_COLORS[debugClass] || MATERIAL_DEBUG_COLORS.unclassified),
+			map: needsAlphaMap ? parameters.map || null : null,
+			alphaMap: parameters.alphaMap || null,
+			alphaTest: parameters.alphaTest,
+			transparent: parameters.transparent,
+			opacity: parameters.opacity,
+			side: parameters.side,
+			depthWrite: parameters.depthWrite,
+			fog: parameters.fog,
+		});
+		debug.userData = {
+			...material.userData,
+			torcsMaterialDebugClass: debugClass,
+		};
+		return debug;
+	}
+
 	isTrackShadowOverlayMaterial(material) {
 		return material && material.userData && material.userData.torcsOverlayRole === "trackShadow";
 	}
@@ -194,7 +331,7 @@ export class AssetManager {
 	}
 
 	withPbrDefaults(parameters, defaults) {
-		return {
+		const pbrParameters = {
 			...parameters,
 			metalness: defaults.metalness,
 			roughness: defaults.roughness,
@@ -202,6 +339,49 @@ export class AssetManager {
 			opacity: defaults.opacity,
 			depthWrite: defaults.opacity < 1.0 ? false : parameters.depthWrite,
 		};
+		if (defaults.envMapIntensity !== undefined) {
+			pbrParameters.envMapIntensity = defaults.envMapIntensity;
+		}
+		return pbrParameters;
+	}
+
+	applyModernPreset(parameters, preset, materialClass) {
+		const wettable = materialClass === "road" || materialClass === "curb";
+		const wetness = wettable ? this.wetness : 0;
+		const colorScalar = wetness > 0 && preset.wetColorScalar !== undefined
+			? lerp(preset.colorScalar ?? 1, preset.wetColorScalar, wetness)
+			: preset.colorScalar;
+		const roughness = wetness > 0 && preset.wetRoughness !== undefined
+			? lerp(preset.roughness, preset.wetRoughness, wetness)
+			: preset.roughness;
+		const envMapIntensity = wetness > 0 && preset.wetEnvMapIntensity !== undefined
+			? lerp(preset.envMapIntensity ?? 0, preset.wetEnvMapIntensity, wetness)
+			: preset.envMapIntensity;
+		const materialParameters = {
+			...parameters,
+			metalness: preset.metalness,
+			roughness,
+		};
+		if (preset.color !== undefined) {
+			materialParameters.color = new THREE.Color(preset.color);
+		} else if (colorScalar !== undefined) {
+			materialParameters.color = parameters.color.clone().multiplyScalar(colorScalar);
+		}
+		if (envMapIntensity !== undefined) {
+			materialParameters.envMapIntensity = envMapIntensity;
+		}
+		if (preset.emissive !== undefined) {
+			materialParameters.emissive = new THREE.Color(preset.emissive);
+			materialParameters.emissiveIntensity = preset.emissiveIntensity || 0;
+			materialParameters.emissiveMap = parameters.map || null;
+		}
+		return materialParameters;
+	}
+
+	makePresetMaterial(parameters, materialClass) {
+		return this.makeStandardMaterial(
+			this.applyModernPreset(parameters, MODERN_MATERIAL_PRESETS[materialClass], materialClass),
+		);
 	}
 
 	makePbrMaterial(parameters, defaults) {
@@ -210,6 +390,7 @@ export class AssetManager {
 			return new THREE.MeshPhysicalMaterial({
 				...pbrParameters,
 				ior: defaults.ior,
+				envMapIntensity: defaults.envMapIntensity,
 			});
 		}
 		return this.makeStandardMaterial(pbrParameters);
@@ -227,8 +408,8 @@ export class AssetManager {
 			return new THREE.MeshPhysicalMaterial({
 				...pbrParameters,
 				ior: CAR_PBR_DEFAULTS.body.ior,
-				clearcoat: 0.85,
-				clearcoatRoughness: 0.22,
+				clearcoat: CAR_PBR_DEFAULTS.body.clearcoat,
+				clearcoatRoughness: CAR_PBR_DEFAULTS.body.clearcoatRoughness,
 			});
 		}
 		const { clearcoatMap, ...standardParameters } = pbrParameters;
@@ -247,9 +428,9 @@ export class AssetManager {
 			return new THREE.MeshPhysicalMaterial({
 				...glassParameters,
 				ior: defaults.ior,
-				transmission: 0.28,
-				clearcoat: 1.0,
-				clearcoatRoughness: 0.04,
+				transmission: defaults.transmission,
+				clearcoat: defaults.clearcoat,
+				clearcoatRoughness: defaults.clearcoatRoughness,
 			});
 		}
 		return this.makeStandardMaterial(glassParameters);
@@ -273,6 +454,9 @@ export class AssetManager {
 
 	makeModernClassMaterial(material, materialClass, context = {}) {
 		const parameters = this.makeModernBaseParameters(material);
+		if (this.materialDebugEnabled) {
+			return this.makeMaterialDebugMaterial(material, materialClass, parameters);
+		}
 		if (materialClass === "body" && context.materialMask) {
 			parameters.remasterMaterialMask = context.materialMask;
 		}
@@ -282,114 +466,49 @@ export class AssetManager {
 			case "glass":
 				return this.makeGlassMaterial(parameters, CAR_PBR_DEFAULTS.glass);
 			case "mirrorGlass":
-				return this.makeGlassMaterial(parameters, CAR_PBR_DEFAULTS.glass);
+				return this.makeGlassMaterial(parameters, CAR_PBR_DEFAULTS.mirrorGlass);
 			case "headlamp":
 				return this.makeEmissiveMaterial(parameters, HEADLAMP_EMISSIVE, 1.35, CAR_PBR_DEFAULTS.headlamp);
 			case "taillamp":
 				return this.makeEmissiveMaterial(parameters, TAILLAMP_EMISSIVE, 1.55, CAR_PBR_DEFAULTS.taillamp);
 			case "exhaust":
-				return this.makePbrMaterial({
-					...parameters,
-					color: new THREE.Color(0x5c5750),
-				}, CAR_PBR_DEFAULTS.exhaust);
+				return this.makePbrMaterial(this.applyModernPreset(parameters, CAR_PBR_DEFAULTS.exhaust, materialClass), CAR_PBR_DEFAULTS.exhaust);
 			case "blackTrim":
-				return this.makeStandardMaterial({
-					...parameters,
-					color: new THREE.Color(0x202020),
-					metalness: 0.08,
-					roughness: 0.68,
-				});
+				return this.makePresetMaterial(parameters, materialClass);
 			case "interior":
-				return this.makeStandardMaterial({
-					...parameters,
-					metalness: 0.05,
-					roughness: 0.76,
-				});
+				return this.makePresetMaterial(parameters, materialClass);
 			case "driver":
-				return this.makeStandardMaterial({
-					...parameters,
-					metalness: 0.0,
-					roughness: 0.82,
-				});
+				return this.makePresetMaterial(parameters, materialClass);
 			case "wheelTire":
-				return this.makeStandardMaterial({
-					...parameters,
-					metalness: 0.0,
-					roughness: 0.88,
-				});
+				return this.makePresetMaterial(parameters, materialClass);
 			case "wheelRim":
-				return this.makeStandardMaterial({
-					...parameters,
-					metalness: 0.55,
-					roughness: 0.36,
-				});
+				return this.makePresetMaterial(parameters, materialClass);
 			case "wheelBrake":
-				return this.makeStandardMaterial({
-					...parameters,
-					metalness: 0.75,
-					roughness: 0.42,
-				});
+				return this.makePresetMaterial(parameters, materialClass);
 			case "road":
-				return this.makeStandardMaterial({
-					...parameters,
-					metalness: 0.0,
-					roughness: 0.82,
-				});
+				return this.makePresetMaterial(parameters, materialClass);
 			case "grass":
 			case "sand":
 			case "terrain":
-				return this.makeStandardMaterial({
-					...parameters,
-					metalness: 0.0,
-					roughness: 0.94,
-				});
+				return this.makePresetMaterial(parameters, materialClass);
 			case "curb":
-				return this.makeStandardMaterial({
-					...parameters,
-					metalness: 0.0,
-					roughness: 0.64,
-				});
+				return this.makePresetMaterial(parameters, materialClass);
 			case "barrier":
 			case "fence":
-				return this.makeStandardMaterial({
-					...parameters,
-					metalness: 0.28,
-					roughness: 0.56,
-				});
+				return this.makePresetMaterial(parameters, materialClass);
 			case "tireWall":
-				return this.makeStandardMaterial({
-					...parameters,
-					metalness: 0.0,
-					roughness: 0.88,
-				});
+				return this.makePresetMaterial(parameters, materialClass);
 			case "treeFoliage":
 				return this.makeStandardMaterial({
-					...parameters,
-					metalness: 0.0,
-					roughness: 0.96,
+					...this.applyModernPreset(parameters, CAR_PBR_DEFAULTS.treeFoliage, materialClass),
 					side: THREE.DoubleSide,
 				});
 			case "concrete":
-				return this.makeStandardMaterial({
-					...parameters,
-					metalness: 0.0,
-					roughness: 0.78,
-				});
+				return this.makePresetMaterial(parameters, materialClass);
 			case "building":
-				return this.makeStandardMaterial({
-					...parameters,
-					metalness: 0.02,
-					roughness: 0.72,
-				});
+				return this.makePresetMaterial(parameters, materialClass);
 			case "sign":
-				return this.makeStandardMaterial({
-					...parameters,
-					emissive: new THREE.Color(0xffffff),
-					emissiveIntensity: 0.12,
-					emissiveMap: parameters.map || null,
-					metalness: 0.0,
-					roughness: 0.48,
-				});
+				return this.makePresetMaterial(parameters, materialClass);
 			default:
 				return null;
 		}
@@ -397,6 +516,12 @@ export class AssetManager {
 
 	makeModernMaterial(material, context = {}) {
 		const materialClass = material.userData && material.userData.torcsMaterialClass;
+		if (this.materialDebugEnabled) {
+			const debug = this.makeModernClassMaterial(material, materialClass || "unclassified", context);
+			debug.userData = { ...material.userData, torcsMaterialDebugClass: materialClass || "unclassified" };
+			material.dispose();
+			return debug;
+		}
 		const modern = materialClass ? this.makeModernClassMaterial(material, materialClass, context) : null;
 		if (!modern) {
 			return this.makeLegacyMaterial(material);

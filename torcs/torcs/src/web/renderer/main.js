@@ -92,6 +92,8 @@ let input = null;
 let runtime = null;
 let activeRenderProfile = getInitialRenderProfile();
 let activeLightIntensity = getInitialLightIntensity();
+let activeMaterialWetness = getInitialMaterialWetness();
+let materialDebugEnabled = getInitialMaterialDebugEnabled();
 let activeTrackPath = DEFAULT_TRACK_PATH;
 let running = false;
 let lastTime = 0;
@@ -194,6 +196,18 @@ function getInitialLightIntensity() {
 	const params = new URLSearchParams(window.location.search);
 	const value = Number(params.get("lightIntensity"));
 	return Number.isFinite(value) ? Math.max(0, Math.min(3, value)) : DEFAULT_LIGHT_INTENSITY;
+}
+
+function getInitialMaterialWetness() {
+	const params = new URLSearchParams(window.location.search);
+	const value = Number(params.get("wetness"));
+	return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0;
+}
+
+function getInitialMaterialDebugEnabled() {
+	const params = new URLSearchParams(window.location.search);
+	const value = params.get("materialDebug");
+	return value === "1" || value === "true";
 }
 
 function formatLightIntensity(value) {
@@ -1227,6 +1241,8 @@ async function main() {
 			elements.skybox.checked = false;
 			cameras = new CameraRig(elements.canvas);
 			assets = new AssetManager("./web-assets/", scene.renderer, activeRenderProfile);
+			assets.setWetness(activeMaterialWetness);
+			assets.setMaterialDebugEnabled(materialDebugEnabled);
 			elements.renderProfile.value = activeRenderProfile;
 		audio = new TorcsAudio("./web-assets/", (status) => {
 			elements.audioState.textContent = status;
