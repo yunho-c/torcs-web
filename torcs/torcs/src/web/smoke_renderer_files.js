@@ -1778,6 +1778,9 @@ requireText(byPath["renderer/cameras.js"], "backRight: { side: -DIAGONAL_LOOKARO
 requireText(byPath["renderer/cameras.js"], "updateLookaround(values, car, lookaround, analogLookaround = null)", "temporary car-relative lookaround camera");
 requireText(byPath["renderer/cameras.js"], "applyAnalogLookTarget(values, lookaround)", "right stick analog camera look target");
 requireText(byPath["renderer/cameras.js"], "analogLookaround && analogLookaround.front", "right stick press front camera override");
+requireText(byPath["renderer/cameras.js"], "updateDebugFps(deltaTime = 1 / 60", "debug FPS free camera update");
+requireText(byPath["renderer/main.js"], "DEBUG_FPS_TOGGLE_CODES", "debug FPS keyboard toggle");
+requireText(byPath["renderer/main.js"], "requestPointerLock", "debug FPS pointer lock mouse look");
 requireText(byPath["renderer/main.js"], "populateCameraOptions()", "native camera selector population");
 requireText(byPath["renderer/main.js"], "cameras.setTrack(trackSamples)", "camera track-sample alignment handoff");
 requireText(byPath["renderer/main.js"], "cameras.getSceneOptions()", "camera draw-current handoff");

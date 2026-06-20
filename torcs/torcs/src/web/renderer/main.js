@@ -100,6 +100,11 @@ let carAssets = new Map();
 let selectedCarIndex = 0;
 let customTrackFile = null;
 let customTrackVisualName = "";
+const DEBUG_FPS_TOGGLE_CODES = new Set(["Equal", "NumpadEqual"]);
+const DEBUG_FPS_CONTROL_CODES = new Set([
+	"KeyW", "KeyA", "KeyS", "KeyD", "KeyQ", "KeyE", "ShiftLeft", "ShiftRight",
+]);
+const debugFpsKeys = new Set();
 
 const RUMBLE_CONFIG_SOURCES = [
 	{
@@ -196,6 +201,48 @@ function formatLightIntensity(value) {
 
 function formatRumbleConfigJson(config = haptics?.getRumbleConfig?.()) {
 	return JSON.stringify(config || {}, null, 2);
+}
+
+function isEditableTarget(target) {
+	if (!target) {
+		return false;
+	}
+	const tagName = target.tagName ? target.tagName.toLowerCase() : "";
+	return target.isContentEditable || tagName === "input" || tagName === "select" || tagName === "textarea";
+}
+
+function setDebugFpsEnabled(enabled) {
+	if (!cameras) {
+		return false;
+	}
+	const active = cameras.setDebugFpsEnabled(enabled);
+	debugFpsKeys.clear();
+	if (active) {
+		hud.setState("fps debug");
+		if (elements.canvas && elements.canvas.requestPointerLock) {
+			try {
+				const lock = elements.canvas.requestPointerLock();
+				if (lock && typeof lock.catch === "function") {
+					lock.catch((error) => console.warn("TORCS web renderer debug FPS pointer lock failed", error));
+				}
+			} catch (error) {
+				console.warn("TORCS web renderer debug FPS pointer lock failed", error);
+			}
+		}
+	} else {
+		if (document.pointerLockElement === elements.canvas && document.exitPointerLock) {
+			document.exitPointerLock();
+		}
+		hud.setState(running ? "running" : (runtime && runtime.active ? "ready" : "loaded"));
+	}
+	if (snapshot) {
+		readAndRender();
+	}
+	return active;
+}
+
+function toggleDebugFps() {
+	return setDebugFpsEnabled(!(cameras && cameras.isDebugFpsEnabled()));
 }
 
 function updateRumbleConfigJson() {
@@ -701,7 +748,11 @@ function readAndRender(deltaTime = 0) {
 		return;
 	}
 	hud.update(snapshot, snapshots, selectedCarIndex);
-	cameras.update(snapshot, input ? input.getCameraLookaround() : "", snapshots);
+	if (cameras.isDebugFpsEnabled()) {
+		cameras.updateDebugFps(deltaTime, debugFpsKeys);
+	} else {
+		cameras.update(snapshot, input ? input.getCameraLookaround() : "", snapshots);
+	}
 	scene.updateCars(snapshots, cameras.camera, selectedCarIndex, carAssets, cameras.getSceneOptions());
 	audio.update(snapshot, cameras.camera, deltaTime);
 	haptics.update(snapshot, deltaTime);
@@ -770,7 +821,7 @@ function animate(time) {
 	if (running) {
 		step(delta);
 	} else if (snapshot) {
-		readAndRender();
+		readAndRender(delta);
 	}
 	requestAnimationFrame(animate);
 }
@@ -917,6 +968,61 @@ async function startSession() {
 
 function bindUi() {
 	populateCameraOptions();
+	window.addEventListener("keydown", (event) => {
+		if (DEBUG_FPS_TOGGLE_CODES.has(event.code) && !isEditableTarget(event.target)) {
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			if (!event.repeat) {
+				toggleDebugFps();
+			}
+			return;
+		}
+		if (!cameras || !cameras.isDebugFpsEnabled()) {
+			return;
+		}
+		if (event.code === "Escape") {
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			setDebugFpsEnabled(false);
+			return;
+		}
+		if (DEBUG_FPS_CONTROL_CODES.has(event.code)) {
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			debugFpsKeys.add(event.code);
+		}
+	}, true);
+	window.addEventListener("keyup", (event) => {
+		if (!cameras || !cameras.isDebugFpsEnabled()) {
+			return;
+		}
+		if (DEBUG_FPS_CONTROL_CODES.has(event.code)) {
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			debugFpsKeys.delete(event.code);
+		}
+	}, true);
+	window.addEventListener("mousemove", (event) => {
+		if (!cameras || !cameras.isDebugFpsEnabled()) {
+			return;
+		}
+		if (document.pointerLockElement === elements.canvas) {
+			cameras.rotateDebugFps(event.movementX || 0, event.movementY || 0);
+		}
+	});
+	elements.canvas.addEventListener("click", () => {
+		if (cameras && cameras.isDebugFpsEnabled() && elements.canvas.requestPointerLock &&
+			document.pointerLockElement !== elements.canvas) {
+			try {
+				const lock = elements.canvas.requestPointerLock();
+				if (lock && typeof lock.catch === "function") {
+					lock.catch((error) => console.warn("TORCS web renderer debug FPS pointer lock failed", error));
+				}
+			} catch (error) {
+				console.warn("TORCS web renderer debug FPS pointer lock failed", error);
+			}
+		}
+	});
 	elements.start.addEventListener("click", startSession);
 	elements.step.addEventListener("click", () => step());
 	elements.run.addEventListener("click", () => {

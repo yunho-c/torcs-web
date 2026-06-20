@@ -97,6 +97,10 @@ const LOOKAROUND_HEIGHT = 1.8;
 const LOOKAROUND_TARGET_HEIGHT = 0.95;
 const ANALOG_LOOK_SIDE_SCALE = 1.8;
 const ANALOG_LOOK_FORWARD_SCALE = 0.9;
+const DEBUG_FPS_BASE_SPEED = 18;
+const DEBUG_FPS_FAST_MULTIPLIER = 4;
+const DEBUG_FPS_MOUSE_SENSITIVITY = 0.0022;
+const DEBUG_FPS_MAX_PITCH = Math.PI * 0.49;
 const NO_SIMU = 0x00000002;
 
 function clamp(value, min, max) {
@@ -179,6 +183,12 @@ export class CameraRig {
 		this.canvas = canvas;
 		this.angleState = new Map();
 		this.flyState = null;
+		this.debugFps = {
+			enabled: false,
+			position: new THREE.Vector3(),
+			yaw: 0,
+			pitch: 0,
+		};
 		this.tvState = { current: -1, lastEventTime: 0, lastViewTime: 0 };
 		this.drawCurrent = true;
 		this.applyModeSettings();
@@ -200,7 +210,7 @@ export class CameraRig {
 	}
 
 	getSceneOptions() {
-		return { drawSelectedCar: this.drawCurrent };
+		return { drawSelectedCar: this.debugFps.enabled || this.drawCurrent };
 	}
 
 	applyModeSettings() {
@@ -217,6 +227,107 @@ export class CameraRig {
 		const height = Math.max(1, this.canvas.clientHeight);
 		this.camera.aspect = width / height;
 		this.camera.updateProjectionMatrix();
+	}
+
+	isDebugFpsEnabled() {
+		return this.debugFps.enabled;
+	}
+
+	setDebugFpsEnabled(enabled) {
+		if (Boolean(enabled) === this.debugFps.enabled) {
+			return this.debugFps.enabled;
+		}
+		this.debugFps.enabled = Boolean(enabled);
+		if (this.debugFps.enabled) {
+			const direction = this.camera.getWorldDirection(this.temp).normalize();
+			this.debugFps.position.copy(this.camera.position);
+			this.debugFps.pitch = Math.asin(clamp(direction.y, -0.98, 0.98));
+			this.debugFps.yaw = Math.atan2(-direction.x, -direction.z);
+			this.applyDebugFpsCamera();
+		} else {
+			this.applyModeSettings();
+		}
+		return this.debugFps.enabled;
+	}
+
+	toggleDebugFps() {
+		return this.setDebugFpsEnabled(!this.debugFps.enabled);
+	}
+
+	rotateDebugFps(movementX = 0, movementY = 0) {
+		if (!this.debugFps.enabled) {
+			return false;
+		}
+		this.debugFps.yaw -= movementX * DEBUG_FPS_MOUSE_SENSITIVITY;
+		this.debugFps.pitch = clamp(
+			this.debugFps.pitch - movementY * DEBUG_FPS_MOUSE_SENSITIVITY,
+			-DEBUG_FPS_MAX_PITCH,
+			DEBUG_FPS_MAX_PITCH,
+		);
+		this.applyDebugFpsCamera();
+		return true;
+	}
+
+	debugFpsForward(target = new THREE.Vector3()) {
+		const cosPitch = Math.cos(this.debugFps.pitch);
+		return target.set(
+			-Math.sin(this.debugFps.yaw) * cosPitch,
+			Math.sin(this.debugFps.pitch),
+			-Math.cos(this.debugFps.yaw) * cosPitch,
+		).normalize();
+	}
+
+	applyDebugFpsCamera() {
+		const settings = {
+			fov: 72,
+			minFov: 45,
+			maxFov: 100,
+			near: 0.1,
+			far: Math.max(2000, this.trackView.maxSize * 3),
+		};
+		const forward = this.debugFpsForward(this.temp);
+		this.applyPerspective(settings);
+		this.camera.position.copy(this.debugFps.position);
+		this.camera.up.set(0, 1, 0);
+		this.target.copy(this.debugFps.position).add(forward);
+		this.camera.lookAt(this.target);
+		this.drawCurrent = true;
+	}
+
+	updateDebugFps(deltaTime = 1 / 60, keyState = new Set()) {
+		if (!this.debugFps.enabled) {
+			return false;
+		}
+		const dt = Math.max(0, Math.min(deltaTime, 0.1));
+		const forward = this.temp.set(-Math.sin(this.debugFps.yaw), 0, -Math.cos(this.debugFps.yaw)).normalize();
+		const right = this.temp2.set(Math.cos(this.debugFps.yaw), 0, -Math.sin(this.debugFps.yaw)).normalize();
+		const move = this.temp3.set(0, 0, 0);
+		if (keyState.has("KeyW")) {
+			move.add(forward);
+		}
+		if (keyState.has("KeyS")) {
+			move.addScaledVector(forward, -1);
+		}
+		if (keyState.has("KeyD")) {
+			move.add(right);
+		}
+		if (keyState.has("KeyA")) {
+			move.addScaledVector(right, -1);
+		}
+		if (keyState.has("KeyE")) {
+			move.y += 1;
+		}
+		if (keyState.has("KeyQ")) {
+			move.y -= 1;
+		}
+		if (move.lengthSq() > 0) {
+			const speed = DEBUG_FPS_BASE_SPEED * (
+				keyState.has("ShiftLeft") || keyState.has("ShiftRight") ? DEBUG_FPS_FAST_MULTIPLIER : 1
+			);
+			this.debugFps.position.addScaledVector(move.normalize(), speed * dt);
+		}
+		this.applyDebugFpsCamera();
+		return true;
 	}
 
 	update(values, lookaround = "", snapshots = [values]) {
