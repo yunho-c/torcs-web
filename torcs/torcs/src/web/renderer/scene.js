@@ -21,6 +21,8 @@ const WHEEL_TEXTURE_ATLAS_OFFSETS = Object.freeze([
 	Object.freeze([0.0, 0.0]),
 	Object.freeze([0.5, 0.0]),
 ]);
+const WHEEL_BRAKE_DISC_RADIUS_SCALE = 0.48;
+const WHEEL_BRAKE_DISC_OFFSET_SCALE = 0.45;
 const WHEEL_HEAT_COOL = new THREE.Color(0x343936);
 const WHEEL_HEAT_HOT = new THREE.Color(0xff5b32);
 const DEFAULT_BACKGROUND = new THREE.Color(0x0b0d0c);
@@ -249,15 +251,58 @@ function makeGeneratedWheelVisual(radius, width, wheelTexture) {
 	return { tire, spokes, capTexture };
 }
 
-function makeWheelHeatMesh(radius, width, opacity) {
+function makeBrakeDiscHeatGeometry(radius) {
+	return new THREE.CircleGeometry(Math.max(0.025, radius * WHEEL_BRAKE_DISC_RADIUS_SCALE), 32);
+}
+
+function setWheelHeatDiscLayout(heat, radius, width) {
+	if (!heat) {
+		return;
+	}
+	const geometry = makeBrakeDiscHeatGeometry(radius);
+	if (heat.geometry) {
+		heat.geometry.dispose();
+	}
+	heat.geometry = geometry;
+	const offset = Math.max(0.01, width * WHEEL_BRAKE_DISC_OFFSET_SCALE);
+	for (let i = 0; i < heat.children.length; i += 1) {
+		const disc = heat.children[i];
+		disc.geometry = geometry;
+		disc.position.z = i === 0 ? -offset : offset;
+	}
+}
+
+function makeWheelHeatMesh(radius, width, maxOpacity) {
 	const heatMaterial = new THREE.MeshBasicMaterial({
 		color: WHEEL_HEAT_COOL.clone(),
 		transparent: true,
-		opacity,
+		opacity: 0,
+		blending: THREE.AdditiveBlending,
+		side: THREE.DoubleSide,
+		depthTest: true,
+		depthWrite: false,
+		toneMapped: false,
 	});
-	const heat = new THREE.Mesh(makeWheelGeometry(radius * 0.58, width * 1.08), heatMaterial);
-	heat.rotation.x = Math.PI / 2;
+	const heat = new THREE.Group();
+	heat.material = heatMaterial;
+	heat.userData.maxOpacity = maxOpacity;
+	heat.add(new THREE.Mesh(undefined, heatMaterial), new THREE.Mesh(undefined, heatMaterial));
+	for (const disc of heat.children) {
+		disc.renderOrder = -1;
+	}
+	setWheelHeatDiscLayout(heat, radius, width);
+	heat.visible = false;
 	return heat;
+}
+
+function setWheelHeatLevel(heat, value) {
+	if (!heat || !heat.material) {
+		return;
+	}
+	const level = clamp01(value);
+	heat.material.color.copy(WHEEL_HEAT_COOL).lerp(WHEEL_HEAT_HOT, level);
+	heat.material.opacity = level * (heat.userData.maxOpacity || 0.4);
+	heat.visible = level > 0.015;
 }
 
 function tintClone(root, color) {
@@ -756,12 +801,12 @@ export class TorcsScene {
 			const camber = new THREE.Group();
 			const spin = new THREE.Group();
 			const { tire, spokes, capTexture } = makeGeneratedWheelVisual(radius, width, wheelTexture);
-			const heat = makeWheelHeatMesh(radius, width, 0.72);
-			spin.add(tire, heat);
+			const heat = makeWheelHeatMesh(radius, width, 0.44);
+			spin.add(tire);
 			if (spokes) {
 				spin.add(spokes);
 			}
-			camber.add(spin);
+			camber.add(heat, spin);
 			steer.add(camber);
 			root.add(steer);
 			this.car.add(root);
@@ -804,11 +849,10 @@ export class TorcsScene {
 				sideFlip.add(scene);
 				return { ...state, scene };
 			});
-			const heat = makeWheelHeatMesh(radius, width, 0.72);
-			spin.add(heat);
+			const heat = makeWheelHeatMesh(radius, width, 0.44);
 			scale.add(sideFlip);
 			spin.add(scale);
-			camber.add(spin);
+			camber.add(heat, spin);
 			steer.add(camber);
 			root.add(steer);
 			this.car.add(root);
@@ -899,8 +943,7 @@ export class TorcsScene {
 					wheel.tire.geometry = makeWheelGeometry(radius, width);
 				}
 				if (wheel.heat) {
-					wheel.heat.geometry.dispose();
-					wheel.heat.geometry = makeWheelGeometry(radius * 0.58, width * 1.08);
+					setWheelHeatDiscLayout(wheel.heat, radius, width);
 				}
 				if (wheel.spokes) {
 					wheel.spokes.clear();
@@ -932,9 +975,7 @@ export class TorcsScene {
 				}
 			}
 
-			const heat = clamp01(values[SNAPSHOT.wheelBrakeTemp0 + index]);
-			wheel.heat.material.color.copy(WHEEL_HEAT_COOL).lerp(WHEEL_HEAT_HOT, heat);
-			wheel.heat.material.opacity = 0.38 + heat * 0.5;
+			setWheelHeatLevel(wheel.heat, values[SNAPSHOT.wheelBrakeTemp0 + index]);
 		}
 	}
 
@@ -983,12 +1024,12 @@ export class TorcsScene {
 			const camber = new THREE.Group();
 			const spin = new THREE.Group();
 			const { tire, spokes, capTexture } = makeGeneratedWheelVisual(radius, width, wheelTexture);
-			const heat = makeWheelHeatMesh(radius, width, 0.52);
-			spin.add(tire, heat);
+			const heat = makeWheelHeatMesh(radius, width, 0.32);
+			spin.add(tire);
 			if (spokes) {
 				spin.add(spokes);
 			}
-			camber.add(spin);
+			camber.add(heat, spin);
 			steer.add(camber);
 			root.add(steer);
 			opponent.root.add(root);
@@ -1035,11 +1076,10 @@ export class TorcsScene {
 				sideFlip.add(scene);
 				return { ...state, scene };
 			});
-			const heat = makeWheelHeatMesh(radius, width, 0.52);
-			spin.add(heat);
+			const heat = makeWheelHeatMesh(radius, width, 0.32);
 			scale.add(sideFlip);
 			spin.add(scale);
-			camber.add(spin);
+			camber.add(heat, spin);
 			steer.add(camber);
 			root.add(steer);
 			opponent.root.add(root);
@@ -1158,8 +1198,7 @@ export class TorcsScene {
 					wheel.tire.geometry = makeWheelGeometry(radius, width);
 				}
 				if (wheel.heat) {
-					wheel.heat.geometry.dispose();
-					wheel.heat.geometry = makeWheelGeometry(radius * 0.58, width * 1.08);
+					setWheelHeatDiscLayout(wheel.heat, radius, width);
 				}
 				if (wheel.spokes) {
 					wheel.spokes.clear();
@@ -1189,9 +1228,7 @@ export class TorcsScene {
 					wheel.activeState = nextState;
 				}
 			}
-			const heat = clamp01(values[SNAPSHOT.wheelBrakeTemp0 + index]);
-			wheel.heat.material.color.copy(WHEEL_HEAT_COOL).lerp(WHEEL_HEAT_HOT, heat);
-			wheel.heat.material.opacity = 0.28 + heat * 0.42;
+			setWheelHeatLevel(wheel.heat, values[SNAPSHOT.wheelBrakeTemp0 + index]);
 		}
 	}
 
