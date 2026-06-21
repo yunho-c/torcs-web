@@ -426,7 +426,6 @@ export class AssetManager {
 			...this.withPbrDefaults(parameters, defaults),
 			color: new THREE.Color(0xc8d7df),
 			transparent: true,
-			side: THREE.DoubleSide,
 			depthWrite: false,
 		};
 		if (typeof THREE.MeshPhysicalMaterial === "function") {

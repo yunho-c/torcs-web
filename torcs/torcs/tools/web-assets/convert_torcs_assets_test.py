@@ -488,16 +488,75 @@ kids 0
 		self.assertEqual(extras_by_class["glass"]["torcsObjectNames"], ["WIFRONTWIND_s_0"])
 		self.assertEqual(extras_by_class["exhaust"]["torcsObjectNames"], ["EXHAUSTPIPE_s_3"])
 
+	def test_car_material_primitives_preserve_mixed_sidedness(self):
+		content = """AC3Db
+OBJECT world
+kids 1
+OBJECT poly
+name "WIFRONTWIND_s_0"
+texture "car.rgb" base
+numvert 4
+0 0 0
+1 0 0
+0 1 0
+1 1 0
+numsurf 2
+SURF 0x14
+mat 0
+refs 3
+0 0 0
+1 1 0
+2 0 1
+SURF 0x24
+mat 0
+refs 3
+1 1 0
+3 1 1
+2 0 1
+kids 0
+"""
+		with tempfile.TemporaryDirectory() as tmp_dir:
+			source_root = Path(tmp_dir)
+			car_dir = source_root / "data/cars/models/demo-car"
+			car_dir.mkdir(parents=True)
+			(car_dir / "car.rgb").write_bytes(b"placeholder")
+			source_path = car_dir / "demo-car.acc"
+			source_path.write_text(content, encoding="latin-1")
+			output_path = source_root / "out.glb"
+
+			result = convert.convert_ac_to_glb(source_root, source_path, output_path, convert.classify_car_object)
+			gltf = read_glb_json(output_path)
+
+		self.assertEqual(result["primitives"], 2)
+		self.assertEqual(
+			sorted(material["doubleSided"] for material in result["materials"]),
+			[False, True],
+		)
+		glass_materials = [
+			material for material in gltf["materials"]
+			if material.get("extras", {}).get("torcsMaterialClass") == "glass"
+		]
+		self.assertEqual(sorted(material["doubleSided"] for material in glass_materials), [False, True])
+		for material in glass_materials:
+			self.assertEqual(material["extras"]["torcsObjectNames"], ["WIFRONTWIND_s_0"])
+
 	def test_car7_trb1_preserves_reference_material_classes(self):
 		source_path = SOURCE_ROOT / "data/cars/models/car7-trb1/car7-trb1.acc"
 		with tempfile.TemporaryDirectory() as tmp_dir:
 			output_path = Path(tmp_dir) / "car7-trb1.glb"
 
 			result = convert.convert_ac_to_glb(SOURCE_ROOT, source_path, output_path, convert.classify_car_object)
+			gltf = read_glb_json(output_path)
 
 		classes = {material["class"] for material in result["materials"]}
 		self.assertGreater(result["primitives"], 2)
 		self.assertTrue({"body", "glass", "headlamp", "taillamp", "exhaust"}.issubset(classes))
+		glass_materials = [
+			material for material in gltf["materials"]
+			if material.get("extras", {}).get("torcsMaterialClass") == "glass"
+		]
+		self.assertTrue(glass_materials)
+		self.assertEqual({material["doubleSided"] for material in glass_materials}, {False})
 
 	def test_kc_2000gt_windows_are_classified_as_glass(self):
 		source_path = SOURCE_ROOT / "data/cars/models/kc-2000gt/kc-2000gt.acc"

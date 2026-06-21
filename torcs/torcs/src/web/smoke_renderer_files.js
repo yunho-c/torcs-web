@@ -1448,6 +1448,15 @@ requireText(byPath["renderer/assets.js"], "makeMaterialDebugMaterial(material, m
 requireText(byPath["renderer/assets.js"], "case \"road\":", "modern track road material class");
 requireText(byPath["renderer/assets.js"], "case \"treeFoliage\":", "modern track tree material class");
 requireText(byPath["renderer/assets.js"], "MeshPhysicalMaterial", "modern physical material support");
+const glassMaterialBody = byPath["renderer/assets.js"].content.match(
+	/\tmakeGlassMaterial\(parameters, defaults = CAR_PBR_DEFAULTS\.glass\) \{[\s\S]*?\n\t\}/,
+);
+if (!glassMaterialBody) {
+	fail("TORCS web renderer smoke test missing modern glass material builder");
+}
+if (glassMaterialBody[0].includes("side: THREE.DoubleSide")) {
+	fail("TORCS web renderer smoke test found glass material forcing double-sided rendering");
+}
 requireText(byPath["renderer/assets.js"], "materialMask", "car material mask loading");
 requireText(byPath["renderer/assets.js"], "loadDataTexture(relativePath)", "material mask data texture loading");
 requireText(byPath["renderer/assets.js"], "clearcoatMap: remasterMaterialMask", "paint clearcoat mask binding");

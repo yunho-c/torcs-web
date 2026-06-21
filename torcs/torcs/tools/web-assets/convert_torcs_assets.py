@@ -683,12 +683,33 @@ def classify_wheel_object(name, texture=""):
 	return "wheelTire"
 
 
-def make_primitive_key(texture, material_class):
-	return texture or "", material_class or ""
+def surface_is_double_sided(flags):
+	return bool((flags >> 4) & 0x02)
 
 
-def make_overlay_primitive_key(texture, material_class, layer, role):
-	return "overlay", texture or "", material_class or "", layer, role
+def make_primitive_key(texture, material_class, double_sided=False):
+	return texture or "", material_class or "", bool(double_sided)
+
+
+def make_overlay_primitive_key(texture, material_class, layer, role, double_sided=False):
+	return "overlay", texture or "", material_class or "", layer, role, bool(double_sided)
+
+
+def make_primitive_data(texture, material_class, role, layer, image_uri, source_texture, double_sided=False):
+	return {
+		"texture": texture or "",
+		"materialClass": material_class,
+		"role": role,
+		"layer": layer,
+		"imageUri": image_uri,
+		"sourceTexture": source_texture or "",
+		"doubleSided": bool(double_sided),
+		"positions": [],
+		"normals": [],
+		"uvs": [],
+		"indices": [],
+		"objects": set(),
+	}
 
 
 def add_accessor(gltf, buffer_views, buffer_parts, component_type, item_type, values, minimum=None, maximum=None):
@@ -809,22 +830,8 @@ def convert_ac_to_glb(source_root, source_path, output_path, object_classifier=N
 				texture_sources[texture] = resolved
 			else:
 				texture = ""
-		key = make_primitive_key(texture, material_class)
-		target = primitives.setdefault(key, {
-			"texture": texture or "",
-			"materialClass": material_class,
-			"role": "base",
-			"layer": "base",
-			"imageUri": f"{Path(texture).stem}.png" if texture else "",
-			"sourceTexture": texture or "",
-			"positions": [],
-			"normals": [],
-			"uvs": [],
-			"indices": [],
-			"objects": set(),
-		})
 		shadow_texture = obj.texture_layers.get("tiled", "")
-		shadow_target = None
+		use_shadow_overlay = False
 		if (
 			include_track_shadow_overlays and
 			is_track_shadow_overlay_texture(shadow_texture) and
@@ -833,41 +840,71 @@ def convert_ac_to_glb(source_root, source_path, output_path, object_classifier=N
 			resolved_shadow = resolve_texture(source_root, asset_source_dir, shadow_texture)
 			if resolved_shadow:
 				shadow_overlay_sources[shadow_texture] = resolved_shadow
-				shadow_key = make_overlay_primitive_key(shadow_texture, material_class, "tiled", "trackShadow")
-				shadow_target = primitives.setdefault(shadow_key, {
-					"texture": shadow_texture,
-					"materialClass": material_class,
-					"role": "trackShadow",
-					"layer": "tiled",
-					"imageUri": make_shadow_overlay_texture_name(shadow_texture),
-					"sourceTexture": shadow_texture,
-					"positions": [],
-					"normals": [],
-					"uvs": [],
-					"indices": [],
-					"objects": set(),
-				})
+				use_shadow_overlay = True
 		skid_texture = obj.texture_layers.get("skids", "")
-		skid_target = None
+		use_skid_overlay = False
 		if include_track_skid_overlays and skid_texture:
 			resolved_skid = resolve_texture(source_root, asset_source_dir, skid_texture)
 			if resolved_skid:
 				skid_overlay_sources[skid_texture] = resolved_skid
-				skid_key = make_overlay_primitive_key(skid_texture, material_class, "skids", "trackSkid")
-				skid_target = primitives.setdefault(skid_key, {
-					"texture": skid_texture,
-					"materialClass": material_class,
-					"role": "trackSkid",
-					"layer": "skids",
-					"imageUri": make_skid_overlay_texture_name(skid_texture),
-					"sourceTexture": skid_texture,
-					"positions": [],
-					"normals": [],
-					"uvs": [],
-					"indices": [],
-					"objects": set(),
-				})
+				use_skid_overlay = True
 		for surface in obj.surfaces:
+			double_sided = surface_is_double_sided(surface["flags"])
+			key = make_primitive_key(texture, material_class, double_sided)
+			target = primitives.setdefault(
+				key,
+				make_primitive_data(
+					texture,
+					material_class,
+					"base",
+					"base",
+					f"{Path(texture).stem}.png" if texture else "",
+					texture,
+					double_sided,
+				),
+			)
+			shadow_target = None
+			if use_shadow_overlay:
+				shadow_key = make_overlay_primitive_key(
+					shadow_texture,
+					material_class,
+					"tiled",
+					"trackShadow",
+					double_sided,
+				)
+				shadow_target = primitives.setdefault(
+					shadow_key,
+					make_primitive_data(
+						shadow_texture,
+						material_class,
+						"trackShadow",
+						"tiled",
+						make_shadow_overlay_texture_name(shadow_texture),
+						shadow_texture,
+						double_sided,
+					),
+				)
+			skid_target = None
+			if use_skid_overlay:
+				skid_key = make_overlay_primitive_key(
+					skid_texture,
+					material_class,
+					"skids",
+					"trackSkid",
+					double_sided,
+				)
+				skid_target = primitives.setdefault(
+					skid_key,
+					make_primitive_data(
+						skid_texture,
+						material_class,
+						"trackSkid",
+						"skids",
+						make_skid_overlay_texture_name(skid_texture),
+						skid_texture,
+						double_sided,
+					),
+				)
 			for triangle in triangulate_surface(surface["refs"], surface["flags"]):
 				add_triangle_to_primitive(target, obj, triangle)
 				if shadow_target:
@@ -913,7 +950,7 @@ def convert_ac_to_glb(source_root, source_path, output_path, object_classifier=N
 				"metallicFactor": 0.0,
 				"roughnessFactor": 0.9,
 			},
-			"doubleSided": True,
+			"doubleSided": data["doubleSided"],
 		}
 		material["extras"] = {
 			"torcsSourceTexture": data["sourceTexture"],
@@ -986,6 +1023,7 @@ def convert_ac_to_glb(source_root, source_path, output_path, object_classifier=N
 			{
 				"class": data["materialClass"],
 				"texture": data["texture"],
+				"doubleSided": data["doubleSided"],
 				"objectNames": sorted(data["objects"]),
 			}
 			for _, data in sorted(primitives.items(), key=lambda item: item[0])
