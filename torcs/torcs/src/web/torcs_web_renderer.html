@@ -897,15 +897,23 @@
 								<option value="shader">Sky shader</option>
 							</select>
 						</label>
+						<label>Time of day
+							<span class="inline-range">
+								<input id="time-of-day" type="range" min="0" max="24" step="0.25" value="7">
+								<span id="time-of-day-value" class="inline-value">07:00</span>
+							</span>
+						</label>
+					</div>
+					<div class="settings-row">
 						<label class="toggle-label">
 							<input id="aces-tone-mapping" type="checkbox" checked>
 							<span>ACES tone mapping</span>
 						</label>
+						<label class="toggle-label">
+							<input id="material-debug" type="checkbox">
+							<span>Material classes</span>
+						</label>
 					</div>
-					<label class="toggle-label">
-						<input id="material-debug" type="checkbox">
-						<span>Material classes</span>
-					</label>
 				</section>
 				<section class="settings-section" aria-label="Asset override settings">
 					<h3>Assets</h3>

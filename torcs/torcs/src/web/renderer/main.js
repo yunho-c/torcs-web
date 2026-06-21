@@ -60,6 +60,8 @@ const elements = {
 	postProcessAoValue: document.getElementById("postprocess-ao-value"),
 	lightIntensity: document.getElementById("light-intensity"),
 	lightIntensityValue: document.getElementById("light-intensity-value"),
+	timeOfDay: document.getElementById("time-of-day"),
+	timeOfDayValue: document.getElementById("time-of-day-value"),
 	acesToneMapping: document.getElementById("aces-tone-mapping"),
 	environmentMode: document.getElementById("environment-mode"),
 	materialWetness: document.getElementById("material-wetness"),
@@ -99,7 +101,13 @@ const elements = {
 const hud = new Hud(elements);
 const DEFAULT_TRACK_PATH = "/torcs/data/tracks/e-track-1/e-track-1.xml";
 const DEFAULT_CAR_PATH = "/torcs/data/cars/models/kc-2000gt/kc-2000gt.xml";
+const DEFAULT_ASSET_SOURCE = "torcs";
+const ASSET_SOURCE_LABELS = Object.freeze({
+	torcs: "TORCS",
+	"speed-dreams": "Speed Dreams",
+});
 const DEFAULT_LIGHT_INTENSITY = 1.5;
+const DEFAULT_TIME_OF_DAY = 7;
 const DEFAULT_CAMERA_MODE = "f2-behind-near";
 const SETTINGS_STORAGE_KEY = "torcs.web.renderer.settings";
 const RENDER_PROFILES = new Set(["legacy", "modern"]);
@@ -118,6 +126,7 @@ let activeRenderProfile = getInitialRenderProfile();
 let activePostProcessPreset = getInitialPostProcessPreset();
 let activePostProcessOptions = getInitialPostProcessOptions(activePostProcessPreset);
 let activeLightIntensity = getInitialLightIntensity();
+let activeTimeOfDay = getInitialTimeOfDay();
 let activeMaterialWetness = getInitialMaterialWetness();
 let materialDebugEnabled = getInitialMaterialDebugEnabled();
 let activeCameraMode = getInitialCameraMode();
@@ -264,6 +273,11 @@ function normalizeEnvironmentMode(mode) {
 	return ENVIRONMENT_MODES.has(normalized) ? normalized : DEFAULT_ENVIRONMENT_MODE;
 }
 
+function normalizeTimeOfDay(timeOfDay) {
+	const value = Number(timeOfDay);
+	return Number.isFinite(value) ? Math.max(0, Math.min(24, value)) : DEFAULT_TIME_OF_DAY;
+}
+
 function normalizePostProcessSettingPreset(preset) {
 	const normalized = String(preset || "").toLowerCase();
 	if (normalized === "auto") {
@@ -317,6 +331,14 @@ function getInitialLightIntensity() {
 	return getStoredNumber("lightIntensity", DEFAULT_LIGHT_INTENSITY, 0, 3);
 }
 
+function getInitialTimeOfDay() {
+	const queryTimeOfDay = getQueryParam("timeOfDay");
+	if (queryTimeOfDay !== null) {
+		return normalizeTimeOfDay(queryTimeOfDay);
+	}
+	return getStoredNumber("timeOfDay", DEFAULT_TIME_OF_DAY, 0, 24);
+}
+
 function getInitialMaterialWetness() {
 	const queryWetness = getQueryParam("wetness");
 	if (queryWetness !== null) {
@@ -356,6 +378,16 @@ function getInitialAcesToneMappingEnabled() {
 
 function formatLightIntensity(value) {
 	return value.toFixed(2);
+}
+
+function formatTimeOfDay(value) {
+	const totalMinutes = Math.round(normalizeTimeOfDay(value) * 60);
+	if (totalMinutes >= 1440) {
+		return "24:00";
+	}
+	const hours = Math.floor(totalMinutes / 60);
+	const minutes = totalMinutes % 60;
+	return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
 
 function formatWetness(value) {
@@ -423,6 +455,8 @@ function applyInitialControlValues() {
 	elements.hapticsTriggerStrength.value = String(getStoredNumber("hapticsTriggerStrength", 1, 0, 1));
 	elements.acesToneMapping.checked = acesToneMappingEnabled;
 	elements.environmentMode.value = activeEnvironmentMode;
+	elements.timeOfDay.value = String(activeTimeOfDay);
+	elements.timeOfDayValue.textContent = formatTimeOfDay(activeTimeOfDay);
 	elements.materialWetness.value = String(activeMaterialWetness);
 	elements.materialWetnessValue.textContent = formatWetness(activeMaterialWetness);
 	elements.materialDebug.checked = materialDebugEnabled;
@@ -860,32 +894,75 @@ function applyControls(controls = input.getControls()) {
 	}
 }
 
+function splitManifestPath(manifestPath) {
+	const source = String(manifestPath || "");
+	const separator = source.indexOf(":");
+	if (separator > 0) {
+		return {
+			source: source.slice(0, separator),
+			path: source.slice(separator + 1),
+			namespaced: true,
+		};
+	}
+	return {
+		source: DEFAULT_ASSET_SOURCE,
+		path: source.replace(/^\/torcs\//, ""),
+		namespaced: false,
+	};
+}
+
+function sourceLabel(source) {
+	if (ASSET_SOURCE_LABELS[source]) {
+		return ASSET_SOURCE_LABELS[source];
+	}
+	return String(source || "")
+		.split(/[-_]+/)
+		.filter(Boolean)
+		.map((word) => word[0].toUpperCase() + word.slice(1))
+		.join(" ") || source || "Asset";
+}
+
 function runtimeAssetPath(manifestPath) {
-	return manifestPath.startsWith("/torcs/") ? manifestPath : `/torcs/${manifestPath}`;
+	const split = splitManifestPath(manifestPath);
+	if (split.source === DEFAULT_ASSET_SOURCE) {
+		return `/torcs/${split.path}`;
+	}
+	return manifestPath;
+}
+
+function isTorcsRuntimeAssetPath(assetPath) {
+	return splitManifestPath(assetPath).source === DEFAULT_ASSET_SOURCE;
 }
 
 function assetIdFromPath(manifestPath) {
-	const parts = manifestPath.split("/");
+	const parts = splitManifestPath(manifestPath).path.split("/");
 	const file = parts[parts.length - 1] || "";
 	return file.replace(/\.xml$/, "") || manifestPath;
 }
 
 function makeAssetLabel(entry, manifestPath) {
+	const split = splitManifestPath(manifestPath);
 	const id = assetIdFromPath(manifestPath);
 	const name = entry && entry.name ? entry.name : id;
-	return name === id ? name : `${name} (${id})`;
+	const baseLabel = name === id ? name : `${name} (${id})`;
+	return `${sourceLabel(split.source)}: ${baseLabel}`;
 }
 
 function makeAssetOptions(entries, type) {
 	return Object.entries(entries || {})
-		.map(([manifestPath, entry]) => ({
-			value: runtimeAssetPath(manifestPath),
-			label: makeAssetLabel(entry, manifestPath),
-			category: entry && entry.category ? entry.category : "",
-			id: assetIdFromPath(manifestPath),
-			type,
-		}))
+		.map(([manifestPath, entry]) => {
+			const split = splitManifestPath(manifestPath);
+			return {
+				value: runtimeAssetPath(manifestPath),
+				label: makeAssetLabel(entry, manifestPath),
+				category: entry && entry.category ? entry.category : "",
+				id: assetIdFromPath(manifestPath),
+				source: split.source,
+				type,
+			};
+		})
 		.sort((a, b) =>
+			sourceLabel(a.source).localeCompare(sourceLabel(b.source)) ||
 			a.category.localeCompare(b.category) ||
 			a.label.localeCompare(b.label) ||
 			a.id.localeCompare(b.id));
@@ -1075,12 +1152,13 @@ function animate(time) {
 async function loadVisualAssets() {
 	try {
 		const trackPath = getVisualTrackPath();
+		const useRuntimeCarModels = runtime && runtime.active && snapshots.length && isTorcsRuntimeAssetPath(elements.car.value);
 		const [track, selectedCarAsset, effects] = await Promise.all([
 			assets.loadTrack(trackPath),
 			assets.loadCar(elements.car.value),
 			assets.loadEffects(),
 		]);
-		carAssets = runtime && runtime.active && snapshots.length
+		carAssets = useRuntimeCarModels
 			? await assets.loadCarAssetsForSnapshots(snapshots, elements.car.value)
 			: new Map([[selectedCarIndex, selectedCarAsset]]);
 		await warnCarVisualFallbacks(carAssets, selectedCarAsset);
@@ -1171,6 +1249,18 @@ function applyLightIntensity(value) {
 	elements.lightIntensityValue.textContent = formatLightIntensity(activeLightIntensity);
 	if (scene) {
 		scene.setLightIntensityScale(activeLightIntensity);
+	}
+	if (snapshot) {
+		readAndRender();
+	}
+}
+
+function applyTimeOfDay(value) {
+	activeTimeOfDay = normalizeTimeOfDay(value);
+	elements.timeOfDay.value = String(activeTimeOfDay);
+	elements.timeOfDayValue.textContent = formatTimeOfDay(activeTimeOfDay);
+	if (scene) {
+		scene.setTimeOfDay(activeTimeOfDay);
 	}
 	if (snapshot) {
 		readAndRender();
@@ -1283,7 +1373,18 @@ async function startSession() {
 	elements.run.textContent = "Run";
 	const carCount = Math.max(1, Math.min(4, Number(elements.carCount.value) || 1));
 	const trackPath = elements.track.value;
-	const ok = runtime.start(trackPath, elements.car.value, carCount);
+	const carPath = elements.car.value;
+	const runtimeTrackPath = isTorcsRuntimeAssetPath(trackPath) ? trackPath : DEFAULT_TRACK_PATH;
+	const runtimeCarPath = isTorcsRuntimeAssetPath(carPath) ? carPath : DEFAULT_CAR_PATH;
+	if (runtimeTrackPath !== trackPath || runtimeCarPath !== carPath) {
+		console.warn("TORCS web renderer using default TORCS runtime data behind converted visual assets", {
+			visualTrack: trackPath,
+			visualCar: carPath,
+			runtimeTrack: runtimeTrackPath,
+			runtimeCar: runtimeCarPath,
+		});
+	}
+	const ok = runtime.start(runtimeTrackPath, runtimeCarPath, carCount);
 	if (!ok) {
 		hud.setState("failed");
 		setEnabled(false);
@@ -1567,6 +1668,11 @@ function bindUi() {
 			writeStoredSetting("lightIntensity", intensity);
 			applyLightIntensity(intensity);
 		});
+		elements.timeOfDay.addEventListener("input", () => {
+			const timeOfDay = Number(elements.timeOfDay.value);
+			writeStoredSetting("timeOfDay", timeOfDay);
+			applyTimeOfDay(timeOfDay);
+		});
 		elements.acesToneMapping.addEventListener("change", () => {
 			writeStoredSetting("acesToneMapping", elements.acesToneMapping.checked);
 			applyAcesToneMapping(elements.acesToneMapping.checked);
@@ -1620,6 +1726,7 @@ async function main() {
 			applyPostProcessSettings(activePostProcessPreset, activePostProcessOptions);
 			applyAcesToneMapping(acesToneMappingEnabled);
 			applyLightIntensity(activeLightIntensity);
+			applyTimeOfDay(activeTimeOfDay);
 			cameras = new CameraRig(elements.canvas);
 			assets = new AssetManager("./web-assets/", scene.renderer, activeRenderProfile);
 			assets.setWetness(activeMaterialWetness);

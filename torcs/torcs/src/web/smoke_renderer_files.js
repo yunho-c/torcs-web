@@ -1389,6 +1389,8 @@ requireText(byPath["torcs_web_renderer.html"], "id=\"postprocess-ao\"", "postpro
 requireText(byPath["torcs_web_renderer.html"], "id=\"postprocess-ao-value\"", "postprocess AO value readout");
 requireText(byPath["torcs_web_renderer.html"], "id=\"light-intensity\"", "light intensity slider");
 requireText(byPath["torcs_web_renderer.html"], "id=\"light-intensity-value\"", "light intensity value readout");
+requireText(byPath["torcs_web_renderer.html"], "id=\"time-of-day\"", "time-of-day slider");
+requireText(byPath["torcs_web_renderer.html"], "id=\"time-of-day-value\"", "time-of-day value readout");
 requireText(byPath["torcs_web_renderer.html"], "id=\"aces-tone-mapping\"", "ACES tone mapping checkbox");
 requireText(byPath["torcs_web_renderer.html"], "id=\"material-wetness\"", "material wetness slider");
 requireText(byPath["torcs_web_renderer.html"], "id=\"material-wetness-value\"", "material wetness value readout");
@@ -1509,6 +1511,8 @@ requireText(byPath["renderer/main.js"], "writeStoredSetting(\"postProcessSkyboxB
 requireText(byPath["renderer/main.js"], "writeStoredSetting(\"postProcessAo\"", "persisted postprocess AO setting");
 requireText(byPath["renderer/main.js"], "getInitialLightIntensity()", "query-string light intensity initialization");
 requireText(byPath["renderer/main.js"], "getQueryParam(\"lightIntensity\")", "light intensity query parameter");
+requireText(byPath["renderer/main.js"], "getInitialTimeOfDay()", "time-of-day settings initialization");
+requireText(byPath["renderer/main.js"], "getQueryParam(\"timeOfDay\")", "time-of-day query parameter");
 requireText(byPath["renderer/main.js"], "getInitialMaterialWetness()", "query-string wetness initialization");
 requireText(byPath["renderer/main.js"], "getQueryParam(\"wetness\")", "material wetness query parameter");
 requireText(byPath["renderer/main.js"], "getInitialMaterialDebugEnabled()", "query-string material debug initialization");
@@ -1645,6 +1649,7 @@ requireText(byPath["renderer/main.js"], "scene = await TorcsScene.create(element
 requireText(byPath["renderer/main.js"], "scene.setRenderProfile(activeRenderProfile)", "scene render profile handoff");
 requireText(byPath["renderer/main.js"], "scene.setPostProcessSettings(activePostProcessPreset, activePostProcessOptions)", "scene postprocess settings handoff");
 requireText(byPath["renderer/main.js"], "scene.setLightIntensityScale(activeLightIntensity)", "scene light intensity handoff");
+requireText(byPath["renderer/main.js"], "scene.setTimeOfDay(activeTimeOfDay)", "scene time-of-day handoff");
 requireText(byPath["renderer/main.js"], "assets.setWetness(activeMaterialWetness)", "asset wetness handoff");
 requireText(byPath["renderer/main.js"], "assets.setMaterialDebugEnabled(materialDebugEnabled)", "asset material debug handoff");
 requireText(byPath["renderer/main.js"], "normalizeEnvironmentMode(mode)", "environment mode normalization");
@@ -1663,6 +1668,7 @@ requireText(byPath["renderer/main.js"], "elements.postProcessSkyboxBlur.addEvent
 requireText(byPath["renderer/main.js"], "elements.postProcessAo.addEventListener", "postprocess AO slider binding");
 requireText(byPath["renderer/main.js"], "applyPostProcessSettings(activePostProcessPreset", "postprocess settings live apply path");
 requireText(byPath["renderer/main.js"], "elements.lightIntensity.addEventListener", "light intensity slider binding");
+requireText(byPath["renderer/main.js"], "elements.timeOfDay.addEventListener", "time-of-day slider binding");
 requireText(byPath["renderer/main.js"], "applyAcesToneMapping(elements.acesToneMapping.checked)", "ACES tone mapping checkbox handoff");
 requireText(byPath["renderer/main.js"], "scene.setAcesToneMappingEnabled(elements.acesToneMapping.checked)", "ACES tone mapping scene binding");
 requireText(byPath["renderer/main.js"], "elements.environmentMode.addEventListener", "environment selector binding");
@@ -1806,6 +1812,9 @@ requireText(byPath["renderer/scene.js"], "import { TorcsEffects } from \"./effec
 requireText(byPath["renderer/scene.js"], "TorcsPostProcessPipeline", "main renderer shared postprocess pipeline");
 requireText(byPath["renderer/scene.js"], "setPostProcessSettings(preset = \"auto\", options = {})", "main renderer postprocess settings setter");
 requireText(byPath["renderer/scene.js"], "setEnvironmentMode(mode = DEFAULT_ENVIRONMENT_MODE)", "main renderer environment mode setter");
+requireText(byPath["renderer/scene.js"], "setTimeOfDay(timeOfDay = DEFAULT_TIME_OF_DAY)", "main renderer time-of-day setter");
+requireText(byPath["renderer/scene.js"], "getTimeOfDaySunDirection(this.timeOfDay", "time-of-day sun direction mapping");
+requireText(byPath["renderer/scene.js"], "getTimeOfDayDaylight(this.timeOfDay)", "time-of-day light intensity mapping");
 requireText(byPath["renderer/scene.js"], "new SkyMesh()", "sky shader mesh creation");
 requireText(byPath["renderer/scene.js"], "sky.turbidity.value = SKY_SHADER_SETTINGS.turbidity", "sky shader turbidity uniform");
 requireText(byPath["renderer/scene.js"], "sky.sunPosition.value.copy(this.skyShaderSun)", "sky shader sun-position uniform");

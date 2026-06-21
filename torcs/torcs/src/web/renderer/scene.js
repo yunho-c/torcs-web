@@ -43,14 +43,14 @@ const DEFAULT_SKYBOX_FACES = ["rt", "lf", "up", "dn", "ft", "bk"];
 const DEFAULT_ENVIRONMENT_INTENSITY = 0.8;
 const ENVIRONMENT_MODES = new Set(["dome", "skybox", "shader"]);
 const DEFAULT_ENVIRONMENT_MODE = "dome";
+const DEFAULT_TIME_OF_DAY = 7;
+const TIME_OF_DAY_SUN_DISTANCE = 260;
 const SKY_SHADER_SCALE = 450000;
 const SKY_SHADER_SETTINGS = Object.freeze({
 	turbidity: 10,
 	rayleigh: 3,
 	mieCoefficient: 0.005,
 	mieDirectionalG: 0.7,
-	elevation: 8,
-	azimuth: 180,
 	cloudCoverage: 0.35,
 	cloudDensity: 0.35,
 	cloudElevation: 0.5,
@@ -81,6 +81,32 @@ function normalizeRenderProfile(profile) {
 function normalizeEnvironmentMode(mode) {
 	const normalized = String(mode || "").toLowerCase();
 	return ENVIRONMENT_MODES.has(normalized) ? normalized : DEFAULT_ENVIRONMENT_MODE;
+}
+
+function normalizeTimeOfDay(timeOfDay) {
+	const value = Number(timeOfDay);
+	return Number.isFinite(value) ? THREE.MathUtils.clamp(value, 0, 24) : DEFAULT_TIME_OF_DAY;
+}
+
+function getTimeOfDaySunAngles(timeOfDay) {
+	const hour = normalizeTimeOfDay(timeOfDay);
+	const dayAngle = (hour - 6) / 12 * Math.PI;
+	return {
+		elevation: Math.max(-8, Math.sin(dayAngle) * 68 - 9),
+		azimuth: 180 + (hour - DEFAULT_TIME_OF_DAY) * 15,
+	};
+}
+
+function getTimeOfDaySunDirection(timeOfDay, target = new THREE.Vector3()) {
+	const angles = getTimeOfDaySunAngles(timeOfDay);
+	const phi = THREE.MathUtils.degToRad(90 - angles.elevation);
+	const theta = THREE.MathUtils.degToRad(angles.azimuth);
+	return target.setFromSphericalCoords(1, phi, theta);
+}
+
+function getTimeOfDayDaylight(timeOfDay) {
+	const angles = getTimeOfDaySunAngles(timeOfDay);
+	return THREE.MathUtils.smoothstep(angles.elevation, -4, 8);
 }
 
 function getTorcsPoseQuaternion(values, target) {
@@ -413,6 +439,9 @@ export class TorcsScene {
 			this.scene.add(group);
 		}
 
+		this.timeOfDay = DEFAULT_TIME_OF_DAY;
+		this.timeOfDaySun = new THREE.Vector3();
+		this.trackLightPosition = new THREE.Vector3(-90, 160, 80);
 		this.addLighting();
 		this.addReferenceGrid();
 		this.car = null;
@@ -506,19 +535,35 @@ export class TorcsScene {
 		this.applyTrackLightIntensities();
 	}
 
+	setTimeOfDay(timeOfDay = DEFAULT_TIME_OF_DAY) {
+		this.timeOfDay = normalizeTimeOfDay(timeOfDay);
+		this.applyTimeOfDaySunPosition();
+		this.applyTrackLightIntensities();
+		this.applySkyShaderSettings();
+	}
+
+	applyTimeOfDaySunPosition() {
+		if (!this.sunLight) {
+			return;
+		}
+		getTimeOfDaySunDirection(this.timeOfDay, this.timeOfDaySun);
+		this.sunLight.position.copy(this.timeOfDaySun).multiplyScalar(TIME_OF_DAY_SUN_DISTANCE);
+	}
+
 	applyTrackLightIntensities() {
 		if (!this.ambientLight || !this.sunLight) {
 			return;
 		}
-		this.ambientLight.intensity = DEFAULT_AMBIENT_INTENSITY * this.lightIntensityScale;
-		this.sunLight.intensity = DEFAULT_SUN_INTENSITY * this.lightIntensityScale;
+		const daylight = getTimeOfDayDaylight(this.timeOfDay);
+		this.ambientLight.intensity = DEFAULT_AMBIENT_INTENSITY * this.lightIntensityScale * (0.45 + daylight * 0.55);
+		this.sunLight.intensity = DEFAULT_SUN_INTENSITY * this.lightIntensityScale * (0.08 + daylight * 0.92);
 	}
 
 	addLighting() {
 		this.ambientLight = new THREE.AmbientLight(DEFAULT_AMBIENT, DEFAULT_AMBIENT_INTENSITY);
 		this.scene.add(this.ambientLight);
 		this.sunLight = new THREE.DirectionalLight(DEFAULT_SUN, DEFAULT_SUN_INTENSITY);
-		this.sunLight.position.set(-90, 160, 80);
+		this.applyTimeOfDaySunPosition();
 		this.scene.add(this.sunLight);
 	}
 
@@ -656,9 +701,7 @@ export class TorcsScene {
 		if (sky.showSunDisc) {
 			sky.showSunDisc.value = SKY_SHADER_SETTINGS.showSunDisc;
 		}
-		const phi = THREE.MathUtils.degToRad(90 - SKY_SHADER_SETTINGS.elevation);
-		const theta = THREE.MathUtils.degToRad(SKY_SHADER_SETTINGS.azimuth);
-		this.skyShaderSun.setFromSphericalCoords(1, phi, theta);
+		getTimeOfDaySunDirection(this.timeOfDay, this.skyShaderSun);
 		sky.sunPosition.value.copy(this.skyShaderSun);
 	}
 
@@ -751,7 +794,8 @@ export class TorcsScene {
 		if (lightPosition.lengthSq() > 0.001) {
 			lightPosition.normalize().multiplyScalar(260);
 		}
-		this.sunLight.position.copy(lightPosition);
+		this.trackLightPosition.copy(lightPosition);
+		this.applyTimeOfDaySunPosition();
 		this.applyBackgroundMode();
 		if (entry && entry.backgroundTexture && !backgroundTexture) {
 			console.warn("TORCS web renderer track background texture is configured but unavailable", {
