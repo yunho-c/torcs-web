@@ -495,6 +495,10 @@ def uses_alpha_test(texture):
 	return "tree" in name or "trans-" in name or "arbor" in name
 
 
+def skips_track_shadow_overlay(material_class, texture):
+	return material_class == "treeFoliage" or uses_alpha_test(texture or "")
+
+
 def apply_texture_alpha(material, texture):
 	if not texture:
 		return
@@ -721,7 +725,11 @@ def convert_ac_to_glb(source_root, source_path, output_path, object_classifier=N
 		})
 		shadow_texture = obj.texture_layers.get("tiled", "")
 		shadow_target = None
-		if include_track_shadow_overlays and is_track_shadow_overlay_texture(shadow_texture):
+		if (
+			include_track_shadow_overlays and
+			is_track_shadow_overlay_texture(shadow_texture) and
+			not skips_track_shadow_overlay(material_class, obj.texture)
+		):
 			resolved_shadow = resolve_texture(source_root, asset_source_dir, shadow_texture)
 			if resolved_shadow:
 				shadow_overlay_sources[shadow_texture] = resolved_shadow

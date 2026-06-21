@@ -273,6 +273,11 @@ export class AssetManager {
 		return material && material.userData && material.userData.torcsOverlayRole === "trackShadow";
 	}
 
+	isTreeFoliageTrackShadowOverlayMaterial(material) {
+		return this.isTrackShadowOverlayMaterial(material) &&
+			material.userData.torcsMaterialClass === "treeFoliage";
+	}
+
 	isTrackSkidOverlayMaterial(material) {
 		return material && material.userData && material.userData.torcsOverlayRole === "trackSkid";
 	}
@@ -547,6 +552,11 @@ export class AssetManager {
 	configureSceneMaterials(scene, context = {}) {
 		scene.traverse((object) => {
 			if (!object.isMesh || !object.material) {
+				return;
+			}
+			const sourceMaterials = Array.isArray(object.material) ? object.material : [object.material];
+			if (sourceMaterials.some((material) => this.isTreeFoliageTrackShadowOverlayMaterial(material))) {
+				object.visible = false;
 				return;
 			}
 			if (Array.isArray(object.material)) {

@@ -1451,6 +1451,8 @@ requireText(byPath["renderer/assets.js"], "loadDataTexture(relativePath)", "mate
 requireText(byPath["renderer/assets.js"], "clearcoatMap: remasterMaterialMask", "paint clearcoat mask binding");
 requireText(byPath["renderer/assets.js"], "roughnessMap: remasterMaterialMask", "paint roughness mask binding");
 requireText(byPath["renderer/assets.js"], "torcsOverlayRole === \"trackShadow\"", "track shadow overlay material detection");
+requireText(byPath["renderer/assets.js"], "isTreeFoliageTrackShadowOverlayMaterial(material)", "tree foliage track shadow overlay detection");
+requireText(byPath["renderer/assets.js"], "object.visible = false", "runtime tree foliage shadow overlay suppression");
 requireText(byPath["renderer/assets.js"], "makeTrackShadowOverlayMaterial(material)", "track shadow overlay material adapter");
 requireText(byPath["renderer/assets.js"], "torcsOverlayRole === \"trackSkid\"", "track skid overlay material detection");
 requireText(byPath["renderer/assets.js"], "makeTrackSkidOverlayMaterial(material)", "track skid overlay material adapter");

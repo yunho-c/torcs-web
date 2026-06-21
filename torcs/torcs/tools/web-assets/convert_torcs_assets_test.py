@@ -658,6 +658,7 @@ kids 0
 OBJECT poly
 name "OBJ1"
 texture "treeg1.png" base
+texture "shadow2.png" tiled
 numvert 3
 0 0 2
 1 0 2
@@ -701,6 +702,8 @@ kids 0
 		]
 		self.assertEqual(len(shadow_overlay_materials), 1)
 		self.assertEqual(shadow_overlay_materials[0]["extras"]["torcsOverlayLayer"], "tiled")
+		self.assertEqual(shadow_overlay_materials[0]["extras"]["torcsMaterialClass"], "road")
+		self.assertNotIn("OBJ1", shadow_overlay_materials[0]["extras"]["torcsObjectNames"])
 		skid_overlay_materials = [
 			material for material in gltf["materials"]
 			if material.get("extras", {}).get("torcsOverlayRole") == "trackSkid"
