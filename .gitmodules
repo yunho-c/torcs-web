@@ -1,0 +1,3 @@
+[submodule "external/speed-dreams-code"]
+	path = external/speed-dreams-code
+	url = https://forge.a-lec.org/speed-dreams/speed-dreams-code.git
