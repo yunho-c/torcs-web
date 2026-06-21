@@ -1,6 +1,7 @@
 import * as THREE from "three/webgpu";
 import { EXRLoader } from "three/addons/loaders/EXRLoader.js";
 import { TorcsEffects } from "./effects.js";
+import { getPostProcessOptions, getPostProcessPresetOverride, TorcsPostProcessPipeline } from "./postprocess.js";
 import { SNAPSHOT } from "./runtime.js";
 import { warnOnce } from "./diagnostics.js";
 
@@ -305,21 +306,30 @@ export class TorcsScene {
 		this.footprint = null;
 		this.track = null;
 		this.trackVisual = null;
-			this.backgroundDome = null;
-			this.environmentMap = null;
-			this.skyboxMap = null;
-			this.skyboxLoadPromise = null;
-			this.useSkybox = false;
-			this.trackBackgroundColor = DEFAULT_BACKGROUND.clone();
-			this.trackBackgroundTexture = null;
-			this.lightIntensityScale = 1.0;
-			this.carEffects = [];
-			this.effects = this.createCarEffects(0);
-		}
+		this.backgroundDome = null;
+		this.environmentMap = null;
+		this.skyboxMap = null;
+		this.skyboxLoadPromise = null;
+		this.useSkybox = false;
+		this.trackBackgroundColor = DEFAULT_BACKGROUND.clone();
+		this.trackBackgroundTexture = null;
+		this.lightIntensityScale = 1.0;
+		this.carEffects = [];
+		this.effects = this.createCarEffects(0);
+		this.postProcessPresetOverride = getPostProcessPresetOverride();
+		this.postprocess = new TorcsPostProcessPipeline(
+			this.renderer,
+			this.scene,
+			null,
+			this.getDefaultPostProcessPreset(),
+			getPostProcessOptions(this.getDefaultPostProcessPreset()),
+		);
+	}
 
 	setRenderProfile(profile) {
 		this.renderProfile = normalizeRenderProfile(profile);
 		this.applyToneMappingProfile();
+		this.updatePostProcessPreset();
 	}
 
 	setAcesToneMappingEnabled(enabled) {
@@ -331,7 +341,7 @@ export class TorcsScene {
 		if (!("toneMapping" in this.renderer)) {
 			return;
 		}
-		// Keep fullscreen post effects on a future RenderPipeline; the baseline tone curve is renderer-level.
+		// Keep the baseline tone curve renderer-level; fullscreen effects live in TorcsPostProcessPipeline.
 		if (this.renderProfile === "modern" && this.acesToneMappingEnabled) {
 			this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
 			this.renderer.toneMappingExposure = MODERN_TONE_MAPPING_EXPOSURE;
@@ -339,6 +349,18 @@ export class TorcsScene {
 		}
 		this.renderer.toneMapping = THREE.NoToneMapping;
 		this.renderer.toneMappingExposure = LEGACY_TONE_MAPPING_EXPOSURE;
+	}
+
+	getDefaultPostProcessPreset() {
+		return this.postProcessPresetOverride || (this.renderProfile === "modern" ? "race" : "none");
+	}
+
+	updatePostProcessPreset() {
+		if (!this.postprocess) {
+			return;
+		}
+		const preset = this.getDefaultPostProcessPreset();
+		this.postprocess.setPreset(preset, getPostProcessOptions(preset));
 	}
 
 	setLightIntensityScale(scale) {
@@ -1194,7 +1216,8 @@ export class TorcsScene {
 				camera.position.z,
 			);
 		}
-		this.renderer.render(this.scene, camera);
+		this.postprocess.setCamera(camera);
+		this.postprocess.render();
 	}
 }
 

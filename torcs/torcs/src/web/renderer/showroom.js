@@ -4,6 +4,7 @@ import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { EXRLoader } from "three/addons/loaders/EXRLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { AssetManager } from "./assets.js";
+import { getPostProcessOptions, getPostProcessPresetOverride, TorcsPostProcessPipeline } from "./postprocess.js";
 
 const DEFAULT_ENVIRONMENT_MAP = "./web/hdri/120_hdrmaps_com_free_2K.exr";
 const LOCAL_VW_PACK_URL = "./local-showroom-assets/vw/pack.json";
@@ -435,8 +436,16 @@ class ShowroomScene {
 		this.activeModel = null;
 		this.clock = new THREE.Clock();
 		this.backgroundPreset = getShowroomBackgroundPreset();
+		this.postProcessPreset = getPostProcessPresetOverride() || "showroom";
 		this.configureScene();
 		this.configureControls();
+		this.postprocess = new TorcsPostProcessPipeline(
+			this.renderer,
+			this.scene,
+			this.camera,
+			this.postProcessPreset,
+			getPostProcessOptions(this.postProcessPreset),
+		);
 		window.addEventListener("resize", () => this.resize());
 	}
 
@@ -572,7 +581,7 @@ class ShowroomScene {
 			this.activeModel.rotation.y += delta * 0.045;
 		}
 		this.controls.update();
-		this.renderer.render(this.scene, this.camera);
+		this.postprocess.render();
 	}
 }
 

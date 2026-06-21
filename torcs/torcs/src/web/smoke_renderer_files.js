@@ -1310,6 +1310,7 @@ const files = [
 	"renderer/diagnostics.js",
 	"renderer/assets.js",
 	"renderer/showroom.js",
+	"renderer/postprocess.js",
 	"renderer/runtime.js",
 	"renderer/scene.js",
 	"renderer/effects.js",
@@ -1505,9 +1506,34 @@ requireText(byPath["renderer/showroom.js"], "./local-showroom-assets/vw/pack.jso
 requireText(byPath["renderer/showroom.js"], "OrbitControls", "showroom orbit controls");
 requireText(byPath["renderer/showroom.js"], "DRACOLoader", "showroom Draco loader");
 requireText(byPath["renderer/showroom.js"], "GLTFLoader", "showroom GLTF loader");
+requireText(byPath["renderer/showroom.js"], "TorcsPostProcessPipeline", "showroom shared postprocess pipeline");
+requireText(byPath["renderer/showroom.js"], "this.postProcessPreset = getPostProcessPresetOverride() || \"showroom\"", "showroom postprocess default preset");
+requireText(byPath["renderer/showroom.js"], "this.postprocess.render()", "showroom postprocess render path");
 if (byPath["renderer/showroom.js"].content.includes("vw.com.mx") ||
 	byPath["renderer/showroom.js"].content.includes("prod.threed.studio")) {
 	fail("TORCS web renderer smoke test found production VW URLs in committed showroom code");
+}
+if (byPath["renderer/showroom.js"].content.includes("EffectComposer")) {
+	fail("TORCS web renderer smoke test found showroom postprocessing composer");
+}
+if (byPath["renderer/showroom.js"].content.includes("from \"postprocessing\"")) {
+	fail("TORCS web renderer smoke test found pmndrs postprocessing in showroom code");
+}
+
+requireText(byPath["renderer/postprocess.js"], "export class TorcsPostProcessPipeline", "shared WebGPU postprocess pipeline export");
+requireText(byPath["renderer/postprocess.js"], "new THREE.RenderPipeline", "Three WebGPU RenderPipeline use");
+requireText(byPath["renderer/postprocess.js"], "pass(this.scene, this.camera)", "Three TSL scene pass");
+requireText(byPath["renderer/postprocess.js"], "scenePass.setMRT(mrt({ output, velocity }))", "race velocity MRT");
+requireText(byPath["renderer/postprocess.js"], "motionBlur(sceneColor, motionVector)", "race motion blur node");
+requireText(byPath["renderer/postprocess.js"], "bloom(sceneColor)", "shared bloom node");
+requireText(byPath["renderer/postprocess.js"], "directionToColor(normalView)", "r183-compatible AO normal packing");
+requireText(byPath["renderer/postprocess.js"], "colorToDirection(prePass.getTextureNode().sample(uv))", "r183-compatible AO normal unpacking");
+requireText(byPath["renderer/postprocess.js"], "ao(prePassDepth, prePassNormal, this.camera)", "showroom AO node");
+requireText(byPath["renderer/postprocess.js"], "builtinAOContext", "showroom AO context binding");
+requireText(byPath["renderer/postprocess.js"], "renderRaw()", "postprocess raw fallback");
+if (byPath["renderer/postprocess.js"].content.includes("EffectComposer") ||
+	byPath["renderer/postprocess.js"].content.includes("from \"postprocessing\"")) {
+	fail("TORCS web renderer smoke test found pmndrs-style postprocessing composer");
 }
 
 requireText(byPath["../CMakeLists.txt"], "'_torcs_web_runtime_start_multi_with_files'", "Phase 6 multi-car Emscripten export");
@@ -1706,6 +1732,7 @@ requireText(byPath["renderer/main.js"], "haptics.setTriggerStrength", "DualSense
 
 requireText(byPath["renderer/scene.js"], "import * as THREE from \"three/webgpu\"", "Three.js WebGPU module import");
 requireText(byPath["renderer/scene.js"], "import { TorcsEffects } from \"./effects.js\"", "effects module import");
+requireText(byPath["renderer/scene.js"], "TorcsPostProcessPipeline", "main renderer shared postprocess pipeline");
 requireText(byPath["renderer/scene.js"], "new THREE.WebGPURenderer", "WebGPU renderer creation");
 requireText(byPath["renderer/scene.js"], "await renderer.init()", "async WebGPU renderer initialization");
 requireText(byPath["renderer/scene.js"], "return new THREE.Line(geometry, material)", "WebGPU-compatible closed line primitive");
@@ -1790,6 +1817,8 @@ requireText(byPath["renderer/scene.js"], "smoke: new THREE.Group()", "smoke/fire
 requireText(byPath["renderer/scene.js"], "this.effects = this.createCarEffects(0)", "effects layer creation");
 requireText(byPath["renderer/scene.js"], "effects.resetDynamics()", "effects reset on new track/session");
 requireText(byPath["renderer/scene.js"], "this.effects.update(values, this.car, camera)", "snapshot-driven effects update");
+requireText(byPath["renderer/scene.js"], "this.postprocess.setCamera(camera)", "camera-aware postprocess render path");
+requireText(byPath["renderer/scene.js"], "this.postprocess.render()", "main renderer postprocess render path");
 if (byPath["renderer/scene.js"].content.includes("this.car.rotation.set(values[SNAPSHOT.pitch]")) {
 	fail("TORCS web renderer smoke test found scalar Euler car body orientation");
 }
@@ -1798,6 +1827,9 @@ if (byPath["renderer/scene.js"].content.includes("WebGLRenderer")) {
 }
 if (byPath["renderer/scene.js"].content.includes("EffectComposer")) {
 	fail("TORCS web renderer smoke test found premature composer post-processing path");
+}
+if (byPath["renderer/scene.js"].content.includes("from \"postprocessing\"")) {
+	fail("TORCS web renderer smoke test found pmndrs postprocessing import");
 }
 if (byPath["renderer/scene.js"].content.includes("LineLoop")) {
 	fail("TORCS web renderer smoke test found unsupported WebGPU LineLoop usage");
