@@ -1518,6 +1518,9 @@ requireText(byPath["renderer/runtime.js"], "shadowX0: 175", "native shadow X sna
 requireText(byPath["renderer/runtime.js"], "shadowY0: 181", "native shadow Y snapshot offset");
 requireText(byPath["renderer/runtime.js"], "shadowZ0: 187", "native shadow Z snapshot offset");
 requireText(byPath["renderer/runtime.js"], "export class TorcsRuntime", "runtime adapter export");
+requireText(byPath["renderer/runtime.js"], "noInitialRun: true", "renderer suppresses probe main auto-run");
+requireText(byPath["renderer/runtime.js"], "runtimeAssetVersion", "runtime sidecar cache-busting token");
+requireText(byPath["renderer/runtime.js"], "/\\\\.(data|wasm)$/.test(path)", "runtime sidecar cache-busting filter");
 
 requireText(byPath["renderer/showroom.js"], "new THREE.WebGPURenderer", "showroom WebGPU renderer creation");
 requireText(byPath["renderer/showroom.js"], "forceWebGL: params.get(\"renderer\") === \"webgl\"", "showroom forced WebGL fallback option");
@@ -1579,6 +1582,8 @@ requireText(byPath["../CMakeLists.txt"], "TORCS_WEB_CAR_CATEGORY_CONFIGS", "car 
 requireText(byPath["../CMakeLists.txt"], "TORCS_WEB_INFERNO2_CONFIGS", "inferno2 XML preload discovery");
 requireText(byPath["../CMakeLists.txt"], "TORCS_WEB_TRACK_CONFIGS", "dynamic track XML preload discovery");
 requireText(byPath["../CMakeLists.txt"], "TORCS_WEB_CAR_CONFIGS", "dynamic car XML preload discovery");
+requireText(byPath["../CMakeLists.txt"], "data/data/tracks/objects.xml@/torcs/data/data/tracks/objects.xml", "nested category track objects XML preload alias");
+requireText(byPath["../CMakeLists.txt"], "data/data/tracks/surfaces.xml@/torcs/data/data/tracks/surfaces.xml", "nested category track surfaces XML preload alias");
 requireText(byPath["../CMakeLists.txt"], "data/web/skybox", "skybox asset copy source");
 requireText(byPath["../CMakeLists.txt"], "web/skybox", "skybox asset copy destination");
 requireText(byPath["../CMakeLists.txt"], "torcs_web_showroom.html", "showroom HTML copy target");

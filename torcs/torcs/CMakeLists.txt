@@ -304,6 +304,8 @@ if(EMSCRIPTEN)
 			"--preload-file=${TORCS_ROOT}/src/libs/tgf/params.dtd@/torcs/src/libs/tgf/params.dtd"
 			"--preload-file=${TORCS_ROOT}/data/data/tracks/objects.xml@/torcs/data/tracks/objects.xml"
 			"--preload-file=${TORCS_ROOT}/data/data/tracks/surfaces.xml@/torcs/data/tracks/surfaces.xml"
+			"--preload-file=${TORCS_ROOT}/data/data/tracks/objects.xml@/torcs/data/data/tracks/objects.xml"
+			"--preload-file=${TORCS_ROOT}/data/data/tracks/surfaces.xml@/torcs/data/data/tracks/surfaces.xml"
 		)
 		file(GLOB_RECURSE TORCS_WEB_TRACK_CONFIGS CONFIGURE_DEPENDS "${TORCS_ROOT}/data/tracks/*.xml")
 		foreach(TORCS_WEB_TRACK_CONFIG IN LISTS TORCS_WEB_TRACK_CONFIGS)

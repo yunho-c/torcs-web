@@ -335,6 +335,17 @@ export async function createTorcsRuntime() {
 	if (!factory) {
 		throw new Error("torcs_web_probe.js did not expose TorcsWebProbe");
 	}
-	const module = await factory({ locateFile: (path) => path });
+	const runtimeAssetVersion = Date.now().toString(36);
+	const module = await factory({
+		locateFile: (path) => {
+			if (!/\.(data|wasm)$/.test(path)) {
+				return path;
+			}
+			const url = new URL(path, window.location.href);
+			url.searchParams.set("v", runtimeAssetVersion);
+			return url.href;
+		},
+		noInitialRun: true,
+	});
 	return new TorcsRuntime(module);
 }
