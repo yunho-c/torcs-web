@@ -1,7 +1,13 @@
 import * as THREE from "three/webgpu";
 import { EXRLoader } from "three/addons/loaders/EXRLoader.js";
 import { TorcsEffects } from "./effects.js";
-import { getPostProcessOptions, getPostProcessPresetOverride, TorcsPostProcessPipeline } from "./postprocess.js";
+import {
+	getPostProcessOptions,
+	getPostProcessPresetOverride,
+	normalizePostProcessOptions,
+	normalizePostProcessPreset,
+	TorcsPostProcessPipeline,
+} from "./postprocess.js";
 import { SNAPSHOT } from "./runtime.js";
 import { warnOnce } from "./diagnostics.js";
 
@@ -316,13 +322,14 @@ export class TorcsScene {
 		this.lightIntensityScale = 1.0;
 		this.carEffects = [];
 		this.effects = this.createCarEffects(0);
-		this.postProcessPresetOverride = getPostProcessPresetOverride();
+		this.postProcessPreset = getPostProcessPresetOverride() || "auto";
+		this.postProcessOptions = getPostProcessOptions(this.getDefaultPostProcessPreset());
 		this.postprocess = new TorcsPostProcessPipeline(
 			this.renderer,
 			this.scene,
 			null,
 			this.getDefaultPostProcessPreset(),
-			getPostProcessOptions(this.getDefaultPostProcessPreset()),
+			this.postProcessOptions,
 		);
 	}
 
@@ -352,7 +359,16 @@ export class TorcsScene {
 	}
 
 	getDefaultPostProcessPreset() {
-		return this.postProcessPresetOverride || (this.renderProfile === "modern" ? "race" : "none");
+		if (this.postProcessPreset === "auto") {
+			return this.renderProfile === "modern" ? "race" : "none";
+		}
+		return normalizePostProcessPreset(this.postProcessPreset, "none");
+	}
+
+	setPostProcessSettings(preset = "auto", options = {}) {
+		this.postProcessPreset = preset === "auto" ? "auto" : normalizePostProcessPreset(preset, "none");
+		this.postProcessOptions = normalizePostProcessOptions(this.getDefaultPostProcessPreset(), options);
+		this.updatePostProcessPreset();
 	}
 
 	updatePostProcessPreset() {
@@ -360,7 +376,7 @@ export class TorcsScene {
 			return;
 		}
 		const preset = this.getDefaultPostProcessPreset();
-		this.postprocess.setPreset(preset, getPostProcessOptions(preset));
+		this.postprocess.setPreset(preset, this.postProcessOptions);
 	}
 
 	setLightIntensityScale(scale) {

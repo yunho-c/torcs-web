@@ -38,12 +38,25 @@ function clamp(value, min, max, fallback) {
 	return Number.isFinite(number) ? Math.max(min, Math.min(max, number)) : fallback;
 }
 
+function optionsEqual(a, b) {
+	return a.bloom === b.bloom && a.motionBlur === b.motionBlur && a.ao === b.ao;
+}
+
 export function normalizePostProcessPreset(preset, fallback = "none") {
 	const normalized = String(preset || "").toLowerCase();
 	if (normalized === "0" || normalized === "off" || normalized === "false") {
 		return "none";
 	}
 	return POSTPROCESS_PRESETS.has(normalized) ? normalized : fallback;
+}
+
+export function normalizePostProcessOptions(preset = "none", options = {}) {
+	const defaults = preset === "showroom" ? DEFAULT_SHOWROOM_OPTIONS : DEFAULT_RACE_OPTIONS;
+	return {
+		bloom: clamp(options.bloom, 0, 3, defaults.bloom),
+		motionBlur: clamp(options.motionBlur, 0, 2, defaults.motionBlur),
+		ao: clamp(options.ao, 0, 2, defaults.ao),
+	};
 }
 
 export function getPostProcessPresetOverride() {
@@ -56,12 +69,11 @@ export function getPostProcessPresetOverride() {
 
 export function getPostProcessOptions(preset = "none") {
 	const params = new URLSearchParams(window.location.search);
-	const defaults = preset === "showroom" ? DEFAULT_SHOWROOM_OPTIONS : DEFAULT_RACE_OPTIONS;
-	return {
-		bloom: clamp(params.get("bloom"), 0, 3, defaults.bloom),
-		motionBlur: clamp(params.get("motionBlur"), 0, 2, defaults.motionBlur),
-		ao: clamp(params.get("ao"), 0, 2, defaults.ao),
-	};
+	return normalizePostProcessOptions(preset, {
+		bloom: params.get("bloom"),
+		motionBlur: params.get("motionBlur"),
+		ao: params.get("ao"),
+	});
 }
 
 export class TorcsPostProcessPipeline {
@@ -70,10 +82,10 @@ export class TorcsPostProcessPipeline {
 		this.scene = scene;
 		this.camera = camera;
 		this.preset = normalizePostProcessPreset(preset, "none");
-		this.options = {
+		this.options = normalizePostProcessOptions(this.preset, {
 			...getPostProcessOptions(this.preset),
 			...options,
-		};
+		});
 		this.pipeline = null;
 		this.disabled = false;
 		this.disabledReason = "";
@@ -96,14 +108,15 @@ export class TorcsPostProcessPipeline {
 
 	setPreset(preset, options = {}) {
 		const nextPreset = normalizePostProcessPreset(preset, "none");
-		this.options = {
+		const nextOptions = normalizePostProcessOptions(nextPreset, {
 			...getPostProcessOptions(nextPreset),
 			...options,
-		};
-		if (nextPreset === this.preset) {
+		});
+		if (nextPreset === this.preset && optionsEqual(nextOptions, this.options)) {
 			return;
 		}
 		this.preset = nextPreset;
+		this.options = nextOptions;
 		this.pipeline = null;
 		this.disabled = false;
 		this.disabledReason = "";

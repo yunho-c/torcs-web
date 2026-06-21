@@ -845,6 +845,36 @@
 							</span>
 						</label>
 					</div>
+					<div class="settings-row">
+						<label>Post FX
+							<select id="postprocess-preset">
+								<option value="auto" selected>Auto</option>
+								<option value="none">Off</option>
+								<option value="race">Race</option>
+								<option value="showroom">Showroom</option>
+							</select>
+						</label>
+						<label>Bloom
+							<span class="inline-range">
+								<input id="postprocess-bloom" type="range" min="0" max="3" step="0.01" value="0.08">
+								<span id="postprocess-bloom-value" class="inline-value">0.08</span>
+							</span>
+						</label>
+					</div>
+					<div class="settings-row">
+						<label>Motion blur
+							<span class="inline-range">
+								<input id="postprocess-motion-blur" type="range" min="0" max="2" step="0.01" value="0.45">
+								<span id="postprocess-motion-blur-value" class="inline-value">0.45</span>
+							</span>
+						</label>
+						<label>AO
+							<span class="inline-range">
+								<input id="postprocess-ao" type="range" min="0" max="2" step="0.01" value="0">
+								<span id="postprocess-ao-value" class="inline-value">0.00</span>
+							</span>
+						</label>
+					</div>
 					<label>Wetness
 						<span class="inline-range">
 							<input id="material-wetness" type="range" min="0" max="1" step="0.01" value="0">

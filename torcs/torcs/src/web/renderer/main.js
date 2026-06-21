@@ -6,6 +6,7 @@ import { TorcsAudio } from "./audio.js";
 import { DualSenseHaptics } from "./haptics.js";
 import { createTorcsRuntime } from "./runtime.js";
 import { TorcsScene } from "./scene.js";
+import { getPostProcessOptions, normalizePostProcessOptions, normalizePostProcessPreset } from "./postprocess.js";
 import { warnOnce } from "./diagnostics.js";
 
 const elements = {
@@ -48,6 +49,13 @@ const elements = {
 	showControlSliders: document.getElementById("show-control-sliders"),
 	camera: document.getElementById("camera"),
 	renderProfile: document.getElementById("render-profile"),
+	postProcessPreset: document.getElementById("postprocess-preset"),
+	postProcessBloom: document.getElementById("postprocess-bloom"),
+	postProcessBloomValue: document.getElementById("postprocess-bloom-value"),
+	postProcessMotionBlur: document.getElementById("postprocess-motion-blur"),
+	postProcessMotionBlurValue: document.getElementById("postprocess-motion-blur-value"),
+	postProcessAo: document.getElementById("postprocess-ao"),
+	postProcessAoValue: document.getElementById("postprocess-ao-value"),
 	lightIntensity: document.getElementById("light-intensity"),
 	lightIntensityValue: document.getElementById("light-intensity-value"),
 	acesToneMapping: document.getElementById("aces-tone-mapping"),
@@ -93,6 +101,7 @@ const DEFAULT_LIGHT_INTENSITY = 1.5;
 const DEFAULT_CAMERA_MODE = "f2-behind-near";
 const SETTINGS_STORAGE_KEY = "torcs.web.renderer.settings";
 const RENDER_PROFILES = new Set(["legacy", "modern"]);
+const POSTPROCESS_SETTING_PRESETS = new Set(["auto", "none", "race", "showroom"]);
 let storedSettings = readStoredSettings();
 let scene = null;
 let cameras = null;
@@ -102,6 +111,8 @@ let haptics = null;
 let input = null;
 let runtime = null;
 let activeRenderProfile = getInitialRenderProfile();
+let activePostProcessPreset = getInitialPostProcessPreset();
+let activePostProcessOptions = getInitialPostProcessOptions(activePostProcessPreset);
 let activeLightIntensity = getInitialLightIntensity();
 let activeMaterialWetness = getInitialMaterialWetness();
 let materialDebugEnabled = getInitialMaterialDebugEnabled();
@@ -244,9 +255,45 @@ function normalizeRenderProfile(profile) {
 	return RENDER_PROFILES.has(profile) ? profile : "legacy";
 }
 
+function normalizePostProcessSettingPreset(preset) {
+	const normalized = String(preset || "").toLowerCase();
+	if (normalized === "auto") {
+		return "auto";
+	}
+	return POSTPROCESS_SETTING_PRESETS.has(normalized) ? normalizePostProcessPreset(normalized, "none") : "auto";
+}
+
+function getResolvedPostProcessPreset(preset = activePostProcessPreset, renderProfile = activeRenderProfile) {
+	return preset === "auto" ? (renderProfile === "modern" ? "race" : "none") : normalizePostProcessPreset(preset, "none");
+}
+
 function getInitialRenderProfile() {
 	const queryProfile = getQueryParam("profile");
 	return normalizeRenderProfile(queryProfile || getStoredString("renderProfile", "legacy"));
+}
+
+function getInitialPostProcessPreset() {
+	const queryPreset = getQueryParam("postprocess");
+	if (queryPreset !== null) {
+		return normalizePostProcessSettingPreset(queryPreset);
+	}
+	return normalizePostProcessSettingPreset(getStoredString("postProcessPreset", "auto"));
+}
+
+function getInitialPostProcessOptions(preset) {
+	const resolvedPreset = getResolvedPostProcessPreset(preset);
+	const queryOptions = getPostProcessOptions(resolvedPreset);
+	return normalizePostProcessOptions(resolvedPreset, {
+		bloom: getQueryParam("bloom") !== null
+			? queryOptions.bloom
+			: getStoredNumber("postProcessBloom", queryOptions.bloom, 0, 3),
+		motionBlur: getQueryParam("motionBlur") !== null
+			? queryOptions.motionBlur
+			: getStoredNumber("postProcessMotionBlur", queryOptions.motionBlur, 0, 2),
+		ao: getQueryParam("ao") !== null
+			? queryOptions.ao
+			: getStoredNumber("postProcessAo", queryOptions.ao, 0, 2),
+	});
 }
 
 function getInitialLightIntensity() {
@@ -295,6 +342,34 @@ function formatWetness(value) {
 	return value.toFixed(2);
 }
 
+function formatPostProcessValue(value) {
+	return value.toFixed(2);
+}
+
+function syncPostProcessControls() {
+	if (elements.postProcessPreset) {
+		elements.postProcessPreset.value = activePostProcessPreset;
+	}
+	if (elements.postProcessBloom) {
+		elements.postProcessBloom.value = String(activePostProcessOptions.bloom);
+		if (elements.postProcessBloomValue) {
+			elements.postProcessBloomValue.textContent = formatPostProcessValue(activePostProcessOptions.bloom);
+		}
+	}
+	if (elements.postProcessMotionBlur) {
+		elements.postProcessMotionBlur.value = String(activePostProcessOptions.motionBlur);
+		if (elements.postProcessMotionBlurValue) {
+			elements.postProcessMotionBlurValue.textContent = formatPostProcessValue(activePostProcessOptions.motionBlur);
+		}
+	}
+	if (elements.postProcessAo) {
+		elements.postProcessAo.value = String(activePostProcessOptions.ao);
+		if (elements.postProcessAoValue) {
+			elements.postProcessAoValue.textContent = formatPostProcessValue(activePostProcessOptions.ao);
+		}
+	}
+}
+
 function setSettingsOpen(open) {
 	if (!elements.settingsModal) {
 		return;
@@ -325,6 +400,7 @@ function applyInitialControlValues() {
 	elements.materialWetness.value = String(activeMaterialWetness);
 	elements.materialWetnessValue.textContent = formatWetness(activeMaterialWetness);
 	elements.materialDebug.checked = materialDebugEnabled;
+	syncPostProcessControls();
 	setControlSlidersVisible(getStoredBoolean("showControlSliders", true), false);
 }
 
@@ -1027,6 +1103,7 @@ async function applyRenderProfile(profile, reloadVisuals = false) {
 	elements.renderProfile.value = activeRenderProfile;
 	if (scene) {
 		scene.setRenderProfile(activeRenderProfile);
+		scene.setPostProcessSettings(activePostProcessPreset, activePostProcessOptions);
 	}
 	if (assets) {
 		assets.setRenderProfile(activeRenderProfile);
@@ -1036,6 +1113,24 @@ async function applyRenderProfile(profile, reloadVisuals = false) {
 		const hasAssets = await loadVisualAssets();
 		const readyState = runtime && runtime.active ? (running ? "running" : "ready") : "loaded";
 		hud.setState(hasAssets ? readyState : "debug");
+	}
+	if (snapshot) {
+		readAndRender();
+	}
+}
+
+function applyPostProcessSettings(preset = activePostProcessPreset, options = activePostProcessOptions, persist = false) {
+	activePostProcessPreset = normalizePostProcessSettingPreset(preset);
+	activePostProcessOptions = normalizePostProcessOptions(getResolvedPostProcessPreset(), options);
+	syncPostProcessControls();
+	if (persist) {
+		writeStoredSetting("postProcessPreset", activePostProcessPreset);
+		writeStoredSetting("postProcessBloom", activePostProcessOptions.bloom);
+		writeStoredSetting("postProcessMotionBlur", activePostProcessOptions.motionBlur);
+		writeStoredSetting("postProcessAo", activePostProcessOptions.ao);
+	}
+	if (scene) {
+		scene.setPostProcessSettings(activePostProcessPreset, activePostProcessOptions);
 	}
 	if (snapshot) {
 		readAndRender();
@@ -1409,6 +1504,27 @@ function bindUi() {
 				hud.setState("debug");
 			});
 		});
+		elements.postProcessPreset.addEventListener("change", () => {
+			applyPostProcessSettings(elements.postProcessPreset.value, activePostProcessOptions, true);
+		});
+		elements.postProcessBloom.addEventListener("input", () => {
+			applyPostProcessSettings(activePostProcessPreset, {
+				...activePostProcessOptions,
+				bloom: Number(elements.postProcessBloom.value),
+			}, true);
+		});
+		elements.postProcessMotionBlur.addEventListener("input", () => {
+			applyPostProcessSettings(activePostProcessPreset, {
+				...activePostProcessOptions,
+				motionBlur: Number(elements.postProcessMotionBlur.value),
+			}, true);
+		});
+		elements.postProcessAo.addEventListener("input", () => {
+			applyPostProcessSettings(activePostProcessPreset, {
+				...activePostProcessOptions,
+				ao: Number(elements.postProcessAo.value),
+			}, true);
+		});
 		elements.lightIntensity.addEventListener("input", () => {
 			const intensity = Number(elements.lightIntensity.value);
 			writeStoredSetting("lightIntensity", intensity);
@@ -1464,6 +1580,7 @@ async function main() {
 		try {
 			scene = await TorcsScene.create(elements.canvas);
 			scene.setRenderProfile(activeRenderProfile);
+			applyPostProcessSettings(activePostProcessPreset, activePostProcessOptions);
 			applyAcesToneMapping(acesToneMappingEnabled);
 			applyLightIntensity(activeLightIntensity);
 			cameras = new CameraRig(elements.canvas);

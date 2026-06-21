@@ -1378,6 +1378,13 @@ requireText(byPath["torcs_web_renderer.html"], "id=\"settings-close\"", "setting
 requireText(byPath["torcs_web_renderer.html"], "id=\"show-control-sliders\"", "control slider visibility checkbox");
 requireText(byPath["torcs_web_renderer.html"], "id=\"control-sliders\"", "manual control slider group");
 requireText(byPath["torcs_web_renderer.html"], "id=\"render-profile\"", "render profile selector");
+requireText(byPath["torcs_web_renderer.html"], "id=\"postprocess-preset\"", "postprocess preset selector");
+requireText(byPath["torcs_web_renderer.html"], "id=\"postprocess-bloom\"", "postprocess bloom slider");
+requireText(byPath["torcs_web_renderer.html"], "id=\"postprocess-bloom-value\"", "postprocess bloom value readout");
+requireText(byPath["torcs_web_renderer.html"], "id=\"postprocess-motion-blur\"", "postprocess motion blur slider");
+requireText(byPath["torcs_web_renderer.html"], "id=\"postprocess-motion-blur-value\"", "postprocess motion blur value readout");
+requireText(byPath["torcs_web_renderer.html"], "id=\"postprocess-ao\"", "postprocess AO slider");
+requireText(byPath["torcs_web_renderer.html"], "id=\"postprocess-ao-value\"", "postprocess AO value readout");
 requireText(byPath["torcs_web_renderer.html"], "id=\"light-intensity\"", "light intensity slider");
 requireText(byPath["torcs_web_renderer.html"], "id=\"light-intensity-value\"", "light intensity value readout");
 requireText(byPath["torcs_web_renderer.html"], "id=\"aces-tone-mapping\"", "ACES tone mapping checkbox");
@@ -1471,6 +1478,15 @@ requireText(byPath["renderer/main.js"], "writeStoredSetting(\"hapticsIntensity\"
 requireText(byPath["renderer/main.js"], "writeStoredSetting(\"showControlSliders\"", "persisted control slider visibility setting");
 requireText(byPath["renderer/main.js"], "getInitialRenderProfile()", "query-string render profile initialization");
 requireText(byPath["renderer/main.js"], "getQueryParam(\"profile\")", "render profile query parameter");
+requireText(byPath["renderer/main.js"], "getInitialPostProcessPreset()", "postprocess settings initialization");
+requireText(byPath["renderer/main.js"], "getQueryParam(\"postprocess\")", "postprocess query parameter");
+requireText(byPath["renderer/main.js"], "getQueryParam(\"bloom\")", "postprocess bloom query parameter");
+requireText(byPath["renderer/main.js"], "getQueryParam(\"motionBlur\")", "postprocess motion-blur query parameter");
+requireText(byPath["renderer/main.js"], "getQueryParam(\"ao\")", "postprocess AO query parameter");
+requireText(byPath["renderer/main.js"], "writeStoredSetting(\"postProcessPreset\"", "persisted postprocess preset setting");
+requireText(byPath["renderer/main.js"], "writeStoredSetting(\"postProcessBloom\"", "persisted postprocess bloom setting");
+requireText(byPath["renderer/main.js"], "writeStoredSetting(\"postProcessMotionBlur\"", "persisted postprocess motion-blur setting");
+requireText(byPath["renderer/main.js"], "writeStoredSetting(\"postProcessAo\"", "persisted postprocess AO setting");
 requireText(byPath["renderer/main.js"], "getInitialLightIntensity()", "query-string light intensity initialization");
 requireText(byPath["renderer/main.js"], "getQueryParam(\"lightIntensity\")", "light intensity query parameter");
 requireText(byPath["renderer/main.js"], "getInitialMaterialWetness()", "query-string wetness initialization");
@@ -1526,6 +1542,8 @@ if (byPath["renderer/showroom.js"].content.includes("from \"postprocessing\"")) 
 }
 
 requireText(byPath["renderer/postprocess.js"], "export class TorcsPostProcessPipeline", "shared WebGPU postprocess pipeline export");
+requireText(byPath["renderer/postprocess.js"], "export function normalizePostProcessOptions", "shared postprocess option normalization");
+requireText(byPath["renderer/postprocess.js"], "optionsEqual(nextOptions, this.options)", "postprocess option-change pipeline invalidation");
 requireText(byPath["renderer/postprocess.js"], "new THREE.RenderPipeline", "Three WebGPU RenderPipeline use");
 requireText(byPath["renderer/postprocess.js"], "pass(this.scene, this.camera)", "Three TSL scene pass");
 requireText(byPath["renderer/postprocess.js"], "scenePass.setMRT(mrt({ output, velocity }))", "race velocity MRT");
@@ -1594,6 +1612,7 @@ requireText(byPath["renderer/main.js"], "clearCustomTrackFile(true)", "custom tr
 requireText(byPath["renderer/main.js"], "getVisualTrackPath()", "runtime track path visual reload guard");
 requireText(byPath["renderer/main.js"], "scene = await TorcsScene.create(elements.canvas)", "async WebGPU scene creation");
 requireText(byPath["renderer/main.js"], "scene.setRenderProfile(activeRenderProfile)", "scene render profile handoff");
+requireText(byPath["renderer/main.js"], "scene.setPostProcessSettings(activePostProcessPreset, activePostProcessOptions)", "scene postprocess settings handoff");
 requireText(byPath["renderer/main.js"], "scene.setLightIntensityScale(activeLightIntensity)", "scene light intensity handoff");
 requireText(byPath["renderer/main.js"], "assets.setWetness(activeMaterialWetness)", "asset wetness handoff");
 requireText(byPath["renderer/main.js"], "assets.setMaterialDebugEnabled(materialDebugEnabled)", "asset material debug handoff");
@@ -1602,6 +1621,11 @@ requireText(byPath["renderer/main.js"], "setSettingsOpen(true)", "settings popup
 requireText(byPath["renderer/main.js"], "setControlSlidersVisible(elements.showControlSliders.checked, true)", "control slider visibility binding");
 requireText(byPath["renderer/main.js"], "elements.renderProfile.addEventListener", "render profile selector binding");
 requireText(byPath["renderer/main.js"], "applyRenderProfile(elements.renderProfile.value, true)", "render profile visual asset reload");
+requireText(byPath["renderer/main.js"], "elements.postProcessPreset.addEventListener", "postprocess preset selector binding");
+requireText(byPath["renderer/main.js"], "elements.postProcessBloom.addEventListener", "postprocess bloom slider binding");
+requireText(byPath["renderer/main.js"], "elements.postProcessMotionBlur.addEventListener", "postprocess motion-blur slider binding");
+requireText(byPath["renderer/main.js"], "elements.postProcessAo.addEventListener", "postprocess AO slider binding");
+requireText(byPath["renderer/main.js"], "applyPostProcessSettings(activePostProcessPreset", "postprocess settings live apply path");
 requireText(byPath["renderer/main.js"], "elements.lightIntensity.addEventListener", "light intensity slider binding");
 requireText(byPath["renderer/main.js"], "applyAcesToneMapping(elements.acesToneMapping.checked)", "ACES tone mapping checkbox handoff");
 requireText(byPath["renderer/main.js"], "scene.setAcesToneMappingEnabled(elements.acesToneMapping.checked)", "ACES tone mapping scene binding");
@@ -1742,6 +1766,7 @@ requireText(byPath["renderer/main.js"], "haptics.setTriggerStrength", "DualSense
 requireText(byPath["renderer/scene.js"], "import * as THREE from \"three/webgpu\"", "Three.js WebGPU module import");
 requireText(byPath["renderer/scene.js"], "import { TorcsEffects } from \"./effects.js\"", "effects module import");
 requireText(byPath["renderer/scene.js"], "TorcsPostProcessPipeline", "main renderer shared postprocess pipeline");
+requireText(byPath["renderer/scene.js"], "setPostProcessSettings(preset = \"auto\", options = {})", "main renderer postprocess settings setter");
 requireText(byPath["renderer/scene.js"], "new THREE.WebGPURenderer", "WebGPU renderer creation");
 requireText(byPath["renderer/scene.js"], "await renderer.init()", "async WebGPU renderer initialization");
 requireText(byPath["renderer/scene.js"], "return new THREE.Line(geometry, material)", "WebGPU-compatible closed line primitive");
