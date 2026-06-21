@@ -54,6 +54,8 @@ const elements = {
 	postProcessBloomValue: document.getElementById("postprocess-bloom-value"),
 	postProcessMotionBlur: document.getElementById("postprocess-motion-blur"),
 	postProcessMotionBlurValue: document.getElementById("postprocess-motion-blur-value"),
+	postProcessSkyboxBlur: document.getElementById("postprocess-skybox-blur"),
+	postProcessSkyboxBlurValue: document.getElementById("postprocess-skybox-blur-value"),
 	postProcessAo: document.getElementById("postprocess-ao"),
 	postProcessAoValue: document.getElementById("postprocess-ao-value"),
 	lightIntensity: document.getElementById("light-intensity"),
@@ -290,6 +292,9 @@ function getInitialPostProcessOptions(preset) {
 		motionBlur: getQueryParam("motionBlur") !== null
 			? queryOptions.motionBlur
 			: getStoredNumber("postProcessMotionBlur", queryOptions.motionBlur, 0, 2),
+		skyboxBlur: getQueryParam("skyboxBlur") !== null
+			? queryOptions.skyboxBlur
+			: getStoredNumber("postProcessSkyboxBlur", queryOptions.skyboxBlur, 0, 2),
 		ao: getQueryParam("ao") !== null
 			? queryOptions.ao
 			: getStoredNumber("postProcessAo", queryOptions.ao, 0, 2),
@@ -360,6 +365,12 @@ function syncPostProcessControls() {
 		elements.postProcessMotionBlur.value = String(activePostProcessOptions.motionBlur);
 		if (elements.postProcessMotionBlurValue) {
 			elements.postProcessMotionBlurValue.textContent = formatPostProcessValue(activePostProcessOptions.motionBlur);
+		}
+	}
+	if (elements.postProcessSkyboxBlur) {
+		elements.postProcessSkyboxBlur.value = String(activePostProcessOptions.skyboxBlur);
+		if (elements.postProcessSkyboxBlurValue) {
+			elements.postProcessSkyboxBlurValue.textContent = formatPostProcessValue(activePostProcessOptions.skyboxBlur);
 		}
 	}
 	if (elements.postProcessAo) {
@@ -976,7 +987,7 @@ function readAndRender(deltaTime = 0) {
 	scene.updateCars(snapshots, cameras.camera, selectedCarIndex, carAssets, cameras.getSceneOptions());
 	audio.update(snapshot, cameras.camera, deltaTime);
 	haptics.update(snapshot, deltaTime);
-	scene.render(cameras.camera);
+	scene.render(cameras.camera, deltaTime);
 }
 
 async function warnCarVisualFallbacks(assetsByCarIndex, fallbackAsset) {
@@ -1127,6 +1138,7 @@ function applyPostProcessSettings(preset = activePostProcessPreset, options = ac
 		writeStoredSetting("postProcessPreset", activePostProcessPreset);
 		writeStoredSetting("postProcessBloom", activePostProcessOptions.bloom);
 		writeStoredSetting("postProcessMotionBlur", activePostProcessOptions.motionBlur);
+		writeStoredSetting("postProcessSkyboxBlur", activePostProcessOptions.skyboxBlur);
 		writeStoredSetting("postProcessAo", activePostProcessOptions.ao);
 	}
 	if (scene) {
@@ -1517,6 +1529,12 @@ function bindUi() {
 			applyPostProcessSettings(activePostProcessPreset, {
 				...activePostProcessOptions,
 				motionBlur: Number(elements.postProcessMotionBlur.value),
+			}, true);
+		});
+		elements.postProcessSkyboxBlur.addEventListener("input", () => {
+			applyPostProcessSettings(activePostProcessPreset, {
+				...activePostProcessOptions,
+				skyboxBlur: Number(elements.postProcessSkyboxBlur.value),
 			}, true);
 		});
 		elements.postProcessAo.addEventListener("input", () => {

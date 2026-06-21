@@ -467,6 +467,7 @@ export class TorcsScene {
 			this.removeBackgroundDome();
 			this.scene.background = this.skyboxMap;
 			this.scene.environment = this.skyboxMap;
+			this.postprocess.setSkyboxTexture(this.skyboxMap);
 			if ("environmentIntensity" in this.scene) {
 				this.scene.environmentIntensity = DEFAULT_ENVIRONMENT_INTENSITY;
 			}
@@ -474,6 +475,7 @@ export class TorcsScene {
 		}
 		this.scene.background = this.trackBackgroundColor.clone();
 		this.scene.environment = this.environmentMap;
+		this.postprocess.setSkyboxTexture(null);
 		if ("environmentIntensity" in this.scene) {
 			this.scene.environmentIntensity = DEFAULT_ENVIRONMENT_INTENSITY;
 		}
@@ -1224,7 +1226,7 @@ export class TorcsScene {
 		return false;
 	}
 
-	render(camera) {
+	render(camera, deltaTime = 0) {
 		if (this.backgroundDome && camera) {
 			this.backgroundDome.position.set(
 				camera.position.x,
@@ -1233,7 +1235,7 @@ export class TorcsScene {
 			);
 		}
 		this.postprocess.setCamera(camera);
-		this.postprocess.render();
+		this.postprocess.render(deltaTime);
 	}
 }
 

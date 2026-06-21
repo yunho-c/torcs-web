@@ -1383,6 +1383,8 @@ requireText(byPath["torcs_web_renderer.html"], "id=\"postprocess-bloom\"", "post
 requireText(byPath["torcs_web_renderer.html"], "id=\"postprocess-bloom-value\"", "postprocess bloom value readout");
 requireText(byPath["torcs_web_renderer.html"], "id=\"postprocess-motion-blur\"", "postprocess motion blur slider");
 requireText(byPath["torcs_web_renderer.html"], "id=\"postprocess-motion-blur-value\"", "postprocess motion blur value readout");
+requireText(byPath["torcs_web_renderer.html"], "id=\"postprocess-skybox-blur\"", "postprocess skybox blur slider");
+requireText(byPath["torcs_web_renderer.html"], "id=\"postprocess-skybox-blur-value\"", "postprocess skybox blur value readout");
 requireText(byPath["torcs_web_renderer.html"], "id=\"postprocess-ao\"", "postprocess AO slider");
 requireText(byPath["torcs_web_renderer.html"], "id=\"postprocess-ao-value\"", "postprocess AO value readout");
 requireText(byPath["torcs_web_renderer.html"], "id=\"light-intensity\"", "light intensity slider");
@@ -1484,10 +1486,12 @@ requireText(byPath["renderer/main.js"], "getInitialPostProcessPreset()", "postpr
 requireText(byPath["renderer/main.js"], "getQueryParam(\"postprocess\")", "postprocess query parameter");
 requireText(byPath["renderer/main.js"], "getQueryParam(\"bloom\")", "postprocess bloom query parameter");
 requireText(byPath["renderer/main.js"], "getQueryParam(\"motionBlur\")", "postprocess motion-blur query parameter");
+requireText(byPath["renderer/main.js"], "getQueryParam(\"skyboxBlur\")", "postprocess skybox-blur query parameter");
 requireText(byPath["renderer/main.js"], "getQueryParam(\"ao\")", "postprocess AO query parameter");
 requireText(byPath["renderer/main.js"], "writeStoredSetting(\"postProcessPreset\"", "persisted postprocess preset setting");
 requireText(byPath["renderer/main.js"], "writeStoredSetting(\"postProcessBloom\"", "persisted postprocess bloom setting");
 requireText(byPath["renderer/main.js"], "writeStoredSetting(\"postProcessMotionBlur\"", "persisted postprocess motion-blur setting");
+requireText(byPath["renderer/main.js"], "writeStoredSetting(\"postProcessSkyboxBlur\"", "persisted postprocess skybox-blur setting");
 requireText(byPath["renderer/main.js"], "writeStoredSetting(\"postProcessAo\"", "persisted postprocess AO setting");
 requireText(byPath["renderer/main.js"], "getInitialLightIntensity()", "query-string light intensity initialization");
 requireText(byPath["renderer/main.js"], "getQueryParam(\"lightIntensity\")", "light intensity query parameter");
@@ -1549,9 +1553,15 @@ if (byPath["renderer/showroom.js"].content.includes("from \"postprocessing\"")) 
 requireText(byPath["renderer/postprocess.js"], "export class TorcsPostProcessPipeline", "shared WebGPU postprocess pipeline export");
 requireText(byPath["renderer/postprocess.js"], "export function normalizePostProcessOptions", "shared postprocess option normalization");
 requireText(byPath["renderer/postprocess.js"], "optionsEqual(nextOptions, this.options)", "postprocess option-change pipeline invalidation");
+requireText(byPath["renderer/postprocess.js"], "skyboxBlur: clamp(options.skyboxBlur", "shared postprocess skybox-blur option normalization");
+requireText(byPath["renderer/postprocess.js"], "setSkyboxTexture(texture)", "postprocess skybox texture handoff");
+requireText(byPath["renderer/postprocess.js"], "createSkyboxBlurNode(sceneColor)", "seam-safe skybox blur node path");
 requireText(byPath["renderer/postprocess.js"], "new THREE.RenderPipeline", "Three WebGPU RenderPipeline use");
 requireText(byPath["renderer/postprocess.js"], "pass(this.scene, this.camera)", "Three TSL scene pass");
 requireText(byPath["renderer/postprocess.js"], "scenePass.setMRT(mrt({ output, velocity }))", "race velocity MRT");
+requireText(byPath["renderer/postprocess.js"], "const sceneDepth = scenePass.getTextureNode(\"depth\")", "race depth mask input");
+requireText(byPath["renderer/postprocess.js"], "const backgroundMask = step(0.99999, sceneDepth)", "race background motion-blur mask");
+requireText(byPath["renderer/postprocess.js"], "mix(foregroundColor, backgroundColor, backgroundMask)", "race foreground/background postprocess composite");
 requireText(byPath["renderer/postprocess.js"], "motionBlur(sceneColor, motionVector)", "race motion blur node");
 requireText(byPath["renderer/postprocess.js"], "bloom(sceneColor)", "shared bloom node");
 requireText(byPath["renderer/postprocess.js"], "directionToColor(normalView)", "r183-compatible AO normal packing");
@@ -1631,6 +1641,7 @@ requireText(byPath["renderer/main.js"], "applyRenderProfile(elements.renderProfi
 requireText(byPath["renderer/main.js"], "elements.postProcessPreset.addEventListener", "postprocess preset selector binding");
 requireText(byPath["renderer/main.js"], "elements.postProcessBloom.addEventListener", "postprocess bloom slider binding");
 requireText(byPath["renderer/main.js"], "elements.postProcessMotionBlur.addEventListener", "postprocess motion-blur slider binding");
+requireText(byPath["renderer/main.js"], "elements.postProcessSkyboxBlur.addEventListener", "postprocess skybox-blur slider binding");
 requireText(byPath["renderer/main.js"], "elements.postProcessAo.addEventListener", "postprocess AO slider binding");
 requireText(byPath["renderer/main.js"], "applyPostProcessSettings(activePostProcessPreset", "postprocess settings live apply path");
 requireText(byPath["renderer/main.js"], "elements.lightIntensity.addEventListener", "light intensity slider binding");
@@ -1643,6 +1654,7 @@ requireText(byPath["renderer/main.js"], "scheduleMaterialSettingsReload()", "mat
 requireText(byPath["renderer/main.js"], "runtime.readTrackSamples()", "track sample ingestion");
 requireText(byPath["renderer/main.js"], "runtime.readSnapshots()", "Phase 6 snapshot array ingestion");
 requireText(byPath["renderer/main.js"], "scene.updateCars(snapshots, cameras.camera, selectedCarIndex, carAssets, cameras.getSceneOptions())", "Phase 6 selected-car scene update with per-car visual assets");
+requireText(byPath["renderer/main.js"], "scene.render(cameras.camera, deltaTime)", "delta-time-aware postprocess render handoff");
 requireText(byPath["renderer/main.js"], "loadCarAssetsForSnapshots(snapshots, elements.car.value)", "runtime car model visual asset loading");
 requireText(byPath["renderer/main.js"], "TORCS web renderer using selected car visual fallback for runtime car model", "per-car visual fallback warning");
 requireText(byPath["renderer/main.js"], "findSnapshotByCarIndex(selectedCarIndex)", "Phase 6 selected-car snapshot lookup");
@@ -1774,6 +1786,8 @@ requireText(byPath["renderer/scene.js"], "import * as THREE from \"three/webgpu\
 requireText(byPath["renderer/scene.js"], "import { TorcsEffects } from \"./effects.js\"", "effects module import");
 requireText(byPath["renderer/scene.js"], "TorcsPostProcessPipeline", "main renderer shared postprocess pipeline");
 requireText(byPath["renderer/scene.js"], "setPostProcessSettings(preset = \"auto\", options = {})", "main renderer postprocess settings setter");
+requireText(byPath["renderer/scene.js"], "this.postprocess.setSkyboxTexture(this.skyboxMap)", "main renderer active skybox postprocess handoff");
+requireText(byPath["renderer/scene.js"], "this.postprocess.setSkyboxTexture(null)", "main renderer disabled skybox postprocess handoff");
 requireText(byPath["renderer/scene.js"], "new THREE.WebGPURenderer", "WebGPU renderer creation");
 requireText(byPath["renderer/scene.js"], "await renderer.init()", "async WebGPU renderer initialization");
 requireText(byPath["renderer/scene.js"], "return new THREE.Line(geometry, material)", "WebGPU-compatible closed line primitive");
@@ -1859,7 +1873,7 @@ requireText(byPath["renderer/scene.js"], "this.effects = this.createCarEffects(0
 requireText(byPath["renderer/scene.js"], "effects.resetDynamics()", "effects reset on new track/session");
 requireText(byPath["renderer/scene.js"], "this.effects.update(values, this.car, camera)", "snapshot-driven effects update");
 requireText(byPath["renderer/scene.js"], "this.postprocess.setCamera(camera)", "camera-aware postprocess render path");
-requireText(byPath["renderer/scene.js"], "this.postprocess.render()", "main renderer postprocess render path");
+requireText(byPath["renderer/scene.js"], "this.postprocess.render(deltaTime)", "main renderer postprocess render path");
 if (byPath["renderer/scene.js"].content.includes("this.car.rotation.set(values[SNAPSHOT.pitch]")) {
 	fail("TORCS web renderer smoke test found scalar Euler car body orientation");
 }

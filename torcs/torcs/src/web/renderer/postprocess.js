@@ -3,12 +3,14 @@ import {
 	builtinAOContext,
 	colorToDirection,
 	directionToColor,
+	mix,
 	mrt,
 	normalView,
 	output,
 	pass,
 	sample,
 	screenUV,
+	step,
 	uniform,
 	vec4,
 	velocity,
@@ -22,13 +24,16 @@ const POSTPROCESS_PRESETS = new Set(["none", "race", "showroom"]);
 const DEFAULT_RACE_OPTIONS = Object.freeze({
 	bloom: 0.08,
 	motionBlur: 0.45,
+	skyboxBlur: 0.35,
 	ao: 0,
 });
 const DEFAULT_SHOWROOM_OPTIONS = Object.freeze({
 	bloom: 0.08,
 	motionBlur: 0,
+	skyboxBlur: 0,
 	ao: 1,
 });
+const SKYBOX_BLUR_TAPS = [0, 0.25, 0.5, 0.75, 1];
 
 function clamp(value, min, max, fallback) {
 	if (value === null || value === undefined) {
@@ -39,7 +44,8 @@ function clamp(value, min, max, fallback) {
 }
 
 function optionsEqual(a, b) {
-	return a.bloom === b.bloom && a.motionBlur === b.motionBlur && a.ao === b.ao;
+	return a.bloom === b.bloom && a.motionBlur === b.motionBlur &&
+		a.skyboxBlur === b.skyboxBlur && a.ao === b.ao;
 }
 
 export function normalizePostProcessPreset(preset, fallback = "none") {
@@ -55,6 +61,7 @@ export function normalizePostProcessOptions(preset = "none", options = {}) {
 	return {
 		bloom: clamp(options.bloom, 0, 3, defaults.bloom),
 		motionBlur: clamp(options.motionBlur, 0, 2, defaults.motionBlur),
+		skyboxBlur: clamp(options.skyboxBlur, 0, 2, defaults.skyboxBlur),
 		ao: clamp(options.ao, 0, 2, defaults.ao),
 	};
 }
@@ -72,6 +79,7 @@ export function getPostProcessOptions(preset = "none") {
 	return normalizePostProcessOptions(preset, {
 		bloom: params.get("bloom"),
 		motionBlur: params.get("motionBlur"),
+		skyboxBlur: params.get("skyboxBlur"),
 		ao: params.get("ao"),
 	});
 }
@@ -89,6 +97,11 @@ export class TorcsPostProcessPipeline {
 		this.pipeline = null;
 		this.disabled = false;
 		this.disabledReason = "";
+		this.skyboxTexture = null;
+		this.skyboxScene = new THREE.Scene();
+		this.skyboxCameras = SKYBOX_BLUR_TAPS.map(() => new THREE.PerspectiveCamera());
+		this.previousSkyboxQuaternion = null;
+		this.currentSkyboxQuaternion = new THREE.Quaternion();
 	}
 
 	setCamera(camera) {
@@ -104,6 +117,16 @@ export class TorcsPostProcessPipeline {
 		if (this.disabled) {
 			this.pipeline = null;
 		}
+	}
+
+	setSkyboxTexture(texture) {
+		if (texture === this.skyboxTexture) {
+			return;
+		}
+		this.skyboxTexture = texture || null;
+		this.skyboxScene.background = this.skyboxTexture;
+		this.previousSkyboxQuaternion = null;
+		this.pipeline = null;
 	}
 
 	setPreset(preset, options = {}) {
@@ -126,7 +149,7 @@ export class TorcsPostProcessPipeline {
 		this.pipeline = null;
 	}
 
-	render() {
+	render(deltaTime = 0) {
 		if (this.disabled || this.preset === "none" || !this.camera) {
 			this.renderRaw();
 			return;
@@ -134,7 +157,9 @@ export class TorcsPostProcessPipeline {
 
 		try {
 			this.ensurePipeline();
+			this.updateSkyboxCameras(deltaTime);
 			this.pipeline.render();
+			this.commitSkyboxFrame();
 		} catch (error) {
 			this.disabled = true;
 			this.disabledReason = error && error.message ? error.message : String(error);
@@ -150,6 +175,40 @@ export class TorcsPostProcessPipeline {
 		if (this.camera) {
 			this.renderer.render(this.scene, this.camera);
 		}
+	}
+
+	updateSkyboxCameras(deltaTime = 0) {
+		if (!this.camera || !this.skyboxTexture || this.options.skyboxBlur <= 0) {
+			return;
+		}
+		this.camera.getWorldQuaternion(this.currentSkyboxQuaternion);
+		const blurScale = deltaTime > 0 && this.previousSkyboxQuaternion
+			? Math.min(1, this.options.skyboxBlur)
+			: 0;
+		for (let i = 0; i < this.skyboxCameras.length; i += 1) {
+			const skyCamera = this.skyboxCameras[i];
+			skyCamera.fov = this.camera.fov;
+			skyCamera.aspect = this.camera.aspect;
+			skyCamera.near = this.camera.near;
+			skyCamera.far = this.camera.far;
+			skyCamera.position.set(0, 0, 0);
+			skyCamera.quaternion.slerpQuaternions(
+				this.currentSkyboxQuaternion,
+				this.previousSkyboxQuaternion || this.currentSkyboxQuaternion,
+				SKYBOX_BLUR_TAPS[i] * blurScale,
+			);
+			skyCamera.updateProjectionMatrix();
+			skyCamera.updateMatrixWorld(true);
+		}
+	}
+
+	commitSkyboxFrame() {
+		if (!this.camera) {
+			return;
+		}
+		this.camera.getWorldQuaternion(this.currentSkyboxQuaternion);
+		this.previousSkyboxQuaternion = this.previousSkyboxQuaternion || new THREE.Quaternion();
+		this.previousSkyboxQuaternion.copy(this.currentSkyboxQuaternion);
 	}
 
 	ensurePipeline() {
@@ -174,10 +233,14 @@ export class TorcsPostProcessPipeline {
 		const scenePass = pass(this.scene, this.camera);
 		scenePass.setMRT(mrt({ output, velocity }));
 		const sceneColor = scenePass.getTextureNode("output");
+		const sceneDepth = scenePass.getTextureNode("depth");
 		const motionVector = scenePass.getTextureNode("velocity").mul(uniform(this.options.motionBlur));
-		let finalColor = this.options.motionBlur > 0
+		const foregroundColor = this.options.motionBlur > 0
 			? motionBlur(sceneColor, motionVector)
 			: sceneColor;
+		const backgroundColor = this.createSkyboxBlurNode(sceneColor);
+		const backgroundMask = step(0.99999, sceneDepth);
+		let finalColor = mix(foregroundColor, backgroundColor, backgroundMask);
 		if (this.options.bloom > 0) {
 			const bloomPass = bloom(sceneColor);
 			bloomPass.strength.value = this.options.bloom;
@@ -189,6 +252,19 @@ export class TorcsPostProcessPipeline {
 		const pipeline = new THREE.RenderPipeline(this.renderer);
 		pipeline.outputNode = vec4(finalColor.mul(vignette).rgb, finalColor.a);
 		return pipeline;
+	}
+
+	createSkyboxBlurNode(fallbackColor) {
+		if (!this.skyboxTexture || this.options.skyboxBlur <= 0) {
+			return fallbackColor;
+		}
+		let skyboxColor = null;
+		for (const skyCamera of this.skyboxCameras) {
+			const skyboxPass = pass(this.skyboxScene, skyCamera);
+			const color = skyboxPass.getTextureNode();
+			skyboxColor = skyboxColor ? skyboxColor.add(color) : color;
+		}
+		return skyboxColor.mul(1 / this.skyboxCameras.length);
 	}
 
 	createShowroomPipeline() {
