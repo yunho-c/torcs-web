@@ -1892,6 +1892,15 @@ requireText(byPath["renderer/effects.js"], "asset.entry ? asset.entry.lights : [
 requireText(byPath["renderer/effects.js"], "this.assetLightSprites.length > 0", "authored car light sprite path");
 requireText(byPath["renderer/effects.js"], "torcsToThree(light.position[0], light.position[1], light.position[2])", "TORCS car light coordinate conversion");
 requireText(byPath["renderer/effects.js"], "getCarLightOpacity(record.type, lightCommand, brake)", "authored car light state mapping");
+requireText(byPath["renderer/effects.js"], "return [diameter * 2, diameter * 2];", "TORCS-style square authored car light scale");
+requireText(byPath["renderer/effects.js"], "sprite.scale.set(spec.size, spec.size, 1)", "TORCS-style square fallback car light scale");
+if (
+	byPath["renderer/effects.js"].content.includes("scale: [5.75, 2.3]") ||
+	byPath["renderer/effects.js"].content.includes("scale: [5.5, 2.4]") ||
+	byPath["renderer/effects.js"].content.includes("scale: [3.9, 1.6]")
+) {
+	fail("TORCS web renderer smoke test found horizontally stretched car light scale factors");
+}
 requireText(byPath["renderer/effects.js"], "updateCollision(values, car, time)", "collision feedback hook");
 requireText(byPath["renderer/effects.js"], "resetDynamics()", "dynamic effect lifecycle reset");
 requireText(byPath["renderer/effects.js"], "SNAPSHOT.wheelSkidIntensity0", "skid snapshot field use");

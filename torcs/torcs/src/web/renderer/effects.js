@@ -27,11 +27,11 @@ const HEAD1_LIGHT_MASK = 0x00000001;
 const HEAD2_LIGHT_MASK = 0x00000002;
 const VALID_CAR_LIGHT_TYPES = new Set(["head1", "head2", "rear", "brake", "brake2"]);
 const CAR_LIGHT_SPRITES = {
-	head1: { texture: "frontlight", color: 0xfff1ca, scale: [5.75, 2.3] },
-	head2: { texture: "frontlight", color: 0xfff1ca, scale: [5.75, 2.3] },
-	rear: { texture: "rearlight", color: 0xff2a22, scale: [5.5, 2.4] },
-	brake: { texture: "brakelight", color: 0xff321f, scale: [3.9, 1.6] },
-	brake2: { texture: "brakelight", color: 0xff321f, scale: [3.9, 1.6] },
+	head1: { texture: "frontlight", color: 0xfff1ca },
+	head2: { texture: "frontlight", color: 0xfff1ca },
+	rear: { texture: "rearlight", color: 0xff2a22 },
+	brake: { texture: "brakelight", color: 0xff321f },
+	brake2: { texture: "brakelight", color: 0xff321f },
 };
 
 const SURFACE_EFFECTS = [
@@ -111,10 +111,9 @@ function getCarLightOpacity(type, lightCommand, brake) {
 	}
 }
 
-function getCarLightScale(type, size) {
-	const spec = CAR_LIGHT_SPRITES[type] || CAR_LIGHT_SPRITES.rear;
+function getCarLightScale(_type, size) {
 	const diameter = Math.max(0.04, size || 0.2);
-	return [diameter * spec.scale[0], diameter * spec.scale[1]];
+	return [diameter * 2, diameter * 2];
 }
 
 function getWheelLocal(values, index, yOffset = 0) {
@@ -416,17 +415,17 @@ export class TorcsEffects {
 
 	createLightSprites() {
 		const specs = [
-			{ key: "headL", type: "frontlight", color: 0xfff1ca, size: [1.15, 0.46] },
-			{ key: "headR", type: "frontlight", color: 0xfff1ca, size: [1.15, 0.46] },
-			{ key: "rearL", type: "rearlight", color: 0xff2a22, size: [0.55, 0.24] },
-			{ key: "rearR", type: "rearlight", color: 0xff2a22, size: [0.55, 0.24] },
-			{ key: "brakeL", type: "brakelight", color: 0xff321f, size: [0.78, 0.32] },
-			{ key: "brakeR", type: "brakelight", color: 0xff321f, size: [0.78, 0.32] },
+			{ key: "headL", type: "frontlight", color: 0xfff1ca, size: 0.4 },
+			{ key: "headR", type: "frontlight", color: 0xfff1ca, size: 0.4 },
+			{ key: "rearL", type: "rearlight", color: 0xff2a22, size: 0.2 },
+			{ key: "rearR", type: "rearlight", color: 0xff2a22, size: 0.2 },
+			{ key: "brakeL", type: "brakelight", color: 0xff321f, size: 0.4 },
+			{ key: "brakeR", type: "brakelight", color: 0xff321f, size: 0.4 },
 		];
 		const sprites = {};
 		for (const spec of specs) {
 			const sprite = new THREE.Sprite(makeSpriteMaterial(this.textures[spec.type], spec.color, 0, true));
-			sprite.scale.set(spec.size[0], spec.size[1], 1);
+			sprite.scale.set(spec.size, spec.size, 1);
 			sprite.userData.type = spec.type;
 			this.groups.carLights.add(sprite);
 			sprites[spec.key] = sprite;
