@@ -24,6 +24,7 @@ AC_SURFACE_TRIANGLE_STRIP = 4
 TREE_ALPHA_CUTOFF = 0.65
 TEXTURE_ALPHA_CUTOFF = 0.10
 BLENDED_ALPHA_MATERIAL_CLASSES = {"glass", "mirrorGlass"}
+ALPHA_TEST_MATERIAL_CLASSES = {"treeFoliage"}
 EFFECT_TEXTURES = [
 	"smoke.rgb",
 	"fire0.rgb",
@@ -126,6 +127,9 @@ class TextureAlphaInfo:
 	has_alpha: bool = False
 	has_transparent_alpha: bool = False
 	has_partial_alpha: bool = False
+
+
+TEXTURE_ALPHA_INFO_CACHE = {}
 
 
 def parse_args(argv=None):
@@ -554,6 +558,25 @@ def probe_texture_alpha_info(path):
 		return TextureAlphaInfo()
 
 
+def cached_texture_alpha_info(path):
+	key = path.resolve()
+	if key not in TEXTURE_ALPHA_INFO_CACHE:
+		TEXTURE_ALPHA_INFO_CACHE[key] = probe_texture_alpha_info(path)
+	return TEXTURE_ALPHA_INFO_CACHE[key]
+
+
+def uses_fixed_alpha_mask(texture, material_class=""):
+	return material_class in ALPHA_TEST_MATERIAL_CLASSES or uses_alpha_test(texture)
+
+
+def should_probe_texture_alpha(texture, material_class=""):
+	if not texture:
+		return False
+	if material_class in BLENDED_ALPHA_MATERIAL_CLASSES:
+		return True
+	return not uses_fixed_alpha_mask(texture, material_class)
+
+
 def apply_texture_alpha(material, texture, material_class="", alpha_info=None):
 	if not texture:
 		return
@@ -561,7 +584,7 @@ def apply_texture_alpha(material, texture, material_class="", alpha_info=None):
 	if alpha_info.has_alpha and material_class in BLENDED_ALPHA_MATERIAL_CLASSES:
 		material["alphaMode"] = "BLEND"
 		return
-	if uses_alpha_test(texture):
+	if uses_fixed_alpha_mask(texture, material_class):
 		material["alphaMode"] = "MASK"
 		material["alphaCutoff"] = TREE_ALPHA_CUTOFF
 	elif alpha_info.has_alpha:
@@ -770,8 +793,6 @@ def convert_ac_to_glb(source_root, source_path, output_path, object_classifier=N
 			resolved = resolve_texture(source_root, asset_source_dir, texture)
 			if resolved:
 				texture_sources[texture] = resolved
-				if texture not in texture_alpha_infos:
-					texture_alpha_infos[texture] = probe_texture_alpha_info(resolved)
 			else:
 				texture = ""
 		key = make_primitive_key(texture, material_class)
@@ -897,6 +918,10 @@ def convert_ac_to_glb(source_root, source_path, output_path, object_classifier=N
 				gltf["textures"].append({"sampler": 0, "source": len(gltf["images"])})
 				gltf["images"].append({"uri": image_uri})
 			material["pbrMetallicRoughness"]["baseColorTexture"] = {"index": texture_indices[image_uri]}
+			if should_probe_texture_alpha(texture, material_class) and texture not in texture_alpha_infos:
+				source = texture_sources.get(texture)
+				if source:
+					texture_alpha_infos[texture] = cached_texture_alpha_info(source)
 			apply_texture_alpha(material, texture, material_class, texture_alpha_infos.get(texture))
 		gltf["materials"].append(material)
 		gltf["meshes"][0]["primitives"].append({

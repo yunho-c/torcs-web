@@ -193,6 +193,14 @@ kids 0
 		self.assertEqual(material["alphaMode"], "MASK")
 		self.assertEqual(material["alphaCutoff"], convert.TREE_ALPHA_CUTOFF)
 
+	def test_tree_foliage_material_uses_masked_alpha(self):
+		material = {}
+
+		convert.apply_texture_alpha(material, "leaf-card.png", "treeFoliage")
+
+		self.assertEqual(material["alphaMode"], "MASK")
+		self.assertEqual(material["alphaCutoff"], convert.TREE_ALPHA_CUTOFF)
+
 	def test_texture_alpha_channel_uses_masked_alpha_for_cutouts(self):
 		material = {}
 
@@ -240,6 +248,98 @@ kids 0
 		self.assertTrue(info.has_alpha)
 		self.assertTrue(info.has_transparent_alpha)
 		self.assertTrue(info.has_partial_alpha)
+
+	def test_convert_ac_to_glb_reuses_texture_alpha_cache(self):
+		asset = """AC3Db
+OBJECT poly
+name "shared"
+texture "shared.png" base
+numvert 3
+0 0 0
+1 0 0
+0 1 0
+numsurf 1
+SURF 0x14
+mat 0
+refs 3
+0 0 0
+1 1 0
+2 0 1
+kids 0
+"""
+		with tempfile.TemporaryDirectory() as tmp_dir:
+			source_root = Path(tmp_dir) / "source"
+			asset_dir = source_root / "data/tracks/demo"
+			output_dir = Path(tmp_dir) / "out"
+			asset_dir.mkdir(parents=True)
+			(asset_dir / "one.acc").write_text(asset, encoding="latin-1")
+			(asset_dir / "two.acc").write_text(asset, encoding="latin-1")
+			(asset_dir / "shared.png").write_bytes(b"not decoded by this test")
+			calls = []
+			original_probe = convert.probe_texture_alpha_info
+			convert.TEXTURE_ALPHA_INFO_CACHE.clear()
+			try:
+				def fake_probe(path):
+					calls.append(path.resolve())
+					return convert.TextureAlphaInfo(has_alpha=True)
+
+				convert.probe_texture_alpha_info = fake_probe
+				convert.convert_ac_to_glb(source_root, asset_dir / "one.acc", output_dir / "one.glb")
+				convert.convert_ac_to_glb(source_root, asset_dir / "two.acc", output_dir / "two.glb")
+			finally:
+				convert.probe_texture_alpha_info = original_probe
+				convert.TEXTURE_ALPHA_INFO_CACHE.clear()
+
+		self.assertEqual(calls, [(asset_dir / "shared.png").resolve()])
+
+	def test_convert_ac_to_glb_skips_alpha_probe_for_fixed_mask_materials(self):
+		asset = """AC3Db
+OBJECT poly
+name "TREECARD"
+texture "leaf-card.png" base
+numvert 3
+0 0 0
+1 0 0
+0 1 0
+numsurf 1
+SURF 0x14
+mat 0
+refs 3
+0 0 0
+1 1 0
+2 0 1
+kids 0
+"""
+		with tempfile.TemporaryDirectory() as tmp_dir:
+			source_root = Path(tmp_dir) / "source"
+			asset_dir = source_root / "data/tracks/demo"
+			output_path = Path(tmp_dir) / "out/demo.glb"
+			asset_dir.mkdir(parents=True)
+			(asset_dir / "demo.acc").write_text(asset, encoding="latin-1")
+			(asset_dir / "leaf-card.png").write_bytes(b"not decoded by this test")
+			calls = []
+			original_probe = convert.probe_texture_alpha_info
+			convert.TEXTURE_ALPHA_INFO_CACHE.clear()
+			try:
+				def fake_probe(path):
+					calls.append(path.resolve())
+					return convert.TextureAlphaInfo(has_alpha=True)
+
+				convert.probe_texture_alpha_info = fake_probe
+				convert.convert_ac_to_glb(
+					source_root,
+					asset_dir / "demo.acc",
+					output_path,
+					convert.classify_track_object,
+				)
+				gltf = read_glb_json(output_path)
+			finally:
+				convert.probe_texture_alpha_info = original_probe
+				convert.TEXTURE_ALPHA_INFO_CACHE.clear()
+
+		self.assertEqual(calls, [])
+		self.assertEqual(gltf["materials"][0]["alphaMode"], "MASK")
+		self.assertEqual(gltf["materials"][0]["alphaCutoff"], convert.TREE_ALPHA_CUTOFF)
 
 	def test_add_accessor_supports_32_bit_indices(self):
 		gltf = {"accessors": []}
