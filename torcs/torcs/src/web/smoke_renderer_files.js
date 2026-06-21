@@ -441,6 +441,10 @@ async function checkHapticsModelBehavior() {
 	const earlyShift = shiftLights.update(makeAudioSnapshot(SNAPSHOT, { engineRpm: 5950, engineRedline: 7000 }));
 	assertHaptics(earlyShift.state === "early" && (earlyShift.playerMask & 0b00011) !== 0 && (earlyShift.playerMask & 0b11100) === 0,
 		"early RPM lights left-side player LEDs", earlyShift);
+	const earlyShiftLower = shiftLights.update(makeAudioSnapshot(SNAPSHOT, { engineRpm: 5810, engineRedline: 7000 }));
+	assertHaptics(earlyShiftLower.state === "early" && earlyShiftLower.playerMask === earlyShift.playerMask &&
+		earlyShift.color.r > earlyShiftLower.color.r && earlyShift.color.b < earlyShiftLower.color.b,
+	"early shift lightbar color interpolates within the same player LED state", { earlyShiftLower, earlyShift });
 	const idealShift = shiftLights.update(makeAudioSnapshot(SNAPSHOT, { engineRpm: 6440, engineRedline: 7000 }));
 	assertHaptics(idealShift.state === "ideal" && idealShift.playerMask === 0b00100,
 		"ideal shift RPM lights only the center player LED", idealShift);
@@ -505,17 +509,42 @@ async function checkHapticsModelBehavior() {
 	const haptics = new DualSenseHaptics();
 	const ledWrites = [];
 	const lightbarWrites = [];
+	const hidBatches = [];
+	let activePlayerMask = 0;
+	let pendingHidPlayerMask = null;
 	haptics.controller = {
-		playerLeds: { set: (mask) => ledWrites.push(mask) },
-		lightbar: { set: (color) => lightbarWrites.push({ ...color }) },
+		hid: {
+			setPlayerLeds: (mask) => {
+				pendingHidPlayerMask = mask;
+				ledWrites.push(mask);
+			},
+			setLightbar: (r, g, b) => {
+				activePlayerMask = pendingHidPlayerMask ?? 0;
+				const color = { r, g, b };
+				lightbarWrites.push({ ...color });
+				hidBatches.push({
+					playerMask: pendingHidPlayerMask,
+					color,
+				});
+				pendingHidPlayerMask = null;
+			},
+		},
 	};
 	haptics.enabled = true;
-	haptics.updateShiftLights(makeAudioSnapshot(SNAPSHOT, { engineRpm: 6440, engineRedline: 7000 }));
-	assertHaptics(ledWrites[0] === 0b00100 && lightbarWrites[0] && lightbarWrites[0].r > 200,
-		"DualSense shift-light output writes player LEDs and lightbar color", {
+	for (let frame = 0; frame < 10; frame += 1) {
+		haptics.updateShiftLights(makeAudioSnapshot(SNAPSHOT, { engineRpm: 6440, engineRedline: 7000 }), 1 / 60);
+	}
+	const shiftLightOutput = haptics.getDiagnostics().shiftLightOutput;
+	assertHaptics(ledWrites[0] === 0b00100 && lightbarWrites.length > 0 && lightbarWrites.length <= 6 &&
+		ledWrites.length === lightbarWrites.length && activePlayerMask === 0b00100 &&
+		hidBatches.every((batch) => batch.playerMask === 0b00100) &&
+		shiftLightOutput.lightbarTargetColor.r > 200 && lightbarWrites[0].r < shiftLightOutput.lightbarTargetColor.r,
+		"DualSense shift-light output batches player LEDs with smoothed lightbar writes", {
 			ledWrites,
 			lightbarWrites,
-			shiftLightOutput: haptics.getDiagnostics().shiftLightOutput,
+			hidBatches,
+			activePlayerMask,
+			shiftLightOutput,
 		});
 	haptics.enabled = false;
 	haptics.controller = null;
@@ -1778,6 +1807,13 @@ requireText(byPath["renderer/haptics.js"], "export class DualSenseShiftLightMode
 requireText(byPath["renderer/haptics.js"], "SHIFT_LIGHT_THRESHOLDS", "DualSense shift-light thresholds");
 requireText(byPath["renderer/haptics.js"], "playerLeds.set", "DualSense player LED output");
 requireText(byPath["renderer/haptics.js"], "shiftLightOutput", "DualSense shift-light diagnostics");
+requireText(byPath["renderer/haptics.js"], "shiftLightGradientColor", "DualSense shift-light lightbar gradient");
+requireText(byPath["renderer/haptics.js"], "SHIFT_LIGHT_LIGHTBAR_FILTER_SPEED", "DualSense shift-light lightbar smoothing");
+requireText(byPath["renderer/haptics.js"], "SHIFT_LIGHT_LIGHTBAR_UPDATE_INTERVAL", "DualSense shift-light lightbar update cap");
+requireText(byPath["renderer/haptics.js"], "lastShiftLightPlayerSignature", "DualSense shift-light player LED write cache");
+requireText(byPath["renderer/haptics.js"], "lastShiftLightColorSignature", "DualSense shift-light lightbar write cache");
+requireText(byPath["renderer/haptics.js"], "writeShiftLightLedOutput", "DualSense shift-light combined LED writer");
+requireText(byPath["renderer/haptics.js"], "hid.setPlayerLeds", "DualSense shift-light low-level player LED output");
 requireText(byPath["renderer/haptics.js"], "createRumbleLut", "DualSense rumble gamma LUT");
 requireText(byPath["renderer/haptics.js"], "findDualsenseAudioDevices", "DualSense speaker PCM debug discovery");
 requireText(byPath["renderer/haptics.js"], "getDiagnostics()", "DualSense haptics diagnostics getter");

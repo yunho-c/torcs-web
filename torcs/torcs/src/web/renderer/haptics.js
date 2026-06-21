@@ -54,6 +54,9 @@ const SHIFT_LIGHT_COLOR = Object.freeze({
 	redlineDim: Object.freeze({ r: 85, g: 0, b: 0 }),
 	off: Object.freeze({ r: 0, g: 0, b: 0 }),
 });
+const SHIFT_LIGHT_LIGHTBAR_FILTER_SPEED = 12;
+const SHIFT_LIGHT_LIGHTBAR_UPDATE_INTERVAL = 1 / 30;
+const SHIFT_LIGHT_LIGHTBAR_COLOR_EPSILON = 2;
 const SHIFT_LIGHT_PLAYER_LED = Object.freeze({
 	leftOuter: 1 << 0,
 	leftInner: 1 << 1,
@@ -92,6 +95,69 @@ function finite(value, fallback = 0) {
 function smoothstep(edge0, edge1, value) {
 	const t = clamp((value - edge0) / (edge1 - edge0), 0, 1);
 	return t * t * (3 - 2 * t);
+}
+
+function mixColor(a, b, amount) {
+	const t = clamp(finite(amount), 0, 1);
+	return {
+		r: finite(a.r) + (finite(b.r) - finite(a.r)) * t,
+		g: finite(a.g) + (finite(b.g) - finite(a.g)) * t,
+		b: finite(a.b) + (finite(b.b) - finite(a.b)) * t,
+	};
+}
+
+function quantizeColor(color = SHIFT_LIGHT_COLOR.off) {
+	return {
+		r: clamp(Math.round(finite(color.r)), 0, 255),
+		g: clamp(Math.round(finite(color.g)), 0, 255),
+		b: clamp(Math.round(finite(color.b)), 0, 255),
+	};
+}
+
+function colorDelta(a, b) {
+	return Math.max(
+		Math.abs(finite(a.r) - finite(b.r)),
+		Math.abs(finite(a.g) - finite(b.g)),
+		Math.abs(finite(a.b) - finite(b.b)),
+	);
+}
+
+function colorSignature(color = SHIFT_LIGHT_COLOR.off) {
+	const quantized = quantizeColor(color);
+	return `${quantized.r},${quantized.g},${quantized.b}`;
+}
+
+function shiftLightGradientColor(ratio) {
+	const rpmRatio = clamp(finite(ratio), 0, SHIFT_LIGHT_THRESHOLDS.redline);
+	if (rpmRatio < SHIFT_LIGHT_THRESHOLDS.approach) {
+		return mixColor(
+			SHIFT_LIGHT_COLOR.low,
+			SHIFT_LIGHT_COLOR.early,
+			smoothstep(0.55, SHIFT_LIGHT_THRESHOLDS.approach, rpmRatio),
+		);
+	}
+	if (rpmRatio < SHIFT_LIGHT_THRESHOLDS.ideal) {
+		return mixColor(
+			SHIFT_LIGHT_COLOR.early,
+			SHIFT_LIGHT_COLOR.ideal,
+			(rpmRatio - SHIFT_LIGHT_THRESHOLDS.approach) /
+				(SHIFT_LIGHT_THRESHOLDS.ideal - SHIFT_LIGHT_THRESHOLDS.approach),
+		);
+	}
+	if (rpmRatio < SHIFT_LIGHT_THRESHOLDS.late) {
+		return mixColor(
+			SHIFT_LIGHT_COLOR.ideal,
+			SHIFT_LIGHT_COLOR.late,
+			(rpmRatio - SHIFT_LIGHT_THRESHOLDS.ideal) /
+				(SHIFT_LIGHT_THRESHOLDS.late - SHIFT_LIGHT_THRESHOLDS.ideal),
+		);
+	}
+	return mixColor(
+		SHIFT_LIGHT_COLOR.late,
+		SHIFT_LIGHT_COLOR.redline,
+		(rpmRatio - SHIFT_LIGHT_THRESHOLDS.late) /
+			(SHIFT_LIGHT_THRESHOLDS.redline - SHIFT_LIGHT_THRESHOLDS.late),
+	);
 }
 
 function createRumbleLut(gamma = DUALSENSE_RUMBLE_CALIBRATION.gamma) {
@@ -690,7 +756,7 @@ export class DualSenseShiftLightModel {
 				state: "late",
 				ratio,
 				playerMask: urgency >= 0.45 ? SHIFT_LIGHT_PLAYER_MASK.lateHigh : SHIFT_LIGHT_PLAYER_MASK.lateLow,
-				color: SHIFT_LIGHT_COLOR.late,
+				color: shiftLightGradientColor(ratio),
 			});
 		}
 		if (ratio >= SHIFT_LIGHT_THRESHOLDS.ideal) {
@@ -700,7 +766,7 @@ export class DualSenseShiftLightModel {
 				state: "ideal",
 				ratio,
 				playerMask: SHIFT_LIGHT_PLAYER_MASK.ideal,
-				color: SHIFT_LIGHT_COLOR.ideal,
+				color: shiftLightGradientColor(ratio),
 			});
 		}
 		if (ratio >= SHIFT_LIGHT_THRESHOLDS.approach) {
@@ -712,7 +778,7 @@ export class DualSenseShiftLightModel {
 				state: "early",
 				ratio,
 				playerMask: progress >= 0.55 ? SHIFT_LIGHT_PLAYER_MASK.earlyHigh : SHIFT_LIGHT_PLAYER_MASK.earlyLow,
-				color: SHIFT_LIGHT_COLOR.early,
+				color: shiftLightGradientColor(ratio),
 			});
 		}
 		return makeShiftLightOutput({
@@ -720,7 +786,7 @@ export class DualSenseShiftLightModel {
 			valid: true,
 			state: "low",
 			ratio,
-			color: SHIFT_LIGHT_COLOR.low,
+			color: shiftLightGradientColor(ratio),
 		});
 	}
 }
@@ -861,6 +927,10 @@ export class DualSenseHaptics {
 		this.rumbleConfig = loadStoredRumbleConfig();
 		this.lastRumbleOutput = makeSilentRumbleOutput();
 		this.lastShiftLightOutput = makeShiftLightOutput();
+		this.lightbarColor = { ...SHIFT_LIGHT_COLOR.off };
+		this.lightbarTargetColor = { ...SHIFT_LIGHT_COLOR.off };
+		this.lastLightbarSentColor = { ...SHIFT_LIGHT_COLOR.off };
+		this.lightbarWriteElapsed = SHIFT_LIGHT_LIGHTBAR_UPDATE_INTERVAL;
 		this.enabled = false;
 		this.pcmDebugEnabled = false;
 		this.status = "locked";
@@ -870,6 +940,8 @@ export class DualSenseHaptics {
 		this.lastTriggerSignature = "";
 		this.lastTriggerModel = null;
 		this.lastShiftLightSignature = "";
+		this.lastShiftLightPlayerSignature = "";
+		this.lastShiftLightColorSignature = "";
 		this.diagnostics = {
 			status: this.status,
 			fallbackReason: "",
@@ -920,10 +992,8 @@ export class DualSenseHaptics {
 			rumbleConfig: this.getRumbleConfigSummary(),
 			rumbleOutput: this.lastRumbleOutput,
 			shiftLightOutput: this.lastShiftLightOutput,
-			shiftLightPlayerLedsAvailable: Boolean(this.controller && this.controller.playerLeds &&
-				typeof this.controller.playerLeds.set === "function"),
-			shiftLightLightbarAvailable: Boolean(this.controller && this.controller.lightbar &&
-				typeof this.controller.lightbar.set === "function"),
+			shiftLightPlayerLedsAvailable: this.isShiftLightPlayerLedsAvailable(),
+			shiftLightLightbarAvailable: this.isShiftLightLightbarAvailable(),
 			status: this.status,
 		};
 	}
@@ -1151,7 +1221,7 @@ export class DualSenseHaptics {
 							summary: "DualSense disconnected; waiting for reconnection",
 						});
 					} else if (active && this.enabled) {
-						this.lastShiftLightSignature = "";
+						this.resetShiftLightState(SHIFT_LIGHT_COLOR.neutral);
 						this.setStatus("active", {
 							hapticTransport: HAPTIC_TRANSPORT.hidRumble,
 							summary: "DualSense HID rumble haptics active",
@@ -1346,7 +1416,7 @@ export class DualSenseHaptics {
 			this.enabled = true;
 			this.model.reset();
 			this.rumbleSynth.reset();
-			this.lastShiftLightSignature = "";
+			this.resetShiftLightState(SHIFT_LIGHT_COLOR.neutral);
 			this.configureControllerHaptics();
 			this.setControllerLight(true);
 			this.applyTriggerFeedback(this.model.makeSilentModel());
@@ -1377,6 +1447,7 @@ export class DualSenseHaptics {
 		this.rumbleSynth.reset();
 		this.lastRumbleOutput = makeSilentRumbleOutput();
 		this.lastShiftLightOutput = makeShiftLightOutput();
+		this.resetShiftLightState();
 		this.lastTriggerModel = null;
 		this.setStatus("off", {
 			hapticTransport: HAPTIC_TRANSPORT.unavailable,
@@ -1393,7 +1464,7 @@ export class DualSenseHaptics {
 		this.lastRumbleOutput = makeSilentRumbleOutput();
 		this.lastShiftLightOutput = makeShiftLightOutput();
 		this.lastTriggerModel = null;
-		this.lastShiftLightSignature = "";
+		this.resetShiftLightState();
 		this.stopControllerOutputs();
 		this.applyTriggerFeedback(this.model.makeSilentModel());
 	}
@@ -1405,7 +1476,7 @@ export class DualSenseHaptics {
 		this.lastShiftLightOutput = makeShiftLightOutput();
 		this.lastTriggerModel = null;
 		this.lastTriggerSignature = "";
-		this.lastShiftLightSignature = "";
+		this.resetShiftLightState();
 	}
 
 	disposeGraph() {
@@ -1420,56 +1491,138 @@ export class DualSenseHaptics {
 		this.pcmDebugEnabled = false;
 	}
 
+	resetShiftLightState(color = SHIFT_LIGHT_COLOR.off) {
+		const next = quantizeColor(color);
+		this.lightbarColor = { ...next };
+		this.lightbarTargetColor = { ...next };
+		this.lastLightbarSentColor = { ...next };
+		this.lightbarWriteElapsed = SHIFT_LIGHT_LIGHTBAR_UPDATE_INTERVAL;
+		this.lastShiftLightSignature = "";
+		this.lastShiftLightPlayerSignature = "";
+		this.lastShiftLightColorSignature = "";
+	}
+
+	hasLowLevelShiftLightOutput() {
+		const hid = this.controller && this.controller.hid;
+		return Boolean(hid && typeof hid.setPlayerLeds === "function" &&
+			typeof hid.setLightbar === "function");
+	}
+
+	isShiftLightPlayerLedsAvailable() {
+		return this.hasLowLevelShiftLightOutput() || Boolean(this.controller && this.controller.playerLeds &&
+			typeof this.controller.playerLeds.set === "function");
+	}
+
+	isShiftLightLightbarAvailable() {
+		return this.hasLowLevelShiftLightOutput() || Boolean(this.controller && this.controller.lightbar &&
+			typeof this.controller.lightbar.set === "function");
+	}
+
+	writeShiftLightLedOutput(playerMask, color, { playerLeds = true, lightbar = true } = {}) {
+		const outputColor = quantizeColor(color);
+		const hid = this.controller && this.controller.hid;
+		if (this.hasLowLevelShiftLightOutput()) {
+			if (playerLeds) {
+				hid.setPlayerLeds(playerMask);
+			}
+			if (lightbar) {
+				hid.setLightbar(outputColor.r, outputColor.g, outputColor.b);
+			}
+			return {
+				playerLeds,
+				lightbar,
+				lowLevel: true,
+			};
+		}
+
+		let wrotePlayerLeds = false;
+		let wroteLightbar = false;
+		if (playerLeds && this.controller && this.controller.playerLeds &&
+			typeof this.controller.playerLeds.set === "function") {
+			this.controller.playerLeds.set(playerMask);
+			wrotePlayerLeds = true;
+		}
+		if (lightbar && this.controller && this.controller.lightbar &&
+			typeof this.controller.lightbar.set === "function") {
+			this.controller.lightbar.set(outputColor);
+			wroteLightbar = true;
+		}
+		return {
+			playerLeds: wrotePlayerLeds,
+			lightbar: wroteLightbar,
+			lowLevel: false,
+		};
+	}
+
 	setControllerLight(active) {
 		this.applyShiftLightOutput(makeShiftLightOutput({
 			active: Boolean(active),
 			valid: false,
 			state: active ? "neutral" : "off",
 			color: active ? SHIFT_LIGHT_COLOR.neutral : SHIFT_LIGHT_COLOR.off,
-		}));
+		}), 0, true);
 	}
 
-	applyShiftLightOutput(output) {
+	applyShiftLightOutput(output, deltaTime = 1 / 60, forceImmediate = false) {
 		const light = output || makeShiftLightOutput();
-		const color = light.color || SHIFT_LIGHT_COLOR.off;
+		const targetColor = quantizeColor(light.color || SHIFT_LIGHT_COLOR.off);
 		const playerMask = clamp(finite(light.playerMask), 0, 31) | 0;
-		const signature = `${playerMask}:${color.r | 0},${color.g | 0},${color.b | 0}`;
-		const playerLedsAvailable = Boolean(this.controller && this.controller.playerLeds &&
-			typeof this.controller.playerLeds.set === "function");
-		const lightbarAvailable = Boolean(this.controller && this.controller.lightbar &&
-			typeof this.controller.lightbar.set === "function");
+		const immediate = forceImmediate || !light.active || light.state === "off" ||
+			light.state === "neutral" || light.state === "redline";
+		const playerLedsAvailable = this.isShiftLightPlayerLedsAvailable();
+		const lightbarAvailable = this.isShiftLightLightbarAvailable();
+		if (immediate) {
+			this.lightbarColor = { ...targetColor };
+		} else {
+			const dt = clamp(finite(deltaTime, 1 / 60), 0, 0.1);
+			const alpha = 1 - Math.exp(-SHIFT_LIGHT_LIGHTBAR_FILTER_SPEED * dt);
+			this.lightbarColor = mixColor(this.lightbarColor, targetColor, alpha);
+		}
+		this.lightbarTargetColor = { ...targetColor };
+		const outputColor = quantizeColor(this.lightbarColor);
 		this.lastShiftLightOutput = {
 			...light,
 			available: playerLedsAvailable || lightbarAvailable,
 			playerMask,
-			color: {
-				r: color.r | 0,
-				g: color.g | 0,
-				b: color.b | 0,
-			},
+			color: outputColor,
+			lightbarTargetColor: targetColor,
 		};
-		if (signature === this.lastShiftLightSignature) {
-			return;
-		}
-		this.lastShiftLightSignature = signature;
+		const playerSignature = String(playerMask);
+		const outputColorSignature = colorSignature(outputColor);
+		this.lastShiftLightSignature = `${playerSignature}:${outputColorSignature}`;
 		try {
-			if (playerLedsAvailable) {
-				this.controller.playerLeds.set(playerMask);
-			}
-			if (lightbarAvailable) {
-				this.controller.lightbar.set(this.lastShiftLightOutput.color);
+			this.lightbarWriteElapsed += clamp(finite(deltaTime, 1 / 60), 0, 0.1);
+			const lightbarColorChanged = !this.lastShiftLightColorSignature ||
+				colorDelta(outputColor, this.lastLightbarSentColor) >= SHIFT_LIGHT_LIGHTBAR_COLOR_EPSILON;
+			const shouldWriteLightbar = lightbarAvailable && outputColorSignature !== this.lastShiftLightColorSignature &&
+				lightbarColorChanged && (immediate || this.lightbarWriteElapsed >= SHIFT_LIGHT_LIGHTBAR_UPDATE_INTERVAL);
+			const shouldWritePlayerLeds = playerLedsAvailable &&
+				(shouldWriteLightbar || playerSignature !== this.lastShiftLightPlayerSignature);
+			if (shouldWriteLightbar || shouldWritePlayerLeds) {
+				const written = this.writeShiftLightLedOutput(playerMask, outputColor, {
+					playerLeds: shouldWritePlayerLeds,
+					lightbar: shouldWriteLightbar,
+				});
+				if (written.playerLeds) {
+					this.lastShiftLightPlayerSignature = playerSignature;
+				}
+				if (written.lightbar) {
+					this.lastShiftLightColorSignature = outputColorSignature;
+					this.lastLightbarSentColor = { ...outputColor };
+					this.lightbarWriteElapsed = 0;
+				}
 			}
 		} catch (_) {
 			// LED support varies by connection state and controller transport.
 		}
 	}
 
-	updateShiftLights(values) {
+	updateShiftLights(values, deltaTime = 1 / 60) {
 		if (!this.controller || !this.enabled) {
 			return;
 		}
 		const output = this.shiftLightModel.update(values, true);
-		this.applyShiftLightOutput(output);
+		this.applyShiftLightOutput(output, deltaTime);
 	}
 
 	stopControllerOutputs() {
@@ -1487,7 +1640,7 @@ export class DualSenseHaptics {
 			// Output reset is best effort when the device disconnects.
 		}
 		this.lastTriggerSignature = "";
-		this.lastShiftLightSignature = "";
+		this.resetShiftLightState();
 	}
 
 	applyTriggerFeedback(model) {
@@ -1574,6 +1727,6 @@ export class DualSenseHaptics {
 		}
 		this.updateRumble(model);
 		this.applyTriggerFeedback(model);
-		this.updateShiftLights(values);
+		this.updateShiftLights(values, deltaTime);
 	}
 }
