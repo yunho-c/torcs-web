@@ -13,6 +13,9 @@ const GAMEPAD_ACCEL_AXIS_CANDIDATES = [6, 5];
 const GAMEPAD_LOOK_X_AXIS = 2;
 const GAMEPAD_LOOK_Y_AXIS = 3;
 const GAMEPAD_LOOK_BUTTON = 11;
+const GAMEPAD_LOOK_EXPONENT = 1.8;
+const GAMEPAD_LOOK_FILTER_SPEED = 13;
+const GAMEPAD_LOOK_RETURN_FILTER_SPEED = 7;
 const GAMEPAD_LOOK_DPAD_BUTTONS = new Map([
 	[12, "front"],
 	[14, "left"],
@@ -57,6 +60,7 @@ export class InputController {
 		};
 		this.gamepadLookButtonHeld = false;
 		this.gamepadLookDpadButtons = [];
+		this.gamepadLookUpdated = false;
 		this.gamepadGearButtons = new Set();
 		this.gamepadTriggerAxisModes = new Map();
 		this.keyboardState = {
@@ -80,8 +84,11 @@ export class InputController {
 		};
 	}
 
-	getCameraLookaround() {
-		this.updateGamepadLook(this.getGamepad());
+	getCameraLookaround(deltaTime = 1 / 60) {
+		if (!this.gamepadLookUpdated) {
+			this.updateGamepadLook(this.getGamepad(), deltaTime);
+		}
+		this.gamepadLookUpdated = false;
 		const keyboardLookaround = this.lookaroundKeys[this.lookaroundKeys.length - 1];
 		if (keyboardLookaround) {
 			return keyboardLookaround;
@@ -130,7 +137,17 @@ export class InputController {
 		if (magnitude <= GAMEPAD_AXIS_DEAD_ZONE) {
 			return 0;
 		}
-		return Math.sign(value) * ((magnitude - GAMEPAD_AXIS_DEAD_ZONE) / (1 - GAMEPAD_AXIS_DEAD_ZONE));
+		const normalized = (magnitude - GAMEPAD_AXIS_DEAD_ZONE) / (1 - GAMEPAD_AXIS_DEAD_ZONE);
+		return Math.sign(value) * Math.pow(normalized, GAMEPAD_LOOK_EXPONENT);
+	}
+
+	smoothGamepadLookAxis(current, target, deltaTime) {
+		const dt = clamp(Number.isFinite(deltaTime) ? deltaTime : 1 / 60, 0, 0.1);
+		const relaxing = Math.abs(target) < Math.abs(current);
+		const speed = relaxing ? GAMEPAD_LOOK_RETURN_FILTER_SPEED : GAMEPAD_LOOK_FILTER_SPEED;
+		const alpha = 1 - Math.exp(-speed * dt);
+		const next = current + (target - current) * alpha;
+		return Math.abs(next) < 0.0001 && target === 0 ? 0 : next;
 	}
 
 	shapeGamepadTriggerAxis(value, modeKey) {
@@ -263,7 +280,7 @@ export class InputController {
 		this.onChange(this.getControls());
 	}
 
-	updateGamepadLook(gamepad = this.getGamepad()) {
+	updateGamepadLook(gamepad = this.getGamepad(), deltaTime = 1 / 60) {
 		const previous = { ...this.gamepadLook };
 		if (!gamepad) {
 			this.gamepadLook.x = 0;
@@ -272,13 +289,22 @@ export class InputController {
 			this.gamepadLook.preset = "";
 			this.gamepadLookButtonHeld = false;
 			this.gamepadLookDpadButtons = [];
+			this.gamepadLookUpdated = true;
 			return previous.x !== 0 || previous.y !== 0 || previous.front || Boolean(previous.preset);
 		}
 		const axes = gamepad.axes || [];
 		const buttons = gamepad.buttons || [];
 		const pressed = Boolean(buttons[GAMEPAD_LOOK_BUTTON] && buttons[GAMEPAD_LOOK_BUTTON].value > 0.5);
-		this.gamepadLook.x = this.shapeGamepadLookAxis(axes[GAMEPAD_LOOK_X_AXIS] || 0);
-		this.gamepadLook.y = this.shapeGamepadLookAxis(axes[GAMEPAD_LOOK_Y_AXIS] || 0);
+		this.gamepadLook.x = this.smoothGamepadLookAxis(
+			this.gamepadLook.x,
+			this.shapeGamepadLookAxis(axes[GAMEPAD_LOOK_X_AXIS] || 0),
+			deltaTime,
+		);
+		this.gamepadLook.y = this.smoothGamepadLookAxis(
+			this.gamepadLook.y,
+			this.shapeGamepadLookAxis(axes[GAMEPAD_LOOK_Y_AXIS] || 0),
+			deltaTime,
+		);
 		if (pressed && !this.gamepadLookButtonHeld) {
 			this.gamepadLook.front = !this.gamepadLook.front;
 		}
@@ -294,6 +320,7 @@ export class InputController {
 		}
 		const lastDpadButton = this.gamepadLookDpadButtons[this.gamepadLookDpadButtons.length - 1];
 		this.gamepadLook.preset = GAMEPAD_LOOK_DPAD_BUTTONS.get(lastDpadButton) || "";
+		this.gamepadLookUpdated = true;
 		return previous.x !== this.gamepadLook.x ||
 			previous.y !== this.gamepadLook.y ||
 			previous.front !== this.gamepadLook.front ||
@@ -332,7 +359,7 @@ export class InputController {
 			this.lastSnapshot = snapshot;
 		}
 		const gamepad = this.getGamepad();
-		const gamepadLookChanged = this.updateGamepadLook(gamepad);
+		const gamepadLookChanged = this.updateGamepadLook(gamepad, deltaTime);
 		const gamepadHasInput = this.hasGamepadInput(gamepad);
 		if (!gamepad && this.gamepadActive) {
 			this.resetGamepadControls();

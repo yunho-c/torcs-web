@@ -95,8 +95,8 @@ const LOOKAROUND_DISTANCE_SCALE = 1.55;
 const LOOKAROUND_SIDE_DISTANCE_SCALE = 3.8;
 const LOOKAROUND_HEIGHT = 1.8;
 const LOOKAROUND_TARGET_HEIGHT = 0.95;
-const ANALOG_LOOK_SIDE_SCALE = 1.8;
-const ANALOG_LOOK_FORWARD_SCALE = 0.9;
+const ANALOG_LOOK_MAX_YAW = Math.PI / 2;
+const ANALOG_LOOK_MAX_PITCH = Math.PI / 4;
 const DEBUG_FPS_BASE_SPEED = 18;
 const DEBUG_FPS_FAST_MULTIPLIER = 4;
 const DEBUG_FPS_MOUSE_SENSITIVITY = 0.0022;
@@ -642,23 +642,32 @@ export class CameraRig {
 		const distance = Math.max(6, dimX * LOOKAROUND_DISTANCE_SCALE, dimY * LOOKAROUND_SIDE_DISTANCE_SCALE);
 		this.camera.up.set(0, 1, 0);
 		this.target.copy(car).add(new THREE.Vector3(0, LOOKAROUND_TARGET_HEIGHT, 0));
-		if (analogLookaround) {
-			this.applyAnalogLookTarget(values, analogLookaround);
-		}
 		this.camera.position.copy(car)
 			.addScaledVector(this.forward, view.forward * distance)
 			.addScaledVector(this.side, view.side * distance)
 			.add(new THREE.Vector3(0, LOOKAROUND_HEIGHT, 0));
+		if (analogLookaround) {
+			this.applyAnalogLookTarget(values, analogLookaround);
+		}
 		this.camera.lookAt(this.target);
 	}
 
 	applyAnalogLookTarget(values, lookaround) {
-		const dimX = Math.max(0.1, values[SNAPSHOT.dimensionX]);
-		const dimY = Math.max(0.1, values[SNAPSHOT.dimensionY]);
-		const sideOffset = Math.max(1.2, dimY * ANALOG_LOOK_SIDE_SCALE);
-		const forwardOffset = Math.max(2.0, dimX * ANALOG_LOOK_FORWARD_SCALE);
-		this.target
-			.addScaledVector(this.side, -lookaround.x * sideOffset)
-			.addScaledVector(this.forward, -lookaround.y * forwardOffset);
+		const view = this.temp.copy(this.target).sub(this.camera.position);
+		const distance = Math.max(1, view.length());
+		if (distance <= 0) {
+			return;
+		}
+		const forward = view.normalize();
+		const up = this.temp2.copy(this.camera.up).normalize();
+		const right = this.temp3.copy(forward).cross(up).normalize();
+		if (right.lengthSq() <= 0) {
+			return;
+		}
+		forward
+			.applyAxisAngle(up, -clamp(lookaround.x || 0, -1, 1) * ANALOG_LOOK_MAX_YAW)
+			.applyAxisAngle(right, -clamp(lookaround.y || 0, -1, 1) * ANALOG_LOOK_MAX_PITCH)
+			.normalize();
+		this.target.copy(this.camera.position).addScaledVector(forward, distance);
 	}
 }
