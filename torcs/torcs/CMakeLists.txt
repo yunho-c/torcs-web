@@ -247,6 +247,28 @@ if(EMSCRIPTEN)
 		else()
 			message(STATUS "TORCS web assets: Speed Dreams data submodule not initialized; skipping optional assets")
 		endif()
+		get_filename_component(TORCS_WEB_SPEED_DREAMS_NORDSCHLEIFE_ROOT
+			"${TORCS_ROOT}/../../external/speed-dreams-nordschleife"
+			ABSOLUTE
+		)
+		if(EXISTS "${TORCS_WEB_SPEED_DREAMS_NORDSCHLEIFE_ROOT}/nordschleife.xml")
+			list(APPEND TORCS_WEB_EXTRA_ASSET_ARGS
+				"--extra-source"
+				"speed-dreams-nordschleife=${TORCS_WEB_SPEED_DREAMS_NORDSCHLEIFE_ROOT}"
+			)
+			message(STATUS "TORCS web assets: including Speed Dreams Nordschleife from ${TORCS_WEB_SPEED_DREAMS_NORDSCHLEIFE_ROOT}")
+		endif()
+		get_filename_component(TORCS_WEB_SPEED_DREAMS_SC_BOXER_96_ROOT
+			"${TORCS_ROOT}/../../external/speed-dreams-sc-boxer-96"
+			ABSOLUTE
+		)
+		if(EXISTS "${TORCS_WEB_SPEED_DREAMS_SC_BOXER_96_ROOT}/sc-boxer-96.xml")
+			list(APPEND TORCS_WEB_EXTRA_ASSET_ARGS
+				"--extra-source"
+				"speed-dreams-sc-boxer-96=${TORCS_WEB_SPEED_DREAMS_SC_BOXER_96_ROOT}"
+			)
+			message(STATUS "TORCS web assets: including Speed Dreams SC Boxer 96 from ${TORCS_WEB_SPEED_DREAMS_SC_BOXER_96_ROOT}")
+		endif()
 		add_custom_target(torcs_web_assets
 			COMMAND
 				"${TORCS_PYTHON_EXECUTABLE}"

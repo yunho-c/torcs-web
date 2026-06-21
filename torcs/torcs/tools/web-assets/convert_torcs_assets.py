@@ -371,18 +371,32 @@ def runtime_path(path):
 
 
 def discover_track_xmls(source_root):
+	data_tracks = source_root / "data/tracks"
+	if data_tracks.is_dir():
+		return sorted(
+			path.relative_to(source_root)
+			for path in data_tracks.rglob("*.xml")
+			if ".prj" not in path.name
+		)
 	return sorted(
 		path.relative_to(source_root)
-		for path in (source_root / "data/tracks").rglob("*.xml")
-		if ".prj" not in path.name
+		for path in source_root.glob("*.xml")
+		if ".prj" not in path.name and find_section(ElementTree.fromstring(clean_xml(path)), "Graphic") is not None
 	)
 
 
 def discover_car_xmls(source_root):
+	car_models = source_root / "data/cars/models"
+	if car_models.is_dir():
+		return sorted(
+			path.relative_to(source_root)
+			for path in car_models.glob("*/*.xml")
+			if path.stem == path.parent.name
+		)
 	return sorted(
 		path.relative_to(source_root)
-		for path in (source_root / "data/cars/models").glob("*/*.xml")
-		if path.stem == path.parent.name
+		for path in source_root.glob("*.xml")
+		if find_section(ElementTree.fromstring(clean_xml(path)), "Graphic Objects") is not None
 	)
 
 
@@ -408,11 +422,13 @@ def resolve_asset_sources(args, output_dir):
 		if label in labels:
 			raise ValueError(f"duplicate asset source label {label}")
 		resolved_root = root.resolve()
-		if not (resolved_root / "data").is_dir():
+		has_data_tree = (resolved_root / "data").is_dir()
+		has_assets = has_data_tree or discover_track_xmls(resolved_root) or discover_car_xmls(resolved_root)
+		if not has_assets:
 			if primary:
-				raise ValueError(f"asset source {label} has no data directory: {resolved_root}")
+				raise ValueError(f"asset source {label} has no convertible assets: {resolved_root}")
 			print(
-				f"warning: skipping asset source {label}; no data directory at {resolved_root}",
+				f"warning: skipping asset source {label}; no convertible assets at {resolved_root}",
 				file=sys.stderr,
 			)
 			return
@@ -538,10 +554,11 @@ def parse_car_metadata(source_root, car_xml):
 			"wheels": attstr(child, "wheels") == "yes",
 		})
 	lods.sort(key=lambda lod: lod["threshold"], reverse=True)
+	car_id = car_xml.parent.name if car_xml.parent != Path(".") else car_xml.stem
 	return {
-		"id": car_xml.parent.name,
+		"id": car_id,
 		"xml": runtime_path(car_xml),
-		"name": root.attrib.get("name", car_xml.parent.name),
+		"name": root.attrib.get("name", car_id),
 		"wheelTexture": attstr(objects, "wheel texture"),
 		"wheel3dBasename": attstr(objects, "3d wheel basename"),
 		"wheel3dDirectory": attstr(objects, "3d wheel directory"),
@@ -708,6 +725,10 @@ def uses_alpha_test(texture):
 
 def skips_track_shadow_overlay(material_class, texture):
 	return material_class == "treeFoliage" or uses_alpha_test(texture or "")
+
+
+def supports_synthetic_overlay_texture(path):
+	return Path(path).suffix.lower() in {".rgb", ".png"}
 
 
 def alpha_info_from_rgba(rgba):
@@ -1015,14 +1036,14 @@ def convert_ac_to_glb(source_root, source_path, output_path, object_classifier=N
 			not skips_track_shadow_overlay(material_class, obj.texture)
 		):
 			resolved_shadow = resolve_texture(source_root, asset_source_dir, shadow_texture)
-			if resolved_shadow:
+			if resolved_shadow and supports_synthetic_overlay_texture(resolved_shadow):
 				shadow_overlay_sources[shadow_texture] = resolved_shadow
 				use_shadow_overlay = True
 		skid_texture = obj.texture_layers.get("skids", "")
 		use_skid_overlay = False
 		if include_track_skid_overlays and skid_texture:
 			resolved_skid = resolve_texture(source_root, asset_source_dir, skid_texture)
-			if resolved_skid:
+			if resolved_skid and supports_synthetic_overlay_texture(resolved_skid):
 				skid_overlay_sources[skid_texture] = resolved_skid
 				use_skid_overlay = True
 		for surface in obj.surfaces:
@@ -1462,9 +1483,11 @@ def convert_shadow_overlay_texture(source, output_dir):
 	if source.suffix.lower() == ".rgb":
 		width, height, rgba = read_sgi_rgb(source)
 		write_png(output, width, height, make_shadow_overlay_rgba(rgba))
+	elif source.suffix.lower() == ".png":
+		width, height, rgba = read_png_rgba(source)
+		write_png(output, width, height, make_shadow_overlay_rgba(rgba))
 	else:
-		output.parent.mkdir(parents=True, exist_ok=True)
-		output.write_bytes(source.read_bytes())
+		return None
 	return output
 
 
@@ -1477,13 +1500,13 @@ def convert_skid_overlay_texture(source, output_dir):
 		width, height, rgba = read_png_rgba(source)
 		write_png(output, width, height, make_shadow_overlay_rgba(rgba))
 	else:
-		output.parent.mkdir(parents=True, exist_ok=True)
-		output.write_bytes(source.read_bytes())
+		return None
 	return output
 
 
-def resolve_engine_sample(source_root, car_name, sample):
+def resolve_engine_sample(source_root, car_source_dir, car_name, sample):
 	candidates = [
+		car_source_dir / sample,
 		source_root / "data/cars/models" / car_name / sample,
 		source_root / "data/data/sound" / sample,
 	]
@@ -1505,12 +1528,25 @@ def resolve_material_mask(source_root, car_name):
 	return path if path.exists() else None
 
 
+def resolve_car_material_mask(source_root, car_source_dir, car_name):
+	for path in (
+		car_source_dir / f"{car_name}-material-mask.png",
+		source_root / "data/cars/models" / car_name / f"{car_name}-material-mask.png",
+	):
+		if path.exists():
+			return path
+	return None
+
+
 def relative_to_output(path, output_dir):
 	return path.relative_to(output_dir).as_posix()
 
 
 def track_output_dir(output_dir, track_xml):
-	track_relative = track_xml.relative_to("data/tracks").parent
+	try:
+		track_relative = track_xml.relative_to("data/tracks").parent
+	except ValueError:
+		track_relative = Path(track_xml.stem)
 	return output_dir / "tracks" / track_relative
 
 
@@ -1531,14 +1567,16 @@ def convert_track(source_root, output_dir, track_xml):
 		name: relative_to_output(convert_texture(source, track_dir), output_dir)
 		for name, source in sorted(track_result["textureSources"].items())
 	}
-	track_shadow_overlay_outputs = {
-		name: relative_to_output(convert_shadow_overlay_texture(source, track_dir), output_dir)
-		for name, source in sorted(track_result["shadowOverlayTextureSources"].items())
-	}
-	track_skid_overlay_outputs = {
-		name: relative_to_output(convert_skid_overlay_texture(source, track_dir), output_dir)
-		for name, source in sorted(track_result["skidOverlayTextureSources"].items())
-	}
+	track_shadow_overlay_outputs = {}
+	for name, source in sorted(track_result["shadowOverlayTextureSources"].items()):
+		output = convert_shadow_overlay_texture(source, track_dir)
+		if output:
+			track_shadow_overlay_outputs[name] = relative_to_output(output, output_dir)
+	track_skid_overlay_outputs = {}
+	for name, source in sorted(track_result["skidOverlayTextureSources"].items()):
+		output = convert_skid_overlay_texture(source, track_dir)
+		if output:
+			track_skid_overlay_outputs[name] = relative_to_output(output, output_dir)
 	track_background_output = ""
 	track_background_source = resolve_texture(
 		source_root,
@@ -1566,16 +1604,18 @@ def convert_track(source_root, output_dir, track_xml):
 		"trackShadowOverlays": [
 			{
 				**overlay,
-				"texture": track_shadow_overlay_outputs.get(overlay["sourceTexture"], ""),
+				"texture": track_shadow_overlay_outputs[overlay["sourceTexture"]],
 			}
 			for overlay in track_result["trackShadowOverlays"]
+			if overlay["sourceTexture"] in track_shadow_overlay_outputs
 		],
 		"trackSkidOverlays": [
 			{
 				**overlay,
-				"texture": track_skid_overlay_outputs.get(overlay["sourceTexture"], ""),
+				"texture": track_skid_overlay_outputs[overlay["sourceTexture"]],
 			}
 			for overlay in track_result["trackSkidOverlays"]
+			if overlay["sourceTexture"] in track_skid_overlay_outputs
 		],
 		"primitiveCount": track_result["primitives"],
 		"objectNames": track_result["objects"],
@@ -1654,12 +1694,12 @@ def convert_car(source_root, output_dir, car_xml):
 		for name, source in sorted(car_texture_sources.items())
 	}
 	material_mask_output = ""
-	material_mask_source = resolve_material_mask(source_root, car_meta["id"])
+	material_mask_source = resolve_car_material_mask(source_root, car_source_dir, car_meta["id"])
 	if material_mask_source:
 		material_mask_output = relative_to_output(convert_texture(material_mask_source, car_dir), output_dir)
 	audio_dir = output_dir / "audio"
 	car_audio_dir = audio_dir / "cars" / car_meta["id"]
-	engine_sample_source = resolve_engine_sample(source_root, car_meta["id"], car_meta["sound"]["engineSample"])
+	engine_sample_source = resolve_engine_sample(source_root, car_source_dir, car_meta["id"], car_meta["sound"]["engineSample"])
 	engine_sample_output = relative_to_output(copy_audio_sample(engine_sample_source, car_audio_dir), output_dir)
 	entry = {
 		"name": car_meta["name"],
