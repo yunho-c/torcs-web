@@ -2,11 +2,14 @@
 """Tests for convert_torcs_assets.py."""
 
 import importlib.util
+import contextlib
+import io
 import json
 import struct
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 
 MODULE_PATH = Path(__file__).with_name("convert_torcs_assets.py")
@@ -41,6 +44,7 @@ class ConvertTorcsAssetsTest(unittest.TestCase):
 
 		self.assertFalse(args.profile)
 		self.assertIsNone(args.profile_output)
+		self.assertIsNone(args.jobs)
 
 	def test_parse_args_accepts_profile_options(self):
 		args = convert.parse_args([
@@ -54,6 +58,38 @@ class ConvertTorcsAssetsTest(unittest.TestCase):
 		self.assertTrue(args.quick)
 		self.assertTrue(args.profile)
 		self.assertEqual(args.profile_output, Path("profile.html"))
+
+	def test_parse_args_accepts_jobs(self):
+		args = convert.parse_args([
+			"--source-root", "source",
+			"--output-dir", "out",
+			"--jobs", "2",
+		])
+
+		self.assertEqual(args.jobs, 2)
+
+	def test_parse_args_rejects_non_positive_jobs(self):
+		with contextlib.redirect_stderr(io.StringIO()):
+			with self.assertRaises(SystemExit):
+				convert.parse_args([
+					"--source-root", "source",
+					"--output-dir", "out",
+					"--jobs", "0",
+				])
+
+	def test_resolve_job_count_defaults_to_cpu_count_minus_one(self):
+		original_process_cpu_count = convert.os.process_cpu_count
+		try:
+			convert.os.process_cpu_count = lambda: 8
+
+			job_count = convert.resolve_job_count(SimpleNamespace(jobs=None))
+		finally:
+			convert.os.process_cpu_count = original_process_cpu_count
+
+		self.assertEqual(job_count, 7)
+
+	def test_resolve_job_count_uses_explicit_jobs(self):
+		self.assertEqual(convert.resolve_job_count(SimpleNamespace(jobs=3)), 3)
 
 	def test_resolve_profile_output_defaults_to_output_dir(self):
 		args = convert.parse_args([
@@ -939,6 +975,71 @@ kids 0
 
 		self.assertEqual(tracks, [Path("data/tracks/road/demo/demo.xml")])
 		self.assertEqual(cars, [Path("data/cars/models/demo-car/demo-car.xml")])
+
+	def test_run_conversion_maps_tracks_and_cars_with_resolved_job_count(self):
+		original_selected_asset_paths = convert.selected_asset_paths
+		original_map_conversion_jobs = convert.map_conversion_jobs
+		original_convert_effects = convert.convert_effects
+		try:
+			track_xmls = [
+				Path("data/tracks/road/a/a.xml"),
+				Path("data/tracks/road/b/b.xml"),
+			]
+			car_xmls = [
+				Path("data/cars/models/a/a.xml"),
+				Path("data/cars/models/b/b.xml"),
+			]
+			calls = []
+
+			def fake_selected_asset_paths(source_root, quick):
+				self.assertFalse(quick)
+				return track_xmls, car_xmls
+
+			def fake_map_conversion_jobs(worker, jobs, job_count):
+				calls.append((worker.__name__, list(jobs), job_count))
+				if worker is convert.convert_track_job:
+					return [
+						(runtime_path.as_posix(), {"name": runtime_path.as_posix()}, {f"{runtime_path}.png"})
+						for _, _, runtime_path in jobs
+					]
+				if worker is convert.convert_car_job:
+					return [
+						(runtime_path.as_posix(), {"name": runtime_path.as_posix()}, {f"{runtime_path}.png"}, {f"{runtime_path}.wav"})
+						for _, _, runtime_path in jobs
+					]
+				raise AssertionError(f"unexpected worker {worker}")
+
+			def fake_convert_effects(source_root, output_dir):
+				return {"textures": {}, "sounds": {}, "crashes": []}, {"effect.png"}, {"effect.wav"}
+
+			convert.selected_asset_paths = fake_selected_asset_paths
+			convert.map_conversion_jobs = fake_map_conversion_jobs
+			convert.convert_effects = fake_convert_effects
+
+			with tempfile.TemporaryDirectory() as tmp_dir:
+				args = SimpleNamespace(
+					source_root=Path(tmp_dir) / "source",
+					output_dir=Path(tmp_dir) / "out",
+					quick=False,
+					jobs=2,
+				)
+				with contextlib.redirect_stdout(io.StringIO()):
+					convert.run_conversion(args)
+				manifest = json.loads((args.output_dir / "manifest.json").read_text(encoding="utf-8"))
+		finally:
+			convert.selected_asset_paths = original_selected_asset_paths
+			convert.map_conversion_jobs = original_map_conversion_jobs
+			convert.convert_effects = original_convert_effects
+
+		self.assertEqual(
+			[(name, count, job_count) for name, jobs, job_count in calls for count in [len(jobs)]],
+			[
+				("convert_track_job", 2, 2),
+				("convert_car_job", 2, 2),
+			],
+		)
+		self.assertEqual(list(manifest["tracks"]), [runtime_path.as_posix() for runtime_path in track_xmls])
+		self.assertEqual(list(manifest["cars"]), [runtime_path.as_posix() for runtime_path in car_xmls])
 
 
 if __name__ == "__main__":

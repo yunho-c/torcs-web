@@ -2,7 +2,9 @@
 """Convert TORCS browser renderer assets to web-native files."""
 
 import argparse
+import concurrent.futures
 import json
+import os
 import re
 import shutil
 import struct
@@ -132,6 +134,13 @@ class TextureAlphaInfo:
 TEXTURE_ALPHA_INFO_CACHE = {}
 
 
+def positive_int(value):
+	parsed = int(value)
+	if parsed < 1:
+		raise argparse.ArgumentTypeError("must be at least 1")
+	return parsed
+
+
 def parse_args(argv=None):
 	parser = argparse.ArgumentParser(description=__doc__)
 	parser.add_argument("--source-root", type=Path, required=True)
@@ -150,6 +159,11 @@ def parse_args(argv=None):
 		"--profile-output",
 		type=Path,
 		help="path for the pyinstrument HTML report; defaults to <output-dir>/convert-profile.html",
+	)
+	parser.add_argument(
+		"--jobs",
+		type=positive_int,
+		help="number of worker processes for track/car conversion; defaults to CPU count minus one",
 	)
 	return parser.parse_args(argv)
 
@@ -1462,23 +1476,50 @@ def convert_effects(source_root, output_dir):
 	}, set(effect_texture_outputs.values()), sound_outputs
 
 
+def resolve_job_count(args):
+	if args.jobs:
+		return args.jobs
+	cpu_count = os.process_cpu_count() or 1
+	return max(1, cpu_count - 1)
+
+
+def convert_track_job(job):
+	source_root, output_dir, track_xml = job
+	return convert_track(source_root, output_dir, track_xml)
+
+
+def convert_car_job(job):
+	source_root, output_dir, car_xml = job
+	return convert_car(source_root, output_dir, car_xml)
+
+
+def map_conversion_jobs(worker, jobs, job_count):
+	if not jobs:
+		return []
+	if job_count == 1:
+		return [worker(job) for job in jobs]
+	with concurrent.futures.ProcessPoolExecutor(max_workers=job_count) as executor:
+		return list(executor.map(worker, jobs))
+
+
 def run_conversion(args):
 	source_root = args.source_root.resolve()
 	output_dir = args.output_dir.resolve()
 	output_dir.mkdir(parents=True, exist_ok=True)
 	clear_generated_output(output_dir)
 
+	job_count = resolve_job_count(args)
 	track_xmls, car_xmls = selected_asset_paths(source_root, args.quick)
 	tracks = {}
 	cars = {}
 	texture_outputs = set()
 	sound_outputs = set()
-	for track_xml in track_xmls:
-		key, entry, outputs = convert_track(source_root, output_dir, track_xml)
+	track_jobs = [(source_root, output_dir, track_xml) for track_xml in track_xmls]
+	car_jobs = [(source_root, output_dir, car_xml) for car_xml in car_xmls]
+	for key, entry, outputs in map_conversion_jobs(convert_track_job, track_jobs, job_count):
 		tracks[key] = entry
 		texture_outputs.update(outputs)
-	for car_xml in car_xmls:
-		key, entry, textures, sounds = convert_car(source_root, output_dir, car_xml)
+	for key, entry, textures, sounds in map_conversion_jobs(convert_car_job, car_jobs, job_count):
 		cars[key] = entry
 		texture_outputs.update(textures)
 		sound_outputs.update(sounds)
@@ -1504,6 +1545,7 @@ def run_conversion(args):
 		"textures": len(texture_outputs),
 		"sounds": len(sound_outputs),
 		"quick": args.quick,
+		"jobs": job_count,
 	}))
 
 
