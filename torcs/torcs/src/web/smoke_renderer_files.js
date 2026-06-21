@@ -1396,7 +1396,10 @@ requireText(byPath["torcs_web_renderer.html"], "id=\"material-debug\"", "materia
 requireText(byPath["torcs_web_renderer.html"], "id=\"track-glb\"", "custom track GLB load button");
 requireText(byPath["torcs_web_renderer.html"], "id=\"clear-track-glb\"", "custom track GLB clear button");
 requireText(byPath["torcs_web_renderer.html"], "id=\"track-glb-file\"", "custom track GLB file input");
-requireText(byPath["torcs_web_renderer.html"], "id=\"skybox\"", "skybox cubemap checkbox");
+requireText(byPath["torcs_web_renderer.html"], "id=\"environment-mode\"", "environment mode selector");
+requireText(byPath["torcs_web_renderer.html"], "<option value=\"dome\" selected>TORCS dome</option>", "TORCS dome environment option");
+requireText(byPath["torcs_web_renderer.html"], "<option value=\"skybox\">Skybox</option>", "skybox environment option");
+requireText(byPath["torcs_web_renderer.html"], "<option value=\"shader\">Sky shader</option>", "sky shader environment option");
 requireText(byPath["torcs_web_renderer.html"], "<option value=\"legacy\" selected>Legacy</option>", "legacy render profile default");
 requireText(byPath["torcs_web_renderer.html"], "<option value=\"modern\">Modern</option>", "modern render profile option");
 if (byPath["torcs_web_renderer.html"].content.includes("Converted track")) {
@@ -1644,7 +1647,11 @@ requireText(byPath["renderer/main.js"], "scene.setPostProcessSettings(activePost
 requireText(byPath["renderer/main.js"], "scene.setLightIntensityScale(activeLightIntensity)", "scene light intensity handoff");
 requireText(byPath["renderer/main.js"], "assets.setWetness(activeMaterialWetness)", "asset wetness handoff");
 requireText(byPath["renderer/main.js"], "assets.setMaterialDebugEnabled(materialDebugEnabled)", "asset material debug handoff");
-requireText(byPath["renderer/main.js"], "applySkybox(elements.skybox.checked)", "skybox checkbox handoff");
+requireText(byPath["renderer/main.js"], "normalizeEnvironmentMode(mode)", "environment mode normalization");
+requireText(byPath["renderer/main.js"], "getInitialEnvironmentMode()", "environment mode initialization");
+requireText(byPath["renderer/main.js"], "getQueryParam(\"environment\")", "environment mode query parameter");
+requireText(byPath["renderer/main.js"], "getStoredBoolean(\"skybox\", false) ? \"skybox\" : DEFAULT_ENVIRONMENT_MODE", "legacy skybox setting migration");
+requireText(byPath["renderer/main.js"], "applyEnvironmentMode(elements.environmentMode.value, true)", "environment selector handoff");
 requireText(byPath["renderer/main.js"], "setSettingsOpen(true)", "settings popup open binding");
 requireText(byPath["renderer/main.js"], "setControlSlidersVisible(elements.showControlSliders.checked, true)", "control slider visibility binding");
 requireText(byPath["renderer/main.js"], "elements.renderProfile.addEventListener", "render profile selector binding");
@@ -1658,7 +1665,7 @@ requireText(byPath["renderer/main.js"], "applyPostProcessSettings(activePostProc
 requireText(byPath["renderer/main.js"], "elements.lightIntensity.addEventListener", "light intensity slider binding");
 requireText(byPath["renderer/main.js"], "applyAcesToneMapping(elements.acesToneMapping.checked)", "ACES tone mapping checkbox handoff");
 requireText(byPath["renderer/main.js"], "scene.setAcesToneMappingEnabled(elements.acesToneMapping.checked)", "ACES tone mapping scene binding");
-requireText(byPath["renderer/main.js"], "elements.skybox.addEventListener", "skybox checkbox binding");
+requireText(byPath["renderer/main.js"], "elements.environmentMode.addEventListener", "environment selector binding");
 requireText(byPath["renderer/main.js"], "elements.materialWetness.addEventListener", "material wetness slider binding");
 requireText(byPath["renderer/main.js"], "elements.materialDebug.addEventListener", "material debug checkbox binding");
 requireText(byPath["renderer/main.js"], "scheduleMaterialSettingsReload()", "material settings debounced reload");
@@ -1794,9 +1801,14 @@ requireText(byPath["renderer/main.js"], "hapticsTriggerStrength", "DualSense ada
 requireText(byPath["renderer/main.js"], "haptics.setTriggerStrength", "DualSense adaptive trigger strength event handling");
 
 requireText(byPath["renderer/scene.js"], "import * as THREE from \"three/webgpu\"", "Three.js WebGPU module import");
+requireText(byPath["renderer/scene.js"], "import { SkyMesh } from \"three/addons/objects/SkyMesh.js\"", "Three.js WebGPU sky mesh import");
 requireText(byPath["renderer/scene.js"], "import { TorcsEffects } from \"./effects.js\"", "effects module import");
 requireText(byPath["renderer/scene.js"], "TorcsPostProcessPipeline", "main renderer shared postprocess pipeline");
 requireText(byPath["renderer/scene.js"], "setPostProcessSettings(preset = \"auto\", options = {})", "main renderer postprocess settings setter");
+requireText(byPath["renderer/scene.js"], "setEnvironmentMode(mode = DEFAULT_ENVIRONMENT_MODE)", "main renderer environment mode setter");
+requireText(byPath["renderer/scene.js"], "new SkyMesh()", "sky shader mesh creation");
+requireText(byPath["renderer/scene.js"], "sky.turbidity.value = SKY_SHADER_SETTINGS.turbidity", "sky shader turbidity uniform");
+requireText(byPath["renderer/scene.js"], "sky.sunPosition.value.copy(this.skyShaderSun)", "sky shader sun-position uniform");
 requireText(byPath["renderer/scene.js"], "this.postprocess.setSkyboxTexture(this.skyboxMap)", "main renderer active skybox postprocess handoff");
 requireText(byPath["renderer/scene.js"], "this.postprocess.setSkyboxTexture(null)", "main renderer disabled skybox postprocess handoff");
 requireText(byPath["renderer/scene.js"], "new THREE.WebGPURenderer", "WebGPU renderer creation");
@@ -1859,7 +1871,7 @@ requireText(byPath["renderer/scene.js"], "effects: this.getCarEffects(carIndex)"
 requireText(byPath["renderer/scene.js"], "if (i !== selectedIndex)", "Phase 6 selected effect visibility survives opponent hiding");
 requireText(byPath["renderer/scene.js"], "opponent.effects.update(values, opponent.root, camera)", "Phase 6 opponent effect snapshot update");
 requireText(byPath["renderer/effects.js"], "setVisible(visible)", "Phase 6 effect visibility control");
-requireText(byPath["renderer/scene.js"], "export { getTorcsPoseQuaternion, torcsToThree }", "shared TORCS pose export");
+requireText(byPath["renderer/scene.js"], "export { getTorcsPoseQuaternion, normalizeEnvironmentMode, torcsToThree }", "shared TORCS pose and environment export");
 requireText(byPath["renderer/scene.js"], "createGeneratedWheels(values)", "generated wheel fallback");
 requireText(byPath["renderer/scene.js"], "createDetailedWheels(values", "detailed wheel asset rig");
 requireText(byPath["renderer/scene.js"], "getWheelSpeedState(values, index", "native wheel speed-state selection");

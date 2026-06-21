@@ -890,9 +890,12 @@
 						</span>
 					</label>
 					<div class="settings-row">
-						<label class="toggle-label">
-							<input id="skybox" type="checkbox">
-							<span>Skybox</span>
+						<label>Environment
+							<select id="environment-mode">
+								<option value="dome" selected>TORCS dome</option>
+								<option value="skybox">Skybox</option>
+								<option value="shader">Sky shader</option>
+							</select>
 						</label>
 						<label class="toggle-label">
 							<input id="aces-tone-mapping" type="checkbox" checked>

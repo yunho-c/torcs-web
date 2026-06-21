@@ -1,5 +1,6 @@
 import * as THREE from "three/webgpu";
 import { EXRLoader } from "three/addons/loaders/EXRLoader.js";
+import { SkyMesh } from "three/addons/objects/SkyMesh.js";
 import { TorcsEffects } from "./effects.js";
 import {
 	getPostProcessOptions,
@@ -40,6 +41,21 @@ const DEFAULT_ENVIRONMENT_MAP = "./web/hdri/120_hdrmaps_com_free_2K.exr";
 const DEFAULT_SKYBOX_PREFIX = "./web/skybox/arid2";
 const DEFAULT_SKYBOX_FACES = ["rt", "lf", "up", "dn", "ft", "bk"];
 const DEFAULT_ENVIRONMENT_INTENSITY = 0.8;
+const ENVIRONMENT_MODES = new Set(["dome", "skybox", "shader"]);
+const DEFAULT_ENVIRONMENT_MODE = "dome";
+const SKY_SHADER_SCALE = 450000;
+const SKY_SHADER_SETTINGS = Object.freeze({
+	turbidity: 10,
+	rayleigh: 3,
+	mieCoefficient: 0.005,
+	mieDirectionalG: 0.7,
+	elevation: 8,
+	azimuth: 180,
+	cloudCoverage: 0.35,
+	cloudDensity: 0.35,
+	cloudElevation: 0.5,
+	showSunDisc: true,
+});
 const DEFAULT_AMBIENT_INTENSITY = 2.4;
 const DEFAULT_SUN_INTENSITY = 2.3;
 const LEGACY_TONE_MAPPING_EXPOSURE = 1.0;
@@ -60,6 +76,11 @@ function torcsToThree(x, y, z = 0, target = new THREE.Vector3()) {
 
 function normalizeRenderProfile(profile) {
 	return RENDER_PROFILES.has(profile) ? profile : "legacy";
+}
+
+function normalizeEnvironmentMode(mode) {
+	const normalized = String(mode || "").toLowerCase();
+	return ENVIRONMENT_MODES.has(normalized) ? normalized : DEFAULT_ENVIRONMENT_MODE;
 }
 
 function getTorcsPoseQuaternion(values, target) {
@@ -415,7 +436,9 @@ export class TorcsScene {
 		this.environmentMap = null;
 		this.skyboxMap = null;
 		this.skyboxLoadPromise = null;
-		this.useSkybox = false;
+		this.environmentMode = DEFAULT_ENVIRONMENT_MODE;
+		this.skyShader = null;
+		this.skyShaderSun = new THREE.Vector3();
 		this.trackBackgroundColor = DEFAULT_BACKGROUND.clone();
 		this.trackBackgroundTexture = null;
 		this.lightIntensityScale = 1.0;
@@ -508,10 +531,14 @@ export class TorcsScene {
 			pmremGenerator = new THREE.PMREMGenerator(this.renderer);
 			const renderTarget = pmremGenerator.fromEquirectangular(sourceTexture);
 			this.environmentMap = renderTarget.texture;
-			this.scene.environment = this.environmentMap;
-			if ("environmentIntensity" in this.scene) {
-				this.scene.environmentIntensity = DEFAULT_ENVIRONMENT_INTENSITY;
+			if (this.environmentMode === "dome" && !this.trackBackgroundTexture) {
+				this.scene.environment = this.environmentMap;
+				if ("environmentIntensity" in this.scene) {
+					this.scene.environmentIntensity = DEFAULT_ENVIRONMENT_INTENSITY;
+				}
+				return;
 			}
+			this.applyBackgroundMode();
 		} catch (error) {
 			console.warn("TORCS web renderer failed to load HDRI environment map", {
 				environmentMap: relativePath,
@@ -553,17 +580,22 @@ export class TorcsScene {
 		return this.skyboxLoadPromise;
 	}
 
-	async setUseSkybox(enabled) {
-		this.useSkybox = Boolean(enabled);
-		if (this.useSkybox) {
+	async setEnvironmentMode(mode = DEFAULT_ENVIRONMENT_MODE) {
+		this.environmentMode = normalizeEnvironmentMode(mode);
+		if (this.environmentMode === "skybox") {
 			await this.loadSkybox();
 		}
 		this.applyBackgroundMode();
 	}
 
+	async setUseSkybox(enabled) {
+		await this.setEnvironmentMode(enabled ? "skybox" : "dome");
+	}
+
 	applyBackgroundMode() {
-		if (this.useSkybox && this.skyboxMap) {
+		if (this.environmentMode === "skybox" && this.skyboxMap) {
 			this.removeBackgroundDome();
+			this.removeSkyShader();
 			this.scene.background = this.skyboxMap;
 			this.scene.environment = this.skyboxMap;
 			this.postprocess.setSkyboxTexture(this.skyboxMap);
@@ -572,6 +604,20 @@ export class TorcsScene {
 			}
 			return;
 		}
+
+		if (this.environmentMode === "shader") {
+			this.removeBackgroundDome();
+			this.ensureSkyShader();
+			this.scene.background = this.trackBackgroundColor.clone();
+			this.scene.environment = this.environmentMap;
+			this.postprocess.setSkyboxTexture(null);
+			if ("environmentIntensity" in this.scene) {
+				this.scene.environmentIntensity = DEFAULT_ENVIRONMENT_INTENSITY;
+			}
+			return;
+		}
+
+		this.removeSkyShader();
 		this.scene.background = this.trackBackgroundColor.clone();
 		this.scene.environment = this.environmentMap;
 		this.postprocess.setSkyboxTexture(null);
@@ -579,6 +625,63 @@ export class TorcsScene {
 			this.scene.environmentIntensity = DEFAULT_ENVIRONMENT_INTENSITY;
 		}
 		this.setBackgroundDome(this.trackBackgroundTexture);
+	}
+
+	createSkyShader() {
+		const sky = new SkyMesh();
+		sky.scale.setScalar(SKY_SHADER_SCALE);
+		sky.renderOrder = -1000;
+		sky.frustumCulled = false;
+		this.applySkyShaderSettings(sky);
+		return sky;
+	}
+
+	applySkyShaderSettings(sky = this.skyShader) {
+		if (!sky) {
+			return;
+		}
+		sky.turbidity.value = SKY_SHADER_SETTINGS.turbidity;
+		sky.rayleigh.value = SKY_SHADER_SETTINGS.rayleigh;
+		sky.mieCoefficient.value = SKY_SHADER_SETTINGS.mieCoefficient;
+		sky.mieDirectionalG.value = SKY_SHADER_SETTINGS.mieDirectionalG;
+		if (sky.cloudCoverage) {
+			sky.cloudCoverage.value = SKY_SHADER_SETTINGS.cloudCoverage;
+		}
+		if (sky.cloudDensity) {
+			sky.cloudDensity.value = SKY_SHADER_SETTINGS.cloudDensity;
+		}
+		if (sky.cloudElevation) {
+			sky.cloudElevation.value = SKY_SHADER_SETTINGS.cloudElevation;
+		}
+		if (sky.showSunDisc) {
+			sky.showSunDisc.value = SKY_SHADER_SETTINGS.showSunDisc;
+		}
+		const phi = THREE.MathUtils.degToRad(90 - SKY_SHADER_SETTINGS.elevation);
+		const theta = THREE.MathUtils.degToRad(SKY_SHADER_SETTINGS.azimuth);
+		this.skyShaderSun.setFromSphericalCoords(1, phi, theta);
+		sky.sunPosition.value.copy(this.skyShaderSun);
+	}
+
+	ensureSkyShader() {
+		if (!this.skyShader) {
+			this.skyShader = this.createSkyShader();
+			this.groups.background.add(this.skyShader);
+		}
+		return this.skyShader;
+	}
+
+	removeSkyShader() {
+		if (!this.skyShader) {
+			return;
+		}
+		this.groups.background.remove(this.skyShader);
+		if (this.skyShader.geometry) {
+			this.skyShader.geometry.dispose();
+		}
+		if (this.skyShader.material) {
+			this.skyShader.material.dispose();
+		}
+		this.skyShader = null;
 	}
 
 	addReferenceGrid() {
@@ -1349,4 +1452,4 @@ export class TorcsScene {
 	}
 }
 
-export { getTorcsPoseQuaternion, torcsToThree };
+export { getTorcsPoseQuaternion, normalizeEnvironmentMode, torcsToThree };

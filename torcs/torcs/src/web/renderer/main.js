@@ -61,7 +61,7 @@ const elements = {
 	lightIntensity: document.getElementById("light-intensity"),
 	lightIntensityValue: document.getElementById("light-intensity-value"),
 	acesToneMapping: document.getElementById("aces-tone-mapping"),
-	skybox: document.getElementById("skybox"),
+	environmentMode: document.getElementById("environment-mode"),
 	materialWetness: document.getElementById("material-wetness"),
 	materialWetnessValue: document.getElementById("material-wetness-value"),
 	materialDebug: document.getElementById("material-debug"),
@@ -103,6 +103,8 @@ const DEFAULT_LIGHT_INTENSITY = 1.5;
 const DEFAULT_CAMERA_MODE = "f2-behind-near";
 const SETTINGS_STORAGE_KEY = "torcs.web.renderer.settings";
 const RENDER_PROFILES = new Set(["legacy", "modern"]);
+const ENVIRONMENT_MODES = new Set(["dome", "skybox", "shader"]);
+const DEFAULT_ENVIRONMENT_MODE = "dome";
 const POSTPROCESS_SETTING_PRESETS = new Set(["auto", "none", "race", "showroom"]);
 let storedSettings = readStoredSettings();
 let scene = null;
@@ -119,7 +121,7 @@ let activeLightIntensity = getInitialLightIntensity();
 let activeMaterialWetness = getInitialMaterialWetness();
 let materialDebugEnabled = getInitialMaterialDebugEnabled();
 let activeCameraMode = getInitialCameraMode();
-let activeSkyboxEnabled = getInitialSkyboxEnabled();
+let activeEnvironmentMode = getInitialEnvironmentMode();
 let acesToneMappingEnabled = getInitialAcesToneMappingEnabled();
 let activeTrackPath = DEFAULT_TRACK_PATH;
 let running = false;
@@ -257,6 +259,11 @@ function normalizeRenderProfile(profile) {
 	return RENDER_PROFILES.has(profile) ? profile : "legacy";
 }
 
+function normalizeEnvironmentMode(mode) {
+	const normalized = String(mode || "").toLowerCase();
+	return ENVIRONMENT_MODES.has(normalized) ? normalized : DEFAULT_ENVIRONMENT_MODE;
+}
+
 function normalizePostProcessSettingPreset(preset) {
 	const normalized = String(preset || "").toLowerCase();
 	if (normalized === "auto") {
@@ -331,8 +338,16 @@ function getInitialCameraMode() {
 	return getStoredString("camera", DEFAULT_CAMERA_MODE);
 }
 
-function getInitialSkyboxEnabled() {
-	return getStoredBoolean("skybox", false);
+function getInitialEnvironmentMode() {
+	const queryEnvironment = getQueryParam("environment");
+	if (queryEnvironment !== null) {
+		return normalizeEnvironmentMode(queryEnvironment);
+	}
+	const storedMode = getStoredString("environmentMode", "");
+	if (storedMode) {
+		return normalizeEnvironmentMode(storedMode);
+	}
+	return getStoredBoolean("skybox", false) ? "skybox" : DEFAULT_ENVIRONMENT_MODE;
 }
 
 function getInitialAcesToneMappingEnabled() {
@@ -407,7 +422,7 @@ function applyInitialControlValues() {
 	elements.hapticsIntensity.value = String(getStoredNumber("hapticsIntensity", 0.65, 0, 1));
 	elements.hapticsTriggerStrength.value = String(getStoredNumber("hapticsTriggerStrength", 1, 0, 1));
 	elements.acesToneMapping.checked = acesToneMappingEnabled;
-	elements.skybox.checked = activeSkyboxEnabled;
+	elements.environmentMode.value = activeEnvironmentMode;
 	elements.materialWetness.value = String(activeMaterialWetness);
 	elements.materialWetnessValue.textContent = formatWetness(activeMaterialWetness);
 	elements.materialDebug.checked = materialDebugEnabled;
@@ -1234,21 +1249,25 @@ function applyAcesToneMapping(enabled) {
 	}
 }
 
-async function applySkybox(enabled) {
+async function applyEnvironmentMode(mode, persist = false) {
 	if (!scene) {
 		return;
 	}
-	activeSkyboxEnabled = Boolean(enabled);
-	elements.skybox.checked = activeSkyboxEnabled;
+	activeEnvironmentMode = normalizeEnvironmentMode(mode);
+	elements.environmentMode.value = activeEnvironmentMode;
 	try {
-		await scene.setUseSkybox(elements.skybox.checked);
-		writeStoredSetting("skybox", elements.skybox.checked);
+		await scene.setEnvironmentMode(activeEnvironmentMode);
+		if (persist) {
+			writeStoredSetting("environmentMode", activeEnvironmentMode);
+		}
 	} catch (error) {
-		console.warn("TORCS web renderer skybox switch failed", error);
-		activeSkyboxEnabled = false;
-		elements.skybox.checked = false;
-		writeStoredSetting("skybox", false);
-		await scene.setUseSkybox(false);
+		console.warn("TORCS web renderer environment switch failed", error);
+		activeEnvironmentMode = DEFAULT_ENVIRONMENT_MODE;
+		elements.environmentMode.value = activeEnvironmentMode;
+		if (persist) {
+			writeStoredSetting("environmentMode", activeEnvironmentMode);
+		}
+		await scene.setEnvironmentMode(activeEnvironmentMode);
 		hud.setState("debug");
 	}
 	if (snapshot) {
@@ -1552,9 +1571,9 @@ function bindUi() {
 			writeStoredSetting("acesToneMapping", elements.acesToneMapping.checked);
 			applyAcesToneMapping(elements.acesToneMapping.checked);
 		});
-		elements.skybox.addEventListener("change", () => {
-			applySkybox(elements.skybox.checked).catch((error) => {
-				console.warn("TORCS web renderer skybox checkbox failed", error);
+		elements.environmentMode.addEventListener("change", () => {
+			applyEnvironmentMode(elements.environmentMode.value, true).catch((error) => {
+				console.warn("TORCS web renderer environment selector failed", error);
 				hud.setState("debug");
 			});
 		});
@@ -1628,7 +1647,7 @@ async function main() {
 			gear: elements.gearInput,
 		}, applyControls);
 		bindUi();
-		await applySkybox(activeSkyboxEnabled);
+		await applyEnvironmentMode(activeEnvironmentMode, false);
 
 		const [loadedRuntime] = await Promise.all([createTorcsRuntime(), populateAssetSelects()]);
 		runtime = loadedRuntime;
