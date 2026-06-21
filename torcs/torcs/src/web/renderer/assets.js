@@ -696,7 +696,21 @@ export class AssetManager {
 		if (shadowPath) {
 			shadowTexture = await this.loadTexture(shadowPath);
 		}
-		const asset = { entry: carEntry, lods, wheelAsset, shadowTexture, materialMask };
+		const wheelFallbackTextureName = entry.wheelFallback && entry.wheelFallback.texture;
+		const wheelFallbackTexturePath = wheelFallbackTextureName && entry.textures ? entry.textures[wheelFallbackTextureName] : "";
+		let wheelFallbackTexture = null;
+		if (wheelFallbackTexturePath) {
+			try {
+				wheelFallbackTexture = await this.loadTexture(wheelFallbackTexturePath);
+			} catch (error) {
+				console.warn("TORCS web renderer failed to load generated wheel fallback texture", {
+					texture: wheelFallbackTextureName,
+					asset: wheelFallbackTexturePath,
+					error,
+				});
+			}
+		}
+		const asset = { entry: carEntry, lods, wheelAsset, shadowTexture, wheelFallbackTexture, materialMask };
 		this.carCache.set(source, asset);
 		return asset;
 	}

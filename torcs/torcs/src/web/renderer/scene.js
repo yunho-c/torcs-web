@@ -15,6 +15,12 @@ const ROAD_Y = 0.03;
 const WHEEL_ORDER = [0, 1, 2, 3];
 const RIGHT_WHEELS = new Set([0, 2]);
 const WHEEL_SPEED_THRESHOLDS = [20, 40, 70];
+const WHEEL_TEXTURE_ATLAS_OFFSETS = Object.freeze([
+	Object.freeze([0.0, 0.5]),
+	Object.freeze([0.5, 0.5]),
+	Object.freeze([0.0, 0.0]),
+	Object.freeze([0.5, 0.0]),
+]);
 const WHEEL_HEAT_COOL = new THREE.Color(0x343936);
 const WHEEL_HEAT_HOT = new THREE.Color(0xff5b32);
 const DEFAULT_BACKGROUND = new THREE.Color(0x0b0d0c);
@@ -190,6 +196,25 @@ function makeWheelGeometry(radius, width) {
 	);
 }
 
+function setWheelTextureAtlasState(texture, speedIndex) {
+	if (!texture) {
+		return;
+	}
+	const offset = WHEEL_TEXTURE_ATLAS_OFFSETS[speedIndex] || WHEEL_TEXTURE_ATLAS_OFFSETS[0];
+	texture.repeat.set(0.5, 0.5);
+	texture.offset.set(offset[0], offset[1]);
+	texture.needsUpdate = true;
+}
+
+function cloneWheelFallbackTexture(texture, speedIndex = 0) {
+	if (!texture) {
+		return null;
+	}
+	const clone = texture.clone();
+	setWheelTextureAtlasState(clone, speedIndex);
+	return clone;
+}
+
 function makeWheelSpokes(radius, width) {
 	const group = new THREE.Group();
 	const material = new THREE.MeshBasicMaterial({ color: 0xd8d0bd });
@@ -204,6 +229,24 @@ function makeWheelSpokes(radius, width) {
 		group.add(spoke);
 	}
 	return group;
+}
+
+function makeGeneratedWheelVisual(radius, width, wheelTexture) {
+	const capTexture = cloneWheelFallbackTexture(wheelTexture);
+	const tireMaterial = new THREE.MeshLambertMaterial({ color: 0x151716 });
+	const capMaterial = capTexture ? new THREE.MeshLambertMaterial({
+		color: 0xffffff,
+		map: capTexture,
+		transparent: true,
+		alphaTest: 0.02,
+	}) : null;
+	const tire = new THREE.Mesh(
+		makeWheelGeometry(radius, width),
+		capMaterial ? [tireMaterial, capMaterial, capMaterial] : tireMaterial,
+	);
+	tire.rotation.x = Math.PI / 2;
+	const spokes = capMaterial ? null : makeWheelSpokes(radius, width);
+	return { tire, spokes, capTexture };
 }
 
 function makeWheelHeatMesh(radius, width, opacity) {
@@ -251,6 +294,17 @@ function getWheelSpeedState(values, index, thresholds = WHEEL_SPEED_THRESHOLDS) 
 		}
 	}
 	return thresholds.length;
+}
+
+function updateGeneratedWheelTextureState(wheel, values, index) {
+	if (!wheel.capTexture) {
+		return;
+	}
+	const nextState = getWheelSpeedState(values, index, wheel.speedThresholds);
+	if (nextState !== wheel.activeTextureState) {
+		setWheelTextureAtlasState(wheel.capTexture, nextState);
+		wheel.activeTextureState = nextState;
+	}
 }
 
 export class TorcsScene {
@@ -692,6 +746,7 @@ export class TorcsScene {
 
 	createGeneratedWheels(values) {
 		this.clearSelectedWheels();
+		const wheelTexture = this.carAsset && this.carAsset.wheelFallbackTexture;
 
 		for (const index of WHEEL_ORDER) {
 			const radius = Math.max(0.05, values[SNAPSHOT.wheelRadius0 + index] || 0.32);
@@ -700,12 +755,12 @@ export class TorcsScene {
 			const steer = new THREE.Group();
 			const camber = new THREE.Group();
 			const spin = new THREE.Group();
-			const tireMaterial = new THREE.MeshLambertMaterial({ color: 0x151716 });
-			const tire = new THREE.Mesh(makeWheelGeometry(radius, width), tireMaterial);
-			tire.rotation.x = Math.PI / 2;
+			const { tire, spokes, capTexture } = makeGeneratedWheelVisual(radius, width, wheelTexture);
 			const heat = makeWheelHeatMesh(radius, width, 0.72);
-			const spokes = makeWheelSpokes(radius, width);
-			spin.add(tire, heat, spokes);
+			spin.add(tire, heat);
+			if (spokes) {
+				spin.add(spokes);
+			}
 			camber.add(spin);
 			steer.add(camber);
 			root.add(steer);
@@ -718,9 +773,12 @@ export class TorcsScene {
 				tire,
 				heat,
 				spokes,
+				capTexture,
+				activeTextureState: 0,
 				radius,
 				width,
 				wheelType: "generated",
+				speedThresholds: WHEEL_SPEED_THRESHOLDS,
 			});
 		}
 	}
@@ -851,6 +909,7 @@ export class TorcsScene {
 				wheel.radius = radius;
 				wheel.width = width;
 			}
+			updateGeneratedWheelTextureState(wheel, values, index);
 
 			wheel.root.position.copy(torcsToThree(
 				values[SNAPSHOT.wheelRelX0 + index],
@@ -915,6 +974,7 @@ export class TorcsScene {
 			opponent.root.remove(wheel.root);
 		}
 		opponent.wheels = [];
+		const wheelTexture = opponent.asset && opponent.asset.wheelFallbackTexture;
 		for (const index of WHEEL_ORDER) {
 			const radius = Math.max(0.05, values[SNAPSHOT.wheelRadius0 + index] || 0.32);
 			const width = Math.max(0.04, values[SNAPSHOT.wheelWidth0 + index] || 0.18);
@@ -922,19 +982,31 @@ export class TorcsScene {
 			const steer = new THREE.Group();
 			const camber = new THREE.Group();
 			const spin = new THREE.Group();
-			const tire = new THREE.Mesh(
-				makeWheelGeometry(radius, width),
-				new THREE.MeshLambertMaterial({ color: 0x151716 }),
-			);
-			tire.rotation.x = Math.PI / 2;
+			const { tire, spokes, capTexture } = makeGeneratedWheelVisual(radius, width, wheelTexture);
 			const heat = makeWheelHeatMesh(radius, width, 0.52);
-			const spokes = makeWheelSpokes(radius, width);
-			spin.add(tire, heat, spokes);
+			spin.add(tire, heat);
+			if (spokes) {
+				spin.add(spokes);
+			}
 			camber.add(spin);
 			steer.add(camber);
 			root.add(steer);
 			opponent.root.add(root);
-			opponent.wheels.push({ root, steer, camber, spin, tire, heat, spokes, radius, width, wheelType: "generated" });
+			opponent.wheels.push({
+				root,
+				steer,
+				camber,
+				spin,
+				tire,
+				heat,
+				spokes,
+				capTexture,
+				activeTextureState: 0,
+				radius,
+				width,
+				wheelType: "generated",
+				speedThresholds: WHEEL_SPEED_THRESHOLDS,
+			});
 		}
 		opponent.wheelModeKey = "generated";
 	}
@@ -1096,6 +1168,7 @@ export class TorcsScene {
 				wheel.radius = radius;
 				wheel.width = width;
 			}
+			updateGeneratedWheelTextureState(wheel, values, index);
 			wheel.root.position.copy(torcsToThree(
 				values[SNAPSHOT.wheelRelX0 + index],
 				values[SNAPSHOT.wheelRelY0 + index],

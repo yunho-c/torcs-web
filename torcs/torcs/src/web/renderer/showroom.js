@@ -14,6 +14,7 @@ const TORCS_PROVIDER = "TORCS";
 const VW_PROVIDER = "VW local";
 const TORCS_WHEEL_ORDER = [0, 1, 2, 3];
 const TORCS_RIGHT_WHEELS = new Set([0, 2]);
+const TORCS_WHEEL_TEXTURE_STILL_OFFSET = Object.freeze([0.0, 0.5]);
 const TEMP_BOX = new THREE.Box3();
 const TEMP_SIZE = new THREE.Vector3();
 const TEMP_CENTER = new THREE.Vector3();
@@ -89,37 +90,61 @@ function visibleClone(root) {
 	return clone;
 }
 
-function makeGeneratedWheel(radius, width) {
+function cloneWheelFallbackTexture(texture) {
+	if (!texture) {
+		return null;
+	}
+	const clone = texture.clone();
+	clone.repeat.set(0.5, 0.5);
+	clone.offset.set(TORCS_WHEEL_TEXTURE_STILL_OFFSET[0], TORCS_WHEEL_TEXTURE_STILL_OFFSET[1]);
+	clone.needsUpdate = true;
+	return clone;
+}
+
+function makeGeneratedWheel(radius, width, wheelTexture = null) {
 	const group = new THREE.Group();
+	const capTexture = cloneWheelFallbackTexture(wheelTexture);
+	const tireMaterial = new THREE.MeshStandardMaterial({
+		color: 0x111111,
+		metalness: 0.05,
+		roughness: 0.62,
+	});
+	const capMaterial = capTexture ? new THREE.MeshStandardMaterial({
+		color: 0xffffff,
+		map: capTexture,
+		transparent: true,
+		alphaTest: 0.02,
+		metalness: 0.18,
+		roughness: 0.38,
+	}) : null;
 	const tire = new THREE.Mesh(
 		new THREE.CylinderGeometry(radius, radius, width, 32, 1, false),
-		new THREE.MeshStandardMaterial({
-			color: 0x111111,
-			metalness: 0.05,
-			roughness: 0.62,
-		}),
+		capMaterial ? [tireMaterial, capMaterial, capMaterial] : tireMaterial,
 	);
 	tire.rotation.x = Math.PI / 2;
-	const rim = new THREE.Mesh(
-		new THREE.CylinderGeometry(radius * 0.54, radius * 0.54, width * 1.05, 24, 1, false),
-		new THREE.MeshStandardMaterial({
-			color: 0xcac2b0,
-			metalness: 0.72,
-			roughness: 0.22,
-		}),
-	);
-	rim.rotation.x = Math.PI / 2;
-	group.add(tire, rim);
+	group.add(tire);
+	if (!capMaterial) {
+		const rim = new THREE.Mesh(
+			new THREE.CylinderGeometry(radius * 0.54, radius * 0.54, width * 1.05, 24, 1, false),
+			new THREE.MeshStandardMaterial({
+				color: 0xcac2b0,
+				metalness: 0.72,
+				roughness: 0.22,
+			}),
+		);
+		rim.rotation.x = Math.PI / 2;
+		group.add(rim);
+	}
 	return group;
 }
 
-function makeDetailedWheel(wheelAsset, wheelIndex, radius, width) {
+function makeDetailedWheel(wheelAsset, wheelIndex, radius, width, wheelFallbackTexture = null) {
 	const state = wheelAsset && Array.isArray(wheelAsset.states)
 		? wheelAsset.states.find((candidate) => candidate.speedIndex === 0) || wheelAsset.states[0]
 		: null;
 	const wheel = new THREE.Group();
 	if (!state || !state.scene) {
-		wheel.add(makeGeneratedWheel(radius, width));
+		wheel.add(makeGeneratedWheel(radius, width, wheelFallbackTexture));
 		return wheel;
 	}
 	const sideFlip = new THREE.Group();
@@ -666,7 +691,7 @@ class TorcsShowroomSource {
 			const wheelWidth = clamp(wheelRecord.width || fallbackWidth, 0.04, 0.5);
 			const position = Array.isArray(wheelRecord.position) ? wheelRecord.position : fallbackLayout[index].position;
 			const wheelCenterZ = Number.isFinite(position[2]) ? position[2] : radius;
-			const wheel = makeDetailedWheel(asset.wheelAsset, index, radius, wheelWidth);
+			const wheel = makeDetailedWheel(asset.wheelAsset, index, radius, wheelWidth, asset.wheelFallbackTexture);
 			torcsToShowroom(position[0], position[1], wheelCenterZ, wheel.position);
 			wheels.add(wheel);
 		}

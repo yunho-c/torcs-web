@@ -658,11 +658,19 @@ kids 0
 			_, entry, textures, _ = convert.convert_car(source_root, output_dir, car_xml)
 
 			self.assertEqual(entry["materialMask"], "cars/demo-car/demo-car-material-mask.png")
+			self.assertEqual(entry["wheelFallback"], {
+				"source": "runtime-snapshot",
+				"texture": "wheel.png",
+				"radiusScale": 1.0,
+				"widthScale": 1.0,
+			})
+			self.assertIsNone(entry["wheelAsset"])
 			self.assertEqual(entry["lights"], [
 				{"type": "head1", "position": [1.9, 0.4, 0.3], "size": 0.2},
 				{"type": "rear", "position": [-1.8, -0.45, 0.35], "size": 0.1},
 				{"type": "brake", "position": [-1.8, 0.45, 0.35], "size": 0.2},
 			])
+			self.assertEqual(entry["textures"]["wheel.png"], "cars/demo-car/wheel.png")
 			self.assertIn("cars/demo-car/demo-car-material-mask.png", textures)
 			self.assertTrue((output_dir / entry["materialMask"]).exists())
 

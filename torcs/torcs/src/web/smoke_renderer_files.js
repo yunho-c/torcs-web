@@ -1461,8 +1461,10 @@ requireText(byPath["renderer/assets.js"], "makeTrackSkidOverlayMaterial(material
 requireText(byPath["renderer/assets.js"], "new THREE.MeshBasicMaterial", "unlit track shadow overlay material");
 requireText(byPath["renderer/assets.js"], "polygonOffset: true", "track shadow overlay z-fighting guard");
 requireText(byPath["renderer/assets.js"], "const source = normalizeRuntimePath(carPath)", "car asset source path annotation");
-requireText(byPath["renderer/assets.js"], "const asset = { entry: carEntry, lods, wheelAsset, shadowTexture, materialMask }", "loaded car entry source metadata");
+requireText(byPath["renderer/assets.js"], "const asset = { entry: carEntry, lods, wheelAsset, shadowTexture, wheelFallbackTexture, materialMask }", "loaded car entry source metadata");
 requireText(byPath["renderer/assets.js"], "entry.wheelAsset.states.map", "detailed wheel asset loading");
+requireText(byPath["renderer/assets.js"], "wheelFallbackTexturePath", "generated wheel fallback texture path resolution");
+requireText(byPath["renderer/assets.js"], "TORCS web renderer failed to load generated wheel fallback texture", "generated wheel fallback texture warning");
 requireText(byPath["renderer/assets.js"], "case \"wheelTire\":", "modern wheel tire material class");
 requireText(byPath["renderer/assets.js"], "case \"wheelRim\":", "modern wheel rim material class");
 requireText(byPath["renderer/assets.js"], "return this.makeLegacyMaterial(material)", "modern profile preserves legacy visual baseline");
@@ -1852,6 +1854,9 @@ requireText(byPath["renderer/scene.js"], "export { getTorcsPoseQuaternion, torcs
 requireText(byPath["renderer/scene.js"], "createGeneratedWheels(values)", "generated wheel fallback");
 requireText(byPath["renderer/scene.js"], "createDetailedWheels(values", "detailed wheel asset rig");
 requireText(byPath["renderer/scene.js"], "getWheelSpeedState(values, index", "native wheel speed-state selection");
+requireText(byPath["renderer/scene.js"], "WHEEL_TEXTURE_ATLAS_OFFSETS", "native generated wheel texture atlas offsets");
+requireText(byPath["renderer/scene.js"], "cloneWheelFallbackTexture", "generated wheel fallback texture clone");
+requireText(byPath["renderer/scene.js"], "setWheelTextureAtlasState(wheel.capTexture", "generated wheel texture speed-state update");
 requireText(byPath["renderer/scene.js"], "const WHEEL_SPEED_THRESHOLDS = [20, 40, 70]", "native wheel speed thresholds");
 requireText(byPath["renderer/scene.js"], "wheel.scale.scale.set(radius * 2, radius * 2, width)", "native wheel radius and width scaling");
 requireText(byPath["renderer/scene.js"], "RIGHT_WHEELS.has(index)", "right-side detailed wheel flip");
@@ -2074,6 +2079,11 @@ checkMaterialMetadata(car7Trb1.lods[0], ["body", "glass", "headlamp", "taillamp"
 if (!car.wheelFallback || car.wheelFallback.source !== "runtime-snapshot" ||
 	!car.wheelFallback.texture || !(car.wheelFallback.texture in car.textures)) {
 	fail("TORCS web renderer smoke test found missing wheel fallback metadata");
+}
+if (car.wheelAsset !== null) {
+	fail("TORCS web renderer smoke test expected kc-2000gt to use native generated wheel fallback", {
+		wheelAsset: car.wheelAsset,
+	});
 }
 if (!car.sound || car.sound.engineSample !== "engine-1.wav" ||
 	!car.sound.engineAsset || typeof car.sound.rpmScale !== "number" ||
