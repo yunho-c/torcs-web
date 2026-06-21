@@ -5,9 +5,11 @@ import importlib.util
 import contextlib
 import io
 import json
+import os
 import struct
 import tempfile
 import unittest
+import zlib
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -35,6 +37,23 @@ def read_glb_json(path):
 	raise AssertionError("GLB JSON chunk not found")
 
 
+def write_rgb_png(path, width, height, rgb):
+	def chunk(kind, payload):
+		return (
+			struct.pack(">I", len(payload)) +
+			kind +
+			payload +
+			struct.pack(">I", zlib.crc32(kind + payload) & 0xFFFFFFFF)
+		)
+	raw = b"".join(b"\0" + rgb[row * width * 3:(row + 1) * width * 3] for row in range(height))
+	path.write_bytes(
+		b"\x89PNG\r\n\x1a\n" +
+		chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)) +
+		chunk(b"IDAT", zlib.compress(raw)) +
+		chunk(b"IEND", b"")
+	)
+
+
 class ConvertTorcsAssetsTest(unittest.TestCase):
 	def test_parse_args_defaults_profile_disabled(self):
 		args = convert.parse_args([
@@ -45,6 +64,7 @@ class ConvertTorcsAssetsTest(unittest.TestCase):
 		self.assertFalse(args.profile)
 		self.assertIsNone(args.profile_output)
 		self.assertIsNone(args.jobs)
+		self.assertFalse(args.no_cache)
 
 	def test_parse_args_accepts_profile_options(self):
 		args = convert.parse_args([
@@ -67,6 +87,15 @@ class ConvertTorcsAssetsTest(unittest.TestCase):
 		])
 
 		self.assertEqual(args.jobs, 2)
+
+	def test_parse_args_accepts_no_cache(self):
+		args = convert.parse_args([
+			"--source-root", "source",
+			"--output-dir", "out",
+			"--no-cache",
+		])
+
+		self.assertTrue(args.no_cache)
 
 	def test_parse_args_rejects_non_positive_jobs(self):
 		with contextlib.redirect_stderr(io.StringIO()):
@@ -284,6 +313,84 @@ kids 0
 		self.assertTrue(info.has_alpha)
 		self.assertTrue(info.has_transparent_alpha)
 		self.assertTrue(info.has_partial_alpha)
+
+	def test_rgb_png_alpha_metadata_skips_unfiltering(self):
+		with tempfile.TemporaryDirectory() as tmp_dir:
+			path = Path(tmp_dir) / "opaque.png"
+			write_rgb_png(path, 1, 1, bytes([255, 0, 0]))
+			original_unfilter = convert.unfilter_png_scanlines
+			try:
+				def fail_unfilter(*args):
+					raise AssertionError("RGB PNG alpha probing should not unfilter image data")
+
+				convert.unfilter_png_scanlines = fail_unfilter
+				info = convert.read_texture_alpha_info(path)
+			finally:
+				convert.unfilter_png_scanlines = original_unfilter
+
+		self.assertFalse(info.has_alpha)
+
+	def test_texture_alpha_disk_cache_avoids_reprobe(self):
+		with tempfile.TemporaryDirectory() as tmp_dir:
+			texture = Path(tmp_dir) / "shared.png"
+			cache_path = Path(tmp_dir) / "alpha-cache.json"
+			texture.write_bytes(b"not decoded by this test")
+			calls = []
+			original_probe = convert.probe_texture_alpha_info
+			try:
+				def fake_probe(path):
+					calls.append(path.resolve())
+					return convert.TextureAlphaInfo(has_alpha=True)
+
+				convert.probe_texture_alpha_info = fake_probe
+				convert.configure_texture_alpha_cache(True, cache_path)
+				first = convert.cached_texture_alpha_info(texture)
+				convert.flush_texture_alpha_cache()
+				convert.configure_texture_alpha_cache(False)
+
+				def fail_probe(path):
+					raise AssertionError("cache hit should not call probe_texture_alpha_info")
+
+				convert.probe_texture_alpha_info = fail_probe
+				convert.configure_texture_alpha_cache(True, cache_path)
+				second = convert.cached_texture_alpha_info(texture)
+			finally:
+				convert.probe_texture_alpha_info = original_probe
+				convert.configure_texture_alpha_cache(False)
+
+		self.assertEqual(calls, [texture.resolve()])
+		self.assertTrue(first.has_alpha)
+		self.assertTrue(second.has_alpha)
+
+	def test_texture_alpha_disk_cache_invalidates_on_file_change(self):
+		with tempfile.TemporaryDirectory() as tmp_dir:
+			texture = Path(tmp_dir) / "shared.png"
+			cache_path = Path(tmp_dir) / "alpha-cache.json"
+			texture.write_bytes(b"first")
+			calls = []
+			original_probe = convert.probe_texture_alpha_info
+			try:
+				def fake_probe(path):
+					calls.append(path.stat().st_size)
+					return convert.TextureAlphaInfo(has_alpha=len(calls) == 2)
+
+				convert.probe_texture_alpha_info = fake_probe
+				convert.configure_texture_alpha_cache(True, cache_path)
+				first = convert.cached_texture_alpha_info(texture)
+				convert.flush_texture_alpha_cache()
+				convert.configure_texture_alpha_cache(False)
+
+				texture.write_bytes(b"changed-size")
+				os.utime(texture, None)
+				convert.configure_texture_alpha_cache(True, cache_path)
+				second = convert.cached_texture_alpha_info(texture)
+			finally:
+				convert.probe_texture_alpha_info = original_probe
+				convert.configure_texture_alpha_cache(False)
+
+		self.assertEqual(calls, [5, 12])
+		self.assertFalse(first.has_alpha)
+		self.assertTrue(second.has_alpha)
 
 	def test_convert_ac_to_glb_reuses_texture_alpha_cache(self):
 		asset = """AC3Db
@@ -1043,7 +1150,7 @@ kids 0
 		self.assertEqual(tracks, [Path("data/tracks/road/demo/demo.xml")])
 		self.assertEqual(cars, [Path("data/cars/models/demo-car/demo-car.xml")])
 
-	def test_run_conversion_maps_tracks_and_cars_with_resolved_job_count(self):
+	def test_run_conversion_maps_tracks_and_cars_as_mixed_jobs(self):
 		original_selected_asset_paths = convert.selected_asset_paths
 		original_map_conversion_jobs = convert.map_conversion_jobs
 		original_convert_effects = convert.convert_effects
@@ -1064,17 +1171,18 @@ kids 0
 
 			def fake_map_conversion_jobs(worker, jobs, job_count):
 				calls.append((worker.__name__, list(jobs), job_count))
-				if worker is convert.convert_track_job:
-					return [
-						(runtime_path.as_posix(), {"name": runtime_path.as_posix()}, {f"{runtime_path}.png"})
-						for _, _, runtime_path in jobs
-					]
-				if worker is convert.convert_car_job:
-					return [
-						(runtime_path.as_posix(), {"name": runtime_path.as_posix()}, {f"{runtime_path}.png"}, {f"{runtime_path}.wav"})
-						for _, _, runtime_path in jobs
-					]
-				raise AssertionError(f"unexpected worker {worker}")
+				self.assertIs(worker, convert.convert_asset_job)
+				results = []
+				for kind, _, _, runtime_path, cache_enabled, cache_path in jobs:
+					self.assertTrue(cache_enabled)
+					self.assertIsNotNone(cache_path)
+					if kind == "track":
+						results.append((kind, runtime_path.as_posix(), {"name": runtime_path.as_posix()}, {f"{runtime_path}.png"}, set()))
+					elif kind == "car":
+						results.append((kind, runtime_path.as_posix(), {"name": runtime_path.as_posix()}, {f"{runtime_path}.png"}, {f"{runtime_path}.wav"}))
+					else:
+						raise AssertionError(f"unexpected job kind {kind}")
+				return results
 
 			def fake_convert_effects(source_root, output_dir):
 				return {"textures": {}, "sounds": {}, "crashes": []}, {"effect.png"}, {"effect.wav"}
@@ -1087,9 +1195,13 @@ kids 0
 				args = SimpleNamespace(
 					source_root=Path(tmp_dir) / "source",
 					output_dir=Path(tmp_dir) / "out",
+					source_label=convert.DEFAULT_SOURCE_LABEL,
+					extra_source=[],
 					quick=False,
 					jobs=2,
+					no_cache=False,
 				)
+				(args.source_root / "data").mkdir(parents=True)
 				with contextlib.redirect_stdout(io.StringIO()):
 					convert.run_conversion(args)
 				manifest = json.loads((args.output_dir / "manifest.json").read_text(encoding="utf-8"))
@@ -1101,12 +1213,11 @@ kids 0
 		self.assertEqual(
 			[(name, count, job_count) for name, jobs, job_count in calls for count in [len(jobs)]],
 			[
-				("convert_track_job", 2, 2),
-				("convert_car_job", 2, 2),
+				("convert_asset_job", 4, 2),
 			],
 		)
-		self.assertEqual(list(manifest["tracks"]), [runtime_path.as_posix() for runtime_path in track_xmls])
-		self.assertEqual(list(manifest["cars"]), [runtime_path.as_posix() for runtime_path in car_xmls])
+		self.assertEqual(list(manifest["tracks"]), [convert.manifest_key(convert.DEFAULT_SOURCE_LABEL, runtime_path.as_posix()) for runtime_path in track_xmls])
+		self.assertEqual(list(manifest["cars"]), [convert.manifest_key(convert.DEFAULT_SOURCE_LABEL, runtime_path.as_posix()) for runtime_path in car_xmls])
 
 
 if __name__ == "__main__":

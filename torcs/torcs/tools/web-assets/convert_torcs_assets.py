@@ -24,6 +24,7 @@ AC_SURFACE_LINE_LOOP = 1
 AC_SURFACE_LINE_STRIP = 2
 AC_SURFACE_TRIANGLES = 3
 AC_SURFACE_TRIANGLE_STRIP = 4
+PNG_CHANNELS_BY_COLOR_TYPE = {0: 1, 2: 3, 4: 2, 6: 4}
 TREE_ALPHA_CUTOFF = 0.65
 TEXTURE_ALPHA_CUTOFF = 0.10
 BLENDED_ALPHA_MATERIAL_CLASSES = {"glass", "mirrorGlass"}
@@ -142,6 +143,8 @@ class AssetSource:
 
 
 TEXTURE_ALPHA_INFO_CACHE = {}
+TEXTURE_ALPHA_INFO_DISK_CACHE = None
+TEXTURE_ALPHA_INFO_DISK_CACHE_PATH = None
 
 
 def positive_int(value):
@@ -197,6 +200,11 @@ def parse_args(argv=None):
 		type=positive_int,
 		help="number of worker processes for track/car conversion; defaults to CPU count minus one",
 	)
+	parser.add_argument(
+		"--no-cache",
+		action="store_true",
+		help="disable the persistent texture alpha metadata cache",
+	)
 	return parser.parse_args(argv)
 
 
@@ -207,6 +215,96 @@ def clear_generated_output(output_dir):
 			shutil.rmtree(path)
 		elif path.exists():
 			path.unlink()
+
+
+class TextureAlphaDiskCache:
+	def __init__(self, path):
+		self.path = path
+		self.entries = {}
+		self.dirty = False
+		self.load()
+
+	def load(self):
+		try:
+			payload = json.loads(self.path.read_text(encoding="utf-8"))
+		except (OSError, ValueError, json.JSONDecodeError):
+			self.entries = {}
+			return
+		if payload.get("version") != 1 or not isinstance(payload.get("entries"), dict):
+			self.entries = {}
+			return
+		self.entries = payload["entries"]
+
+	def lookup(self, key):
+		entry = self.entries.get(key)
+		if not isinstance(entry, dict):
+			return None
+		return TextureAlphaInfo(
+			has_alpha=bool(entry.get("hasAlpha")),
+			has_transparent_alpha=bool(entry.get("hasTransparentAlpha")),
+			has_partial_alpha=bool(entry.get("hasPartialAlpha")),
+		)
+
+	def store(self, key, info):
+		self.entries[key] = {
+			"hasAlpha": info.has_alpha,
+			"hasTransparentAlpha": info.has_transparent_alpha,
+			"hasPartialAlpha": info.has_partial_alpha,
+		}
+		self.dirty = True
+
+	def save(self):
+		if not self.dirty:
+			return
+		entries = {}
+		try:
+			payload = json.loads(self.path.read_text(encoding="utf-8"))
+			if payload.get("version") == 1 and isinstance(payload.get("entries"), dict):
+				entries.update(payload["entries"])
+		except (OSError, ValueError, json.JSONDecodeError):
+			pass
+		entries.update(self.entries)
+		payload = {"version": 1, "entries": entries}
+		try:
+			self.path.parent.mkdir(parents=True, exist_ok=True)
+			tmp = self.path.with_name(f"{self.path.name}.{os.getpid()}.tmp")
+			tmp.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+			tmp.replace(self.path)
+		except OSError:
+			return
+		self.entries = entries
+		self.dirty = False
+
+
+def default_alpha_cache_path():
+	if sys.platform == "darwin":
+		cache_root = Path.home() / "Library" / "Caches"
+	elif os.name == "nt":
+		cache_root = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+	else:
+		cache_root = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
+	return cache_root / "torcs-web" / "texture-alpha-cache.json"
+
+
+def configure_texture_alpha_cache(enabled=True, cache_path=None):
+	global TEXTURE_ALPHA_INFO_DISK_CACHE, TEXTURE_ALPHA_INFO_DISK_CACHE_PATH
+	resolved_cache_path = (cache_path or default_alpha_cache_path()).resolve() if enabled else None
+	if enabled and TEXTURE_ALPHA_INFO_DISK_CACHE_PATH == resolved_cache_path and TEXTURE_ALPHA_INFO_DISK_CACHE:
+		return
+	TEXTURE_ALPHA_INFO_CACHE.clear()
+	TEXTURE_ALPHA_INFO_DISK_CACHE = TextureAlphaDiskCache(resolved_cache_path) if enabled else None
+	TEXTURE_ALPHA_INFO_DISK_CACHE_PATH = resolved_cache_path
+
+
+def flush_texture_alpha_cache():
+	if TEXTURE_ALPHA_INFO_DISK_CACHE:
+		TEXTURE_ALPHA_INFO_DISK_CACHE.save()
+
+
+def texture_alpha_cache_key(path):
+	resolved = path.resolve()
+	stat = resolved.stat()
+	return f"{resolved}|{stat.st_size}|{stat.st_mtime_ns}"
 
 
 def clean_xml(path):
@@ -635,8 +733,7 @@ def read_texture_alpha_info(path):
 		_, _, rgba = read_sgi_rgb(path)
 		return alpha_info_from_rgba(rgba)
 	if suffix == ".png":
-		_, _, rgba = read_png_rgba(path)
-		return alpha_info_from_rgba(rgba)
+		return read_png_alpha_info(path)
 	return TextureAlphaInfo()
 
 
@@ -648,9 +745,14 @@ def probe_texture_alpha_info(path):
 
 
 def cached_texture_alpha_info(path):
-	key = path.resolve()
+	key = texture_alpha_cache_key(path)
 	if key not in TEXTURE_ALPHA_INFO_CACHE:
-		TEXTURE_ALPHA_INFO_CACHE[key] = probe_texture_alpha_info(path)
+		info = TEXTURE_ALPHA_INFO_DISK_CACHE.lookup(key) if TEXTURE_ALPHA_INFO_DISK_CACHE else None
+		if info is None:
+			info = probe_texture_alpha_info(path)
+			if TEXTURE_ALPHA_INFO_DISK_CACHE:
+				TEXTURE_ALPHA_INFO_DISK_CACHE.store(key, info)
+		TEXTURE_ALPHA_INFO_CACHE[key] = info
 	return TEXTURE_ALPHA_INFO_CACHE[key]
 
 
@@ -1227,7 +1329,7 @@ def unfilter_png_scanlines(path, data, width, height, bytes_per_pixel, row_bytes
 	return rows
 
 
-def read_png_rgba(path):
+def read_png_payload(path):
 	data = path.read_bytes()
 	if data[:8] != b"\x89PNG\r\n\x1a\n":
 		raise ValueError(f"{path} is not a PNG file")
@@ -1251,12 +1353,47 @@ def read_png_rgba(path):
 		raise ValueError(f"{path} missing PNG IHDR")
 	if bit_depth != 8:
 		raise ValueError(f"{path} has unsupported PNG bit depth {bit_depth}")
-	channels_by_color_type = {0: 1, 2: 3, 4: 2, 6: 4}
-	if color_type not in channels_by_color_type:
+	if color_type not in PNG_CHANNELS_BY_COLOR_TYPE:
 		raise ValueError(f"{path} has unsupported PNG color type {color_type}")
-	channels = channels_by_color_type[color_type]
+	return width, height, color_type, bytes(idat)
+
+
+def read_png_alpha_info(path):
+	width, height, color_type, idat = read_png_payload(path)
+	if color_type in (0, 2):
+		return TextureAlphaInfo()
+	channels = PNG_CHANNELS_BY_COLOR_TYPE[color_type]
 	row_bytes = width * channels
-	rows = unfilter_png_scanlines(path, zlib.decompress(bytes(idat)), width, height, channels, row_bytes)
+	rows = unfilter_png_scanlines(path, zlib.decompress(idat), width, height, channels, row_bytes)
+	alpha_channel = channels - 1
+	has_transparent_alpha = False
+	has_partial_alpha = False
+	for row in rows:
+		for offset in range(alpha_channel, len(row), channels):
+			alpha = row[offset]
+			if alpha < 255:
+				if alpha == 0:
+					has_transparent_alpha = True
+				else:
+					has_partial_alpha = True
+				if has_transparent_alpha and has_partial_alpha:
+					return TextureAlphaInfo(
+						has_alpha=True,
+						has_transparent_alpha=True,
+						has_partial_alpha=True,
+					)
+	return TextureAlphaInfo(
+		has_alpha=has_transparent_alpha or has_partial_alpha,
+		has_transparent_alpha=has_transparent_alpha,
+		has_partial_alpha=has_partial_alpha,
+	)
+
+
+def read_png_rgba(path):
+	width, height, color_type, idat = read_png_payload(path)
+	channels = PNG_CHANNELS_BY_COLOR_TYPE[color_type]
+	row_bytes = width * channels
+	rows = unfilter_png_scanlines(path, zlib.decompress(idat), width, height, channels, row_bytes)
 	pixels = bytearray(width * height * 4)
 	for y, row in enumerate(rows):
 		for x in range(width):
@@ -1606,6 +1743,21 @@ def convert_car_job(job):
 	return convert_car(source_root, output_dir, car_xml)
 
 
+def convert_asset_job(job):
+	kind, source_root, output_dir, asset_xml, cache_enabled, cache_path = job
+	configure_texture_alpha_cache(cache_enabled, cache_path)
+	try:
+		if kind == "track":
+			key, entry, textures = convert_track(source_root, output_dir, asset_xml)
+			return kind, key, entry, textures, set()
+		if kind == "car":
+			key, entry, textures, sounds = convert_car(source_root, output_dir, asset_xml)
+			return kind, key, entry, textures, sounds
+		raise ValueError(f"unknown conversion job kind {kind}")
+	finally:
+		flush_texture_alpha_cache()
+
+
 def map_conversion_jobs(worker, jobs, job_count):
 	if not jobs:
 		return []
@@ -1662,23 +1814,27 @@ def prefix_output_paths(paths, prefix):
 	return {prefix_manifest_path(path, prefix) for path in paths}
 
 
-def convert_source_assets(source, quick, job_count):
+def convert_source_assets(source, quick, job_count, cache_enabled, cache_path):
 	track_xmls, car_xmls = selected_asset_paths(source.root, quick and source.primary)
 	tracks = {}
 	cars = {}
 	texture_outputs = set()
 	sound_outputs = set()
-	track_jobs = [(source.root, source.output_dir, track_xml) for track_xml in track_xmls]
-	car_jobs = [(source.root, source.output_dir, car_xml) for car_xml in car_xmls]
-	for key, entry, outputs in map_conversion_jobs(convert_track_job, track_jobs, job_count):
+	jobs = [
+		("track", source.root, source.output_dir, track_xml, cache_enabled, cache_path)
+		for track_xml in track_xmls
+	]
+	jobs.extend(
+		("car", source.root, source.output_dir, car_xml, cache_enabled, cache_path)
+		for car_xml in car_xmls
+	)
+	for kind, key, entry, textures, sounds in map_conversion_jobs(convert_asset_job, jobs, job_count):
 		prefix_manifest_paths(entry, source.manifest_prefix)
 		entry["assetSource"] = source.label
-		tracks[manifest_key(source.label, key)] = entry
-		texture_outputs.update(prefix_output_paths(outputs, source.manifest_prefix))
-	for key, entry, textures, sounds in map_conversion_jobs(convert_car_job, car_jobs, job_count):
-		prefix_manifest_paths(entry, source.manifest_prefix)
-		entry["assetSource"] = source.label
-		cars[manifest_key(source.label, key)] = entry
+		if kind == "track":
+			tracks[manifest_key(source.label, key)] = entry
+		else:
+			cars[manifest_key(source.label, key)] = entry
 		texture_outputs.update(prefix_output_paths(textures, source.manifest_prefix))
 		sound_outputs.update(prefix_output_paths(sounds, source.manifest_prefix))
 	return tracks, cars, texture_outputs, sound_outputs
@@ -1690,6 +1846,8 @@ def run_conversion(args):
 	clear_generated_output(output_dir)
 
 	job_count = resolve_job_count(args)
+	cache_enabled = not args.no_cache
+	cache_path = default_alpha_cache_path() if cache_enabled else None
 	sources = resolve_asset_sources(args, output_dir)
 	primary_source = sources[0]
 	tracks = {}
@@ -1697,7 +1855,7 @@ def run_conversion(args):
 	texture_outputs = set()
 	sound_outputs = set()
 	for source in sources:
-		source_tracks, source_cars, textures, sounds = convert_source_assets(source, args.quick, job_count)
+		source_tracks, source_cars, textures, sounds = convert_source_assets(source, args.quick, job_count, cache_enabled, cache_path)
 		tracks.update(source_tracks)
 		cars.update(source_cars)
 		texture_outputs.update(textures)
@@ -1733,6 +1891,7 @@ def run_conversion(args):
 		"sources": [source.label for source in sources],
 		"quick": args.quick,
 		"jobs": job_count,
+		"cache": cache_enabled,
 	}))
 
 
