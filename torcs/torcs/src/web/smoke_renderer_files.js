@@ -1902,8 +1902,13 @@ requireText(byPath["renderer/scene.js"], "THREE.NoToneMapping", "legacy no-tone-
 requireText(byPath["renderer/scene.js"], "this.renderProfile === \"modern\" && this.acesToneMappingEnabled", "modern ACES tone mapping gate");
 requireText(byPath["renderer/scene.js"], "MODERN_TONE_MAPPING_EXPOSURE = 0.82", "modern tone mapping exposure");
 requireText(byPath["renderer/scene.js"], "setLightIntensityScale(scale)", "interactive light intensity setter");
-requireText(byPath["renderer/scene.js"], "DEFAULT_AMBIENT_INTENSITY * this.lightIntensityScale", "scaled ambient intensity");
-requireText(byPath["renderer/scene.js"], "DEFAULT_SUN_INTENSITY * this.lightIntensityScale", "scaled sun intensity");
+requireText(byPath["renderer/scene.js"], "MODERN_AMBIENT_INTENSITY = 1.35", "modern reduced ambient intensity");
+requireText(byPath["renderer/scene.js"], "MODERN_SUN_INTENSITY = 2.5", "modern sun intensity");
+requireText(byPath["renderer/scene.js"], "MODERN_ENVIRONMENT_INTENSITY = 0.6", "modern reduced environment intensity");
+requireText(byPath["renderer/scene.js"], "CSM_NATIVE_SHADOW_OPACITY_SCALE = 0.12", "reduced native shadow overlay under CSM");
+requireText(byPath["renderer/scene.js"], "this.renderProfile === \"modern\" ? MODERN_AMBIENT_INTENSITY : DEFAULT_AMBIENT_INTENSITY", "profile-specific ambient intensity");
+requireText(byPath["renderer/scene.js"], "this.renderProfile === \"modern\" ? MODERN_SUN_INTENSITY : DEFAULT_SUN_INTENSITY", "profile-specific sun intensity");
+requireText(byPath["renderer/scene.js"], "applyEnvironmentIntensity()", "profile-specific environment intensity");
 requireText(byPath["renderer/scene.js"], "this.renderProfile = \"legacy\"", "legacy scene render profile default");
 requireText(byPath["renderer/scene.js"], "backgroundColor.clone().multiplyScalar(0.8)", "native fog color scaling");
 requireText(byPath["renderer/scene.js"], "const FOG_NEAR = 300", "linear TORCS fog start");

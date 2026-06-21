@@ -42,6 +42,7 @@ const DEFAULT_ENVIRONMENT_MAP = "./web/hdri/120_hdrmaps_com_free_2K.exr";
 const DEFAULT_SKYBOX_PREFIX = "./web/skybox/arid2";
 const DEFAULT_SKYBOX_FACES = ["rt", "lf", "up", "dn", "ft", "bk"];
 const DEFAULT_ENVIRONMENT_INTENSITY = 0.8;
+const MODERN_ENVIRONMENT_INTENSITY = 0.6;
 const ENVIRONMENT_MODES = new Set(["dome", "skybox", "shader"]);
 const DEFAULT_ENVIRONMENT_MODE = "dome";
 const DEFAULT_TIME_OF_DAY = 7;
@@ -59,6 +60,8 @@ const SKY_SHADER_SETTINGS = Object.freeze({
 });
 const DEFAULT_AMBIENT_INTENSITY = 2.4;
 const DEFAULT_SUN_INTENSITY = 2.3;
+const MODERN_AMBIENT_INTENSITY = 1.35;
+const MODERN_SUN_INTENSITY = 2.5;
 const SHADOW_CASCADE_COUNT = 4;
 const SHADOW_MAP_SIZE = 2048;
 const SHADOW_MAX_FAR = 700;
@@ -66,7 +69,7 @@ const SHADOW_LIGHT_MARGIN = 90;
 const SHADOW_CAMERA_EXTENT = 900;
 const SHADOW_CAMERA_NEAR = 1;
 const SHADOW_CAMERA_FAR = 1800;
-const CSM_NATIVE_SHADOW_OPACITY_SCALE = 0.22;
+const CSM_NATIVE_SHADOW_OPACITY_SCALE = 0.12;
 const LEGACY_TONE_MAPPING_EXPOSURE = 1.0;
 const MODERN_TONE_MAPPING_EXPOSURE = 0.82;
 const TORCS_TO_THREE_BASIS = new THREE.Matrix4().set(
@@ -541,6 +544,8 @@ export class TorcsScene {
 	setRenderProfile(profile) {
 		this.renderProfile = normalizeRenderProfile(profile);
 		this.applyToneMappingProfile();
+		this.applyTrackLightIntensities();
+		this.applyEnvironmentIntensity();
 		this.updatePostProcessPreset();
 	}
 
@@ -623,8 +628,10 @@ export class TorcsScene {
 			return;
 		}
 		const daylight = getTimeOfDayDaylight(this.timeOfDay);
-		this.ambientLight.intensity = DEFAULT_AMBIENT_INTENSITY * this.lightIntensityScale * (0.45 + daylight * 0.55);
-		this.sunLight.intensity = DEFAULT_SUN_INTENSITY * this.lightIntensityScale * (0.08 + daylight * 0.92);
+		const ambientIntensity = this.renderProfile === "modern" ? MODERN_AMBIENT_INTENSITY : DEFAULT_AMBIENT_INTENSITY;
+		const sunIntensity = this.renderProfile === "modern" ? MODERN_SUN_INTENSITY : DEFAULT_SUN_INTENSITY;
+		this.ambientLight.intensity = ambientIntensity * this.lightIntensityScale * (0.45 + daylight * 0.55);
+		this.sunLight.intensity = sunIntensity * this.lightIntensityScale * (0.08 + daylight * 0.92);
 	}
 
 	addLighting() {
@@ -717,9 +724,7 @@ export class TorcsScene {
 			this.environmentMap = renderTarget.texture;
 			if (this.environmentMode === "dome" && !this.trackBackgroundTexture) {
 				this.scene.environment = this.environmentMap;
-				if ("environmentIntensity" in this.scene) {
-					this.scene.environmentIntensity = DEFAULT_ENVIRONMENT_INTENSITY;
-				}
+				this.applyEnvironmentIntensity();
 				return;
 			}
 			this.applyBackgroundMode();
@@ -783,9 +788,7 @@ export class TorcsScene {
 			this.scene.background = this.skyboxMap;
 			this.scene.environment = this.skyboxMap;
 			this.postprocess.setSkyboxTexture(this.skyboxMap);
-			if ("environmentIntensity" in this.scene) {
-				this.scene.environmentIntensity = DEFAULT_ENVIRONMENT_INTENSITY;
-			}
+			this.applyEnvironmentIntensity();
 			return;
 		}
 
@@ -795,9 +798,7 @@ export class TorcsScene {
 			this.scene.background = this.trackBackgroundColor.clone();
 			this.scene.environment = this.environmentMap;
 			this.postprocess.setSkyboxTexture(null);
-			if ("environmentIntensity" in this.scene) {
-				this.scene.environmentIntensity = DEFAULT_ENVIRONMENT_INTENSITY;
-			}
+			this.applyEnvironmentIntensity();
 			return;
 		}
 
@@ -805,10 +806,17 @@ export class TorcsScene {
 		this.scene.background = this.trackBackgroundColor.clone();
 		this.scene.environment = this.environmentMap;
 		this.postprocess.setSkyboxTexture(null);
-		if ("environmentIntensity" in this.scene) {
-			this.scene.environmentIntensity = DEFAULT_ENVIRONMENT_INTENSITY;
-		}
+		this.applyEnvironmentIntensity();
 		this.setBackgroundDome(this.trackBackgroundTexture);
+	}
+
+	applyEnvironmentIntensity() {
+		if (!("environmentIntensity" in this.scene)) {
+			return;
+		}
+		this.scene.environmentIntensity = this.renderProfile === "modern"
+			? MODERN_ENVIRONMENT_INTENSITY
+			: DEFAULT_ENVIRONMENT_INTENSITY;
 	}
 
 	createSkyShader() {
