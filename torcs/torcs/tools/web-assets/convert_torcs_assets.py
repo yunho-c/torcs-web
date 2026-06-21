@@ -6,6 +6,7 @@ import json
 import re
 import shutil
 import struct
+import sys
 import zlib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -127,7 +128,7 @@ class TextureAlphaInfo:
 	has_partial_alpha: bool = False
 
 
-def parse_args():
+def parse_args(argv=None):
 	parser = argparse.ArgumentParser(description=__doc__)
 	parser.add_argument("--source-root", type=Path, required=True)
 	parser.add_argument("--output-dir", type=Path, required=True)
@@ -136,7 +137,17 @@ def parse_args():
 		action="store_true",
 		help="convert only the golden E-Track 1/kc-2000gt web asset pair",
 	)
-	return parser.parse_args()
+	parser.add_argument(
+		"--profile",
+		action="store_true",
+		help="profile the conversion with pyinstrument and write an HTML report",
+	)
+	parser.add_argument(
+		"--profile-output",
+		type=Path,
+		help="path for the pyinstrument HTML report; defaults to <output-dir>/convert-profile.html",
+	)
+	return parser.parse_args(argv)
 
 
 def clear_generated_output(output_dir):
@@ -1426,8 +1437,7 @@ def convert_effects(source_root, output_dir):
 	}, set(effect_texture_outputs.values()), sound_outputs
 
 
-def main():
-	args = parse_args()
+def run_conversion(args):
 	source_root = args.source_root.resolve()
 	output_dir = args.output_dir.resolve()
 	output_dir.mkdir(parents=True, exist_ok=True)
@@ -1470,6 +1480,40 @@ def main():
 		"sounds": len(sound_outputs),
 		"quick": args.quick,
 	}))
+
+
+def resolve_profile_output(args):
+	if args.profile_output:
+		return args.profile_output.resolve()
+	return args.output_dir.resolve() / "convert-profile.html"
+
+
+def main(argv=None):
+	args = parse_args(argv)
+	if not args.profile:
+		run_conversion(args)
+		return
+
+	try:
+		from pyinstrument import Profiler
+	except ImportError as error:
+		print(
+			"Install pyinstrument to use --profile: python3 -m pip install pyinstrument",
+			file=sys.stderr,
+		)
+		raise SystemExit(1) from error
+
+	profiler = Profiler()
+	profiler.start()
+	try:
+		run_conversion(args)
+	finally:
+		profiler.stop()
+
+	profile_output = resolve_profile_output(args)
+	profile_output.parent.mkdir(parents=True, exist_ok=True)
+	profiler.write_html(profile_output)
+	print(json.dumps({"profile": runtime_path(profile_output)}))
 
 
 if __name__ == "__main__":

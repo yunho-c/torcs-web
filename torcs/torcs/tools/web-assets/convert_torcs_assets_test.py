@@ -33,6 +33,37 @@ def read_glb_json(path):
 
 
 class ConvertTorcsAssetsTest(unittest.TestCase):
+	def test_parse_args_defaults_profile_disabled(self):
+		args = convert.parse_args([
+			"--source-root", "source",
+			"--output-dir", "out",
+		])
+
+		self.assertFalse(args.profile)
+		self.assertIsNone(args.profile_output)
+
+	def test_parse_args_accepts_profile_options(self):
+		args = convert.parse_args([
+			"--source-root", "source",
+			"--output-dir", "out",
+			"--quick",
+			"--profile",
+			"--profile-output", "profile.html",
+		])
+
+		self.assertTrue(args.quick)
+		self.assertTrue(args.profile)
+		self.assertEqual(args.profile_output, Path("profile.html"))
+
+	def test_resolve_profile_output_defaults_to_output_dir(self):
+		args = convert.parse_args([
+			"--source-root", "source",
+			"--output-dir", "out",
+			"--profile",
+		])
+
+		self.assertEqual(convert.resolve_profile_output(args), Path("out/convert-profile.html").resolve())
+
 	def test_triangulates_fan_surfaces(self):
 		refs = make_refs(4)
 
