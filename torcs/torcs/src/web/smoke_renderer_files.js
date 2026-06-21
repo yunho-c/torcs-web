@@ -1474,7 +1474,7 @@ requireText(byPath["renderer/assets.js"], "torcsOverlayRole === \"trackSkid\"", 
 requireText(byPath["renderer/assets.js"], "makeTrackSkidOverlayMaterial(material)", "track skid overlay material adapter");
 requireText(byPath["renderer/assets.js"], "new THREE.MeshBasicMaterial", "unlit track shadow overlay material");
 requireText(byPath["renderer/assets.js"], "polygonOffset: true", "track shadow overlay z-fighting guard");
-requireText(byPath["renderer/assets.js"], "const source = normalizeRuntimePath(carPath)", "car asset source path annotation");
+requireText(byPath["renderer/assets.js"], "resolveManifestEntry(manifest.cars, carPath)", "namespaced car asset source path annotation");
 requireText(byPath["renderer/assets.js"], "const asset = { entry: carEntry, lods, wheelAsset, shadowTexture, wheelFallbackTexture, materialMask }", "loaded car entry source metadata");
 requireText(byPath["renderer/assets.js"], "entry.wheelAsset.states.map", "detailed wheel asset loading");
 requireText(byPath["renderer/assets.js"], "wheelFallbackTexturePath", "generated wheel fallback texture path resolution");
@@ -2022,11 +2022,16 @@ if (byPath["renderer/cameras.js"].content.includes("Math.cos(yaw)")) {
 }
 
 const manifest = JSON.parse(read("web-assets/manifest.json"));
-const track = manifest.tracks["data/tracks/e-track-1/e-track-1.xml"];
-const car = manifest.cars["data/cars/models/kc-2000gt/kc-2000gt.xml"];
-const car7Trb1 = manifest.cars["data/cars/models/car7-trb1/car7-trb1.xml"];
+const track = manifest.tracks["torcs:data/tracks/e-track-1/e-track-1.xml"];
+const car = manifest.cars["torcs:data/cars/models/kc-2000gt/kc-2000gt.xml"];
+const car7Trb1 = manifest.cars["torcs:data/cars/models/car7-trb1/car7-trb1.xml"];
 if (!track || !car) {
 	fail("TORCS web renderer smoke test missing Phase 1 manifest entries");
+}
+if (!manifest.sources || !manifest.sources.torcs || manifest.sources.torcs.primary !== true) {
+	fail("TORCS web renderer smoke test missing primary TORCS asset source metadata", {
+		sources: manifest.sources,
+	});
 }
 if (!car7Trb1 || !Array.isArray(car7Trb1.lods) || car7Trb1.lods.length === 0) {
 	fail("TORCS web renderer smoke test missing car7-trb1 remaster reference asset");
@@ -2048,9 +2053,21 @@ if (JSON.stringify(car7Trb1.wheelAsset.speedThresholds) !== JSON.stringify([20, 
 		speedThresholds: car7Trb1.wheelAsset.speedThresholds,
 	});
 }
-if (!manifest.tracks["data/tracks/g-track-1/g-track-1.xml"] ||
-	!manifest.cars["data/cars/models/kc-a110/kc-a110.xml"]) {
+if (!manifest.tracks["torcs:data/tracks/g-track-1/g-track-1.xml"] ||
+	!manifest.cars["torcs:data/cars/models/kc-a110/kc-a110.xml"]) {
 	fail("TORCS web renderer smoke test missing selectable multi-asset manifest entries");
+}
+if (manifest.sources["speed-dreams"]) {
+	const sdTrack = manifest.tracks["speed-dreams:data/tracks/circuit/jarama/jarama.xml"];
+	const sdCar = manifest.cars["speed-dreams:data/cars/models/sc-cavallo-360/sc-cavallo-360.xml"];
+	if (!sdTrack || !sdCar) {
+		fail("TORCS web renderer smoke test missing optional Speed Dreams manifest entries", {
+			tracks: Object.keys(manifest.tracks).filter((key) => key.startsWith("speed-dreams:")),
+			cars: Object.keys(manifest.cars).filter((key) => key.startsWith("speed-dreams:")),
+		});
+	}
+	checkGlb(sdTrack.asset);
+	checkGlb(sdCar.lods[0].asset);
 }
 checkGlb(track.asset);
 checkObjectNames(track, track.source);

@@ -233,6 +233,20 @@ if(EMSCRIPTEN)
 
 	find_program(TORCS_PYTHON_EXECUTABLE NAMES python3 python)
 	if(TORCS_PYTHON_EXECUTABLE)
+		get_filename_component(TORCS_WEB_SPEED_DREAMS_DATA_ROOT
+			"${TORCS_ROOT}/../../external/speed-dreams-code/speed-dreams-data"
+			ABSOLUTE
+		)
+		set(TORCS_WEB_EXTRA_ASSET_ARGS "")
+		if(EXISTS "${TORCS_WEB_SPEED_DREAMS_DATA_ROOT}/data")
+			list(APPEND TORCS_WEB_EXTRA_ASSET_ARGS
+				"--extra-source"
+				"speed-dreams=${TORCS_WEB_SPEED_DREAMS_DATA_ROOT}"
+			)
+			message(STATUS "TORCS web assets: including Speed Dreams data from ${TORCS_WEB_SPEED_DREAMS_DATA_ROOT}")
+		else()
+			message(STATUS "TORCS web assets: Speed Dreams data submodule not initialized; skipping optional assets")
+		endif()
 		add_custom_target(torcs_web_assets
 			COMMAND
 				"${TORCS_PYTHON_EXECUTABLE}"
@@ -241,6 +255,7 @@ if(EMSCRIPTEN)
 				"${TORCS_ROOT}"
 				"--output-dir"
 				"$<TARGET_FILE_DIR:torcs_web_probe>/web-assets"
+				${TORCS_WEB_EXTRA_ASSET_ARGS}
 			COMMAND
 				"${TORCS_PYTHON_EXECUTABLE}"
 				"${TORCS_ROOT}/tools/web-assets/validate_assets.py"

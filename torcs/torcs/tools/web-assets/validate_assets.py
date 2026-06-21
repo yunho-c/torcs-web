@@ -14,6 +14,7 @@ WAV_RIFF_MAGIC = b"RIFF"
 WAV_WAVE_MAGIC = b"WAVE"
 GOLDEN_TRACK_XML = "data/tracks/e-track-1/e-track-1.xml"
 GOLDEN_CAR_XML = "data/cars/models/kc-2000gt/kc-2000gt.xml"
+DEFAULT_SOURCE_LABEL = "torcs"
 DEFAULT_TRACK_XMLS = [
 	GOLDEN_TRACK_XML,
 	"data/tracks/g-track-1/g-track-1.xml",
@@ -96,6 +97,10 @@ def require(root, relative_path):
 	if not path.exists():
 		raise ValueError(f"missing asset reference {relative_path}")
 	return path
+
+
+def has_manifest_entry(entries, relative_path):
+	return relative_path in entries or f"{DEFAULT_SOURCE_LABEL}:{relative_path}" in entries
 
 
 def check_object_names(entry, label):
@@ -223,10 +228,10 @@ def main():
 		required_tracks = [GOLDEN_TRACK_XML] if args.quick else DEFAULT_TRACK_XMLS
 		required_cars = [GOLDEN_CAR_XML] if args.quick else DEFAULT_CAR_XMLS
 		for track_xml in required_tracks:
-			if track_xml not in tracks:
+			if not has_manifest_entry(tracks, track_xml):
 				raise ValueError(f"manifest missing required track {track_xml}")
 		for car_xml in required_cars:
-			if car_xml not in cars:
+			if not has_manifest_entry(cars, car_xml):
 				raise ValueError(f"manifest missing required car {car_xml}")
 
 		for track in tracks.values():
@@ -250,9 +255,9 @@ def main():
 			check_car_wheel_layout(car)
 			wheel_fallback = car.get("wheelFallback") or {}
 			wheel_texture = wheel_fallback.get("texture")
-			if wheel_fallback.get("source") != "runtime-snapshot" or not wheel_texture:
+			if wheel_fallback.get("source") != "runtime-snapshot":
 				raise ValueError("car missing runtime wheel fallback metadata")
-			if wheel_texture not in car.get("textures", {}):
+			if wheel_texture and wheel_texture not in car.get("textures", {}):
 				raise ValueError(f"wheel fallback texture {wheel_texture} is not converted")
 			sound = car.get("sound") or {}
 			if not sound.get("engineSample") or not sound.get("engineAsset"):

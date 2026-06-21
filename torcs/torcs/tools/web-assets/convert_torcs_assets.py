@@ -17,6 +17,7 @@ from xml.etree import ElementTree
 
 GOLDEN_TRACK_XML = Path("data/tracks/e-track-1/e-track-1.xml")
 GOLDEN_CAR_XML = Path("data/cars/models/kc-2000gt/kc-2000gt.xml")
+DEFAULT_SOURCE_LABEL = "torcs"
 EMPTY_TEXTURE = "empty_texture_no_mapping"
 AC_SURFACE_FAN = 0
 AC_SURFACE_LINE_LOOP = 1
@@ -131,6 +132,15 @@ class TextureAlphaInfo:
 	has_partial_alpha: bool = False
 
 
+@dataclass
+class AssetSource:
+	label: str
+	root: Path
+	output_dir: Path
+	manifest_prefix: str = ""
+	primary: bool = False
+
+
 TEXTURE_ALPHA_INFO_CACHE = {}
 
 
@@ -141,9 +151,31 @@ def positive_int(value):
 	return parsed
 
 
+def source_label(value):
+	if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", value or ""):
+		raise argparse.ArgumentTypeError("must start with an alphanumeric character and contain only alphanumerics, '.', '_', or '-'")
+	return value
+
+
+def parse_extra_source(value):
+	label, separator, source_root = value.partition("=")
+	if not separator or not source_root:
+		raise argparse.ArgumentTypeError("must be LABEL=PATH")
+	return source_label(label), Path(source_root)
+
+
 def parse_args(argv=None):
 	parser = argparse.ArgumentParser(description=__doc__)
 	parser.add_argument("--source-root", type=Path, required=True)
+	parser.add_argument("--source-label", type=source_label, default=DEFAULT_SOURCE_LABEL)
+	parser.add_argument(
+		"--extra-source",
+		type=parse_extra_source,
+		action="append",
+		default=[],
+		metavar="LABEL=PATH",
+		help="additional TORCS-compatible data root to convert and namespace under LABEL",
+	)
 	parser.add_argument("--output-dir", type=Path, required=True)
 	parser.add_argument(
 		"--quick",
@@ -169,7 +201,7 @@ def parse_args(argv=None):
 
 
 def clear_generated_output(output_dir):
-	for name in ("tracks", "cars", "effects", "audio", "manifest.json"):
+	for name in ("tracks", "cars", "effects", "audio", "sources", "manifest.json"):
 		path = output_dir / name
 		if path.is_dir():
 			shutil.rmtree(path)
@@ -235,6 +267,8 @@ def find_section(section, *names):
 
 
 def runtime_path(path):
+	if isinstance(path, str):
+		return path
 	return path.as_posix()
 
 
@@ -258,6 +292,47 @@ def selected_asset_paths(source_root, quick):
 	if quick:
 		return [GOLDEN_TRACK_XML], [GOLDEN_CAR_XML]
 	return discover_track_xmls(source_root), discover_car_xmls(source_root)
+
+
+def manifest_key(label, source_relative_path):
+	return f"{label}:{runtime_path(source_relative_path)}"
+
+
+def source_display_name(label):
+	return " ".join(word.capitalize() for word in re.split(r"[-_]+", label) if word) or label
+
+
+def resolve_asset_sources(args, output_dir):
+	sources = []
+	labels = set()
+
+	def add_source(label, root, primary=False):
+		if label in labels:
+			raise ValueError(f"duplicate asset source label {label}")
+		resolved_root = root.resolve()
+		if not (resolved_root / "data").is_dir():
+			if primary:
+				raise ValueError(f"asset source {label} has no data directory: {resolved_root}")
+			print(
+				f"warning: skipping asset source {label}; no data directory at {resolved_root}",
+				file=sys.stderr,
+			)
+			return
+		labels.add(label)
+		manifest_prefix = "" if primary else f"sources/{label}"
+		sources.append(AssetSource(
+			label=label,
+			root=resolved_root,
+			output_dir=output_dir if primary else output_dir / "sources" / label,
+			manifest_prefix=manifest_prefix,
+			primary=primary,
+		))
+
+	add_source(args.source_label, args.source_root, primary=True)
+	if not args.quick:
+		for label, root in args.extra_source:
+			add_source(label, root)
+	return sources
 
 
 def parse_track_metadata(source_root, track_xml):
@@ -1536,37 +1611,110 @@ def map_conversion_jobs(worker, jobs, job_count):
 		return []
 	if job_count == 1:
 		return [worker(job) for job in jobs]
-	with concurrent.futures.ProcessPoolExecutor(max_workers=job_count) as executor:
-		return list(executor.map(worker, jobs))
+	try:
+		with concurrent.futures.ProcessPoolExecutor(max_workers=job_count) as executor:
+			return list(executor.map(worker, jobs))
+	except PermissionError as error:
+		print(
+			f"warning: process-pool conversion unavailable ({error}); falling back to --jobs 1",
+			file=sys.stderr,
+		)
+		return [worker(job) for job in jobs]
+
+
+def prefix_manifest_path(path, prefix):
+	if not path or not prefix:
+		return path
+	return f"{prefix}/{path}"
+
+
+def prefix_manifest_paths(entry, prefix):
+	if not prefix:
+		return entry
+	for field in ("asset", "backgroundTexture", "materialMask"):
+		if entry.get(field):
+			entry[field] = prefix_manifest_path(entry[field], prefix)
+	for textures in (entry.get("textures"),):
+		if isinstance(textures, dict):
+			for name, path in list(textures.items()):
+				textures[name] = prefix_manifest_path(path, prefix)
+	for overlay_field in ("trackShadowOverlays", "trackSkidOverlays"):
+		for overlay in entry.get(overlay_field, []):
+			if overlay.get("texture"):
+				overlay["texture"] = prefix_manifest_path(overlay["texture"], prefix)
+	for lod in entry.get("lods", []):
+		if lod.get("asset"):
+			lod["asset"] = prefix_manifest_path(lod["asset"], prefix)
+	sound = entry.get("sound")
+	if isinstance(sound, dict) and sound.get("engineAsset"):
+		sound["engineAsset"] = prefix_manifest_path(sound["engineAsset"], prefix)
+	wheel_asset = entry.get("wheelAsset")
+	if isinstance(wheel_asset, dict):
+		for state in wheel_asset.get("states", []):
+			if state.get("asset"):
+				state["asset"] = prefix_manifest_path(state["asset"], prefix)
+	return entry
+
+
+def prefix_output_paths(paths, prefix):
+	if not prefix:
+		return set(paths)
+	return {prefix_manifest_path(path, prefix) for path in paths}
+
+
+def convert_source_assets(source, quick, job_count):
+	track_xmls, car_xmls = selected_asset_paths(source.root, quick and source.primary)
+	tracks = {}
+	cars = {}
+	texture_outputs = set()
+	sound_outputs = set()
+	track_jobs = [(source.root, source.output_dir, track_xml) for track_xml in track_xmls]
+	car_jobs = [(source.root, source.output_dir, car_xml) for car_xml in car_xmls]
+	for key, entry, outputs in map_conversion_jobs(convert_track_job, track_jobs, job_count):
+		prefix_manifest_paths(entry, source.manifest_prefix)
+		entry["assetSource"] = source.label
+		tracks[manifest_key(source.label, key)] = entry
+		texture_outputs.update(prefix_output_paths(outputs, source.manifest_prefix))
+	for key, entry, textures, sounds in map_conversion_jobs(convert_car_job, car_jobs, job_count):
+		prefix_manifest_paths(entry, source.manifest_prefix)
+		entry["assetSource"] = source.label
+		cars[manifest_key(source.label, key)] = entry
+		texture_outputs.update(prefix_output_paths(textures, source.manifest_prefix))
+		sound_outputs.update(prefix_output_paths(sounds, source.manifest_prefix))
+	return tracks, cars, texture_outputs, sound_outputs
 
 
 def run_conversion(args):
-	source_root = args.source_root.resolve()
 	output_dir = args.output_dir.resolve()
 	output_dir.mkdir(parents=True, exist_ok=True)
 	clear_generated_output(output_dir)
 
 	job_count = resolve_job_count(args)
-	track_xmls, car_xmls = selected_asset_paths(source_root, args.quick)
+	sources = resolve_asset_sources(args, output_dir)
+	primary_source = sources[0]
 	tracks = {}
 	cars = {}
 	texture_outputs = set()
 	sound_outputs = set()
-	track_jobs = [(source_root, output_dir, track_xml) for track_xml in track_xmls]
-	car_jobs = [(source_root, output_dir, car_xml) for car_xml in car_xmls]
-	for key, entry, outputs in map_conversion_jobs(convert_track_job, track_jobs, job_count):
-		tracks[key] = entry
-		texture_outputs.update(outputs)
-	for key, entry, textures, sounds in map_conversion_jobs(convert_car_job, car_jobs, job_count):
-		cars[key] = entry
+	for source in sources:
+		source_tracks, source_cars, textures, sounds = convert_source_assets(source, args.quick, job_count)
+		tracks.update(source_tracks)
+		cars.update(source_cars)
 		texture_outputs.update(textures)
 		sound_outputs.update(sounds)
-	effects, effect_textures, effect_sounds = convert_effects(source_root, output_dir)
+	effects, effect_textures, effect_sounds = convert_effects(primary_source.root, output_dir)
 	texture_outputs.update(effect_textures)
 	sound_outputs.update(effect_sounds)
 	manifest = {
 		"version": 1,
 		"generator": "tools/web-assets/convert_torcs_assets.py",
+		"sources": {
+			source.label: {
+				"name": "TORCS" if source.label == DEFAULT_SOURCE_LABEL else source_display_name(source.label),
+				"primary": source.primary,
+			}
+			for source in sources
+		},
 		"coordinateFrame": {
 			"source": "AC3D x, height-y, z",
 			"three": "x, height-y, z",
@@ -1582,6 +1730,7 @@ def run_conversion(args):
 		"cars": len(cars),
 		"textures": len(texture_outputs),
 		"sounds": len(sound_outputs),
+		"sources": [source.label for source in sources],
 		"quick": args.quick,
 		"jobs": job_count,
 	}))

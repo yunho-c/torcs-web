@@ -116,9 +116,31 @@ const MATERIAL_DEBUG_COLORS = Object.freeze({
 	sign: 0xffbe0b,
 	unclassified: 0xff00ff,
 });
+const DEFAULT_ASSET_SOURCE = "torcs";
 
 function normalizeRuntimePath(path) {
-	return path.replace(/^\/torcs\//, "");
+	const source = String(path || "");
+	if (source.includes(":")) {
+		return source;
+	}
+	return source.replace(/^\/torcs\//, "");
+}
+
+function manifestKeyCandidates(path) {
+	const normalized = normalizeRuntimePath(path);
+	if (!normalized || normalized.includes(":")) {
+		return normalized ? [normalized] : [];
+	}
+	return [`${DEFAULT_ASSET_SOURCE}:${normalized}`, normalized];
+}
+
+function resolveManifestEntry(entries, path) {
+	for (const key of manifestKeyCandidates(path)) {
+		if (entries && entries[key]) {
+			return { key, entry: entries[key] };
+		}
+	}
+	return { key: normalizeRuntimePath(path), entry: null };
 }
 
 function normalizeRenderProfile(profile) {
@@ -604,7 +626,8 @@ export class AssetManager {
 		}
 		const manifest = await this.loadManifest();
 		const source = `data/cars/models/${modelName}/${modelName}.xml`;
-		return manifest.cars && manifest.cars[source] ? source : "";
+		const resolved = resolveManifestEntry(manifest.cars, source);
+		return resolved.entry ? resolved.key : "";
 	}
 
 	async loadCarForModelName(modelName, fallbackCarPath = "") {
@@ -642,7 +665,8 @@ export class AssetManager {
 
 	async loadTrack(trackPath) {
 		const manifest = await this.loadManifest();
-		const entry = manifest.tracks[normalizeRuntimePath(trackPath)];
+		const resolved = resolveManifestEntry(manifest.tracks, trackPath);
+		const entry = resolved.entry;
 		if (!entry) {
 			return null;
 		}
@@ -664,11 +688,12 @@ export class AssetManager {
 
 	async loadCar(carPath) {
 		const manifest = await this.loadManifest();
-		const source = normalizeRuntimePath(carPath);
+		const resolved = resolveManifestEntry(manifest.cars, carPath);
+		const source = resolved.key;
 		if (this.carCache.has(source)) {
 			return this.carCache.get(source);
 		}
-		const entry = manifest.cars[source];
+		const entry = resolved.entry;
 		if (!entry || !entry.lods.length) {
 			return null;
 		}
