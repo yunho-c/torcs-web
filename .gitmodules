@@ -1,3 +1,9 @@
 [submodule "external/speed-dreams-code"]
 	path = external/speed-dreams-code
 	url = https://forge.a-lec.org/speed-dreams/speed-dreams-code.git
+[submodule "external/speed-dreams-nordschleife"]
+	path = external/speed-dreams-nordschleife
+	url = https://forge.a-lec.org/speed-dreams/nordschleife.git
+[submodule "external/speed-dreams-sc-boxer-96"]
+	path = external/speed-dreams-sc-boxer-96
+	url = https://forge.a-lec.org/speed-dreams/sc-boxer-96.git
