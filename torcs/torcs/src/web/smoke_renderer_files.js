@@ -869,6 +869,61 @@ async function checkInputControllerBehavior() {
 		"second right stick press toggles front off while preserving analog look", {
 			blendedFrontLook,
 		});
+
+		const dpadLookElements = makeInputElements();
+		const dpadLookInput = new InputController(dpadLookElements, () => {});
+		let dpadGamepad = makeGamepad({ pressed: [14] });
+		dpadLookInput.getGamepad = () => dpadGamepad;
+		assertInput(dpadLookInput.update(1 / 60, makeInputSnapshot(2, 0)), "d-pad left updates camera lookaround state");
+		const dpadLeftLook = dpadLookInput.getCameraLookaround();
+		assertInput(dpadLeftLook && dpadLeftLook.type === "gamepad" && dpadLeftLook.preset === "left" &&
+			dpadLeftLook.x === 0 && dpadLeftLook.y === 0,
+		"d-pad left maps to held left lookaround without analog drift", { dpadLeftLook });
+		assertInput(Number(dpadLookElements.steer.value) === 0 &&
+			Number(dpadLookElements.accel.value) === 0 &&
+			Number(dpadLookElements.brake.value) === 0,
+		"d-pad lookaround alone does not change driving controls", {
+			steer: Number(dpadLookElements.steer.value),
+			accel: Number(dpadLookElements.accel.value),
+			brake: Number(dpadLookElements.brake.value),
+		});
+		dpadGamepad = makeGamepad({ pressed: [14, 15] });
+		dpadLookInput.update(1 / 60, makeInputSnapshot(2, 0));
+		assertInput(dpadLookInput.getCameraLookaround().preset === "right", "newer d-pad right overrides held d-pad left", {
+			lookaround: dpadLookInput.getCameraLookaround(),
+		});
+		dpadGamepad = makeGamepad({ pressed: [14] });
+		dpadLookInput.update(1 / 60, makeInputSnapshot(2, 0));
+		assertInput(dpadLookInput.getCameraLookaround().preset === "left", "d-pad release returns to previous held direction", {
+			lookaround: dpadLookInput.getCameraLookaround(),
+		});
+		dpadGamepad = makeGamepad({ axes: [0, 0, 0.45, -0.35], pressed: [12] });
+		dpadLookInput.update(1 / 60, makeInputSnapshot(2, 0));
+		const dpadFrontAnalogLook = dpadLookInput.getCameraLookaround();
+		assertInput(dpadFrontAnalogLook && dpadFrontAnalogLook.type === "gamepad" &&
+			dpadFrontAnalogLook.preset === "front" && dpadFrontAnalogLook.x > 0 && dpadFrontAnalogLook.y < 0,
+		"d-pad front composes with right-stick analog lookaround", { dpadFrontAnalogLook });
+		dpadLookInput.handleKey({
+			code: "BracketLeft",
+			shiftKey: false,
+			repeat: false,
+			preventDefault() {},
+		}, true);
+		assertInput(dpadLookInput.getCameraLookaround() === "left", "keyboard lookaround overrides d-pad gamepad lookaround", {
+			lookaround: dpadLookInput.getCameraLookaround(),
+		});
+		dpadLookInput.handleKey({
+			code: "BracketLeft",
+			shiftKey: false,
+			repeat: false,
+			preventDefault() {},
+		}, false);
+		dpadGamepad = makeGamepad();
+		dpadLookInput.update(1 / 60, makeInputSnapshot(2, 0));
+		assertInput(dpadLookInput.getCameraLookaround() === "", "d-pad release returns to normal camera", {
+			lookaround: dpadLookInput.getCameraLookaround(),
+		});
+
 		lookGamepad = makeGamepad({ axes: [0, 0, 0.6, 0] });
 		gamepadLookInput.handleKey({
 			code: "BracketLeft",
@@ -1582,6 +1637,10 @@ requireText(byPath["renderer/input.js"], "getCameraLookaround()", "temporary cam
 requireText(byPath["renderer/input.js"], "const GAMEPAD_LOOK_X_AXIS = 2", "right stick horizontal lookaround axis");
 requireText(byPath["renderer/input.js"], "const GAMEPAD_LOOK_Y_AXIS = 3", "right stick vertical lookaround axis");
 requireText(byPath["renderer/input.js"], "const GAMEPAD_LOOK_BUTTON = 11", "right stick press look-from-front toggle");
+requireText(byPath["renderer/input.js"], "GAMEPAD_LOOK_DPAD_BUTTONS", "d-pad camera lookaround buttons");
+requireText(byPath["renderer/input.js"], "[12, \"front\"]", "d-pad up front lookaround");
+requireText(byPath["renderer/input.js"], "[14, \"left\"]", "d-pad left lookaround");
+requireText(byPath["renderer/input.js"], "[15, \"right\"]", "d-pad right lookaround");
 requireText(byPath["renderer/input.js"], "updateGamepadLook(gamepad = this.getGamepad())", "gamepad camera lookaround polling");
 
 requireText(byPath["renderer/audio.js"], "export class TorcsAudio", "audio runtime export");
@@ -1817,6 +1876,7 @@ requireText(byPath["renderer/cameras.js"], "backRight: { side: -DIAGONAL_LOOKARO
 requireText(byPath["renderer/cameras.js"], "updateLookaround(values, car, lookaround, analogLookaround = null)", "temporary car-relative lookaround camera");
 requireText(byPath["renderer/cameras.js"], "applyAnalogLookTarget(values, lookaround)", "right stick analog camera look target");
 requireText(byPath["renderer/cameras.js"], "analogLookaround && analogLookaround.front", "right stick press front camera override");
+requireText(byPath["renderer/cameras.js"], "analogLookaround.preset", "d-pad gamepad lookaround preset");
 requireText(byPath["renderer/cameras.js"], "updateDebugFps(deltaTime = 1 / 60", "debug FPS free camera update");
 requireText(byPath["renderer/main.js"], "DEBUG_FPS_TOGGLE_CODES", "debug FPS keyboard toggle");
 requireText(byPath["renderer/main.js"], "requestPointerLock", "debug FPS pointer lock mouse look");

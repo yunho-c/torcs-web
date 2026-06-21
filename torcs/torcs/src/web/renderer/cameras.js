@@ -340,8 +340,15 @@ export class CameraRig {
 		const car = torcsToThree(values[SNAPSHOT.x], values[SNAPSHOT.y], values[SNAPSHOT.z]);
 		const keyboardLookaround = typeof lookaround === "string" && Object.hasOwn(CAMERA_LOOKAROUNDS, lookaround) ? lookaround : "";
 		const analogLookaround = lookaround && lookaround.type === "gamepad" ? lookaround : null;
+		const gamepadPresetLookaround = analogLookaround && Object.hasOwn(CAMERA_LOOKAROUNDS, analogLookaround.preset)
+			? analogLookaround.preset
+			: "";
 		if (keyboardLookaround) {
 			this.updateLookaround(values, car, keyboardLookaround);
+			return;
+		}
+		if (gamepadPresetLookaround) {
+			this.updateLookaround(values, car, gamepadPresetLookaround, analogLookaround);
 			return;
 		}
 		if (analogLookaround && analogLookaround.front) {
