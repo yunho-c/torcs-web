@@ -21,6 +21,8 @@ AC_SURFACE_LINE_STRIP = 2
 AC_SURFACE_TRIANGLES = 3
 AC_SURFACE_TRIANGLE_STRIP = 4
 TREE_ALPHA_CUTOFF = 0.65
+TEXTURE_ALPHA_CUTOFF = 0.10
+BLENDED_ALPHA_MATERIAL_CLASSES = {"glass", "mirrorGlass"}
 EFFECT_TEXTURES = [
 	"smoke.rgb",
 	"fire0.rgb",
@@ -116,6 +118,13 @@ class AcObject:
 	texture_layers: dict = field(default_factory=dict)
 	vertices: list = field(default_factory=list)
 	surfaces: list = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class TextureAlphaInfo:
+	has_alpha: bool = False
+	has_transparent_alpha: bool = False
+	has_partial_alpha: bool = False
 
 
 def parse_args():
@@ -499,12 +508,54 @@ def skips_track_shadow_overlay(material_class, texture):
 	return material_class == "treeFoliage" or uses_alpha_test(texture or "")
 
 
-def apply_texture_alpha(material, texture):
+def alpha_info_from_rgba(rgba):
+	has_transparent_alpha = False
+	has_partial_alpha = False
+	for offset in range(3, len(rgba), 4):
+		alpha = rgba[offset]
+		if alpha < 255:
+			if alpha == 0:
+				has_transparent_alpha = True
+			else:
+				has_partial_alpha = True
+	return TextureAlphaInfo(
+		has_alpha=has_transparent_alpha or has_partial_alpha,
+		has_transparent_alpha=has_transparent_alpha,
+		has_partial_alpha=has_partial_alpha,
+	)
+
+
+def read_texture_alpha_info(path):
+	suffix = path.suffix.lower()
+	if suffix == ".rgb":
+		_, _, rgba = read_sgi_rgb(path)
+		return alpha_info_from_rgba(rgba)
+	if suffix == ".png":
+		_, _, rgba = read_png_rgba(path)
+		return alpha_info_from_rgba(rgba)
+	return TextureAlphaInfo()
+
+
+def probe_texture_alpha_info(path):
+	try:
+		return read_texture_alpha_info(path)
+	except (OSError, ValueError, zlib.error, struct.error):
+		return TextureAlphaInfo()
+
+
+def apply_texture_alpha(material, texture, material_class="", alpha_info=None):
 	if not texture:
+		return
+	alpha_info = alpha_info or TextureAlphaInfo()
+	if alpha_info.has_alpha and material_class in BLENDED_ALPHA_MATERIAL_CLASSES:
+		material["alphaMode"] = "BLEND"
 		return
 	if uses_alpha_test(texture):
 		material["alphaMode"] = "MASK"
 		material["alphaCutoff"] = TREE_ALPHA_CUTOFF
+	elif alpha_info.has_alpha:
+		material["alphaMode"] = "MASK"
+		material["alphaCutoff"] = TEXTURE_ALPHA_CUTOFF
 
 
 def contains_any(text, patterns):
@@ -697,6 +748,7 @@ def convert_ac_to_glb(source_root, source_path, output_path, object_classifier=N
 	primitives = {}
 	asset_source_dir = source_path.parent
 	texture_sources = {}
+	texture_alpha_infos = {}
 	shadow_overlay_sources = {}
 	skid_overlay_sources = {}
 
@@ -707,6 +759,8 @@ def convert_ac_to_glb(source_root, source_path, output_path, object_classifier=N
 			resolved = resolve_texture(source_root, asset_source_dir, texture)
 			if resolved:
 				texture_sources[texture] = resolved
+				if texture not in texture_alpha_infos:
+					texture_alpha_infos[texture] = probe_texture_alpha_info(resolved)
 			else:
 				texture = ""
 		key = make_primitive_key(texture, material_class)
@@ -832,7 +886,7 @@ def convert_ac_to_glb(source_root, source_path, output_path, object_classifier=N
 				gltf["textures"].append({"sampler": 0, "source": len(gltf["images"])})
 				gltf["images"].append({"uri": image_uri})
 			material["pbrMetallicRoughness"]["baseColorTexture"] = {"index": texture_indices[image_uri]}
-			apply_texture_alpha(material, texture)
+			apply_texture_alpha(material, texture, material_class, texture_alpha_infos.get(texture))
 		gltf["materials"].append(material)
 		gltf["meshes"][0]["primitives"].append({
 			"attributes": {

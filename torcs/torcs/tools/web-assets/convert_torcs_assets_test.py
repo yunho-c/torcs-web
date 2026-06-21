@@ -162,12 +162,53 @@ kids 0
 		self.assertEqual(material["alphaMode"], "MASK")
 		self.assertEqual(material["alphaCutoff"], convert.TREE_ALPHA_CUTOFF)
 
+	def test_texture_alpha_channel_uses_masked_alpha_for_cutouts(self):
+		material = {}
+
+		convert.apply_texture_alpha(
+			material,
+			"kc-2000gt.rgb",
+			"body",
+			convert.TextureAlphaInfo(has_alpha=True, has_transparent_alpha=True),
+		)
+
+		self.assertEqual(material["alphaMode"], "MASK")
+		self.assertEqual(material["alphaCutoff"], convert.TEXTURE_ALPHA_CUTOFF)
+
+	def test_texture_alpha_channel_uses_blend_for_glass(self):
+		material = {}
+
+		convert.apply_texture_alpha(
+			material,
+			"kc-2000gt.rgb",
+			"glass",
+			convert.TextureAlphaInfo(has_alpha=True, has_partial_alpha=True),
+		)
+
+		self.assertEqual(material["alphaMode"], "BLEND")
+		self.assertNotIn("alphaCutoff", material)
+
 	def test_non_billboard_texture_does_not_set_alpha_mode(self):
 		material = {}
 
 		convert.apply_texture_alpha(material, "kc-2000gt.rgb")
 
 		self.assertNotIn("alphaMode", material)
+
+	def test_reads_png_alpha_metadata(self):
+		with tempfile.TemporaryDirectory() as tmp_dir:
+			path = Path(tmp_dir) / "alpha.png"
+			convert.write_png(path, 3, 1, bytes([
+				255, 0, 0, 255,
+				0, 255, 0, 128,
+				0, 0, 255, 0,
+			]))
+
+			info = convert.read_texture_alpha_info(path)
+
+		self.assertTrue(info.has_alpha)
+		self.assertTrue(info.has_transparent_alpha)
+		self.assertTrue(info.has_partial_alpha)
 
 	def test_add_accessor_supports_32_bit_indices(self):
 		gltf = {"accessors": []}
@@ -302,6 +343,33 @@ kids 0
 		glass_objects = {name for material in glass_materials for name in material["objectNames"]}
 		self.assertTrue(glass_materials)
 		self.assertIn("WI_s_5", glass_objects)
+
+	def test_kc_2000gt_alpha_atlas_enables_cutout_materials(self):
+		source_path = SOURCE_ROOT / "data/cars/models/kc-2000gt/kc-2000gt.acc"
+		with tempfile.TemporaryDirectory() as tmp_dir:
+			output_path = Path(tmp_dir) / "kc-2000gt.glb"
+
+			convert.convert_ac_to_glb(SOURCE_ROOT, source_path, output_path, convert.classify_car_object)
+			gltf = read_glb_json(output_path)
+
+		body_materials = [
+			material for material in gltf["materials"]
+			if material.get("extras", {}).get("torcsSourceTexture") == "kc-2000gt.rgb" and
+			material.get("extras", {}).get("torcsMaterialClass") == "body"
+		]
+		glass_materials = [
+			material for material in gltf["materials"]
+			if material.get("extras", {}).get("torcsSourceTexture") == "kc-2000gt.rgb" and
+			material.get("extras", {}).get("torcsMaterialClass") == "glass"
+		]
+
+		self.assertTrue(body_materials)
+		self.assertTrue(glass_materials)
+		for material in body_materials:
+			self.assertEqual(material["alphaMode"], "MASK")
+			self.assertEqual(material["alphaCutoff"], convert.TEXTURE_ALPHA_CUTOFF)
+		for material in glass_materials:
+			self.assertEqual(material["alphaMode"], "BLEND")
 
 	def test_convert_car_copies_optional_material_mask(self):
 		car_xml = Path("data/cars/models/demo-car/demo-car.xml")
