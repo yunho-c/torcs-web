@@ -258,6 +258,7 @@ export class TorcsEffects {
 			shadow: null,
 			skid: null,
 		};
+		this.shadowOpacityScale = 1.0;
 		this.shadow = this.createShadow();
 		this.skidMarks = this.createSkidMarks();
 		this.lightSprites = this.createLightSprites();
@@ -294,7 +295,7 @@ export class TorcsEffects {
 		this.textures.shadow = asset && asset.shadowTexture ? asset.shadowTexture : null;
 		this.shadow.material.map = this.textures.shadow;
 		this.shadow.material.color.set(this.textures.shadow ? 0xffffff : 0x000000);
-		this.shadow.material.opacity = this.textures.shadow ? 0.54 : 0.34;
+		this.refreshShadowOpacity();
 		this.shadow.material.needsUpdate = true;
 		if (asset && !this.textures.shadow) {
 			warnOnce(
@@ -317,6 +318,19 @@ export class TorcsEffects {
 				},
 			);
 		}
+	}
+
+	setShadowOpacityScale(scale = 1.0) {
+		this.shadowOpacityScale = Number.isFinite(scale) ? Math.max(0, Math.min(1, scale)) : 1.0;
+		this.refreshShadowOpacity();
+	}
+
+	refreshShadowOpacity() {
+		if (!this.shadow || !this.shadow.material) {
+			return;
+		}
+		const baseOpacity = this.textures.shadow ? 0.54 : 0.34;
+		this.shadow.material.opacity = baseOpacity * this.shadowOpacityScale;
 	}
 
 	setVisible(visible) {

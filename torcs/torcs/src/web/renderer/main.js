@@ -63,6 +63,7 @@ const elements = {
 	timeOfDay: document.getElementById("time-of-day"),
 	timeOfDayValue: document.getElementById("time-of-day-value"),
 	acesToneMapping: document.getElementById("aces-tone-mapping"),
+	cascadedShadows: document.getElementById("cascaded-shadows"),
 	environmentMode: document.getElementById("environment-mode"),
 	materialWetness: document.getElementById("material-wetness"),
 	materialWetnessValue: document.getElementById("material-wetness-value"),
@@ -141,6 +142,7 @@ let carAssets = new Map();
 let selectedCarIndex = 0;
 let customTrackFile = null;
 let customTrackVisualName = "";
+let cascadedShadowsEnabled = getInitialCascadedShadowsEnabled();
 const DEBUG_FPS_TOGGLE_CODES = new Set(["Equal", "NumpadEqual"]);
 const DEBUG_FPS_CONTROL_CODES = new Set([
 	"KeyW", "KeyA", "KeyS", "KeyD", "KeyQ", "KeyE", "ShiftLeft", "ShiftRight",
@@ -376,6 +378,15 @@ function getInitialAcesToneMappingEnabled() {
 	return getStoredBoolean("acesToneMapping", true);
 }
 
+function getInitialCascadedShadowsEnabled() {
+	const queryShadows = getQueryParam("shadows");
+	if (queryShadows !== null) {
+		const normalized = String(queryShadows).toLowerCase();
+		return !(normalized === "0" || normalized === "false" || normalized === "off" || normalized === "no");
+	}
+	return getStoredBoolean("cascadedShadows", true);
+}
+
 function formatLightIntensity(value) {
 	return value.toFixed(2);
 }
@@ -454,6 +465,7 @@ function applyInitialControlValues() {
 	elements.hapticsIntensity.value = String(getStoredNumber("hapticsIntensity", 0.65, 0, 1));
 	elements.hapticsTriggerStrength.value = String(getStoredNumber("hapticsTriggerStrength", 1, 0, 1));
 	elements.acesToneMapping.checked = acesToneMappingEnabled;
+	elements.cascadedShadows.checked = cascadedShadowsEnabled;
 	elements.environmentMode.value = activeEnvironmentMode;
 	elements.timeOfDay.value = String(activeTimeOfDay);
 	elements.timeOfDayValue.textContent = formatTimeOfDay(activeTimeOfDay);
@@ -1339,6 +1351,17 @@ function applyAcesToneMapping(enabled) {
 	}
 }
 
+function applyCascadedShadows(enabled) {
+	cascadedShadowsEnabled = Boolean(enabled);
+	elements.cascadedShadows.checked = cascadedShadowsEnabled;
+	if (scene) {
+		scene.setCascadedShadowsEnabled(cascadedShadowsEnabled);
+	}
+	if (snapshot) {
+		readAndRender();
+	}
+}
+
 async function applyEnvironmentMode(mode, persist = false) {
 	if (!scene) {
 		return;
@@ -1677,6 +1700,10 @@ function bindUi() {
 			writeStoredSetting("acesToneMapping", elements.acesToneMapping.checked);
 			applyAcesToneMapping(elements.acesToneMapping.checked);
 		});
+		elements.cascadedShadows.addEventListener("change", () => {
+			writeStoredSetting("cascadedShadows", elements.cascadedShadows.checked);
+			applyCascadedShadows(elements.cascadedShadows.checked);
+		});
 		elements.environmentMode.addEventListener("change", () => {
 			applyEnvironmentMode(elements.environmentMode.value, true).catch((error) => {
 				console.warn("TORCS web renderer environment selector failed", error);
@@ -1725,6 +1752,7 @@ async function main() {
 			scene.setRenderProfile(activeRenderProfile);
 			applyPostProcessSettings(activePostProcessPreset, activePostProcessOptions);
 			applyAcesToneMapping(acesToneMappingEnabled);
+			applyCascadedShadows(cascadedShadowsEnabled);
 			applyLightIntensity(activeLightIntensity);
 			applyTimeOfDay(activeTimeOfDay);
 			cameras = new CameraRig(elements.canvas);

@@ -1,4 +1,5 @@
 import * as THREE from "three/webgpu";
+import { CSMShadowNode } from "three/addons/csm/CSMShadowNode.js";
 import { EXRLoader } from "three/addons/loaders/EXRLoader.js";
 import { SkyMesh } from "three/addons/objects/SkyMesh.js";
 import { TorcsEffects } from "./effects.js";
@@ -58,6 +59,14 @@ const SKY_SHADER_SETTINGS = Object.freeze({
 });
 const DEFAULT_AMBIENT_INTENSITY = 2.4;
 const DEFAULT_SUN_INTENSITY = 2.3;
+const SHADOW_CASCADE_COUNT = 4;
+const SHADOW_MAP_SIZE = 2048;
+const SHADOW_MAX_FAR = 700;
+const SHADOW_LIGHT_MARGIN = 90;
+const SHADOW_CAMERA_EXTENT = 900;
+const SHADOW_CAMERA_NEAR = 1;
+const SHADOW_CAMERA_FAR = 1800;
+const CSM_NATIVE_SHADOW_OPACITY_SCALE = 0.22;
 const LEGACY_TONE_MAPPING_EXPOSURE = 1.0;
 const MODERN_TONE_MAPPING_EXPOSURE = 0.82;
 const TORCS_TO_THREE_BASIS = new THREE.Matrix4().set(
@@ -181,10 +190,12 @@ function makeRoadMesh(track) {
 	geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
 	geometry.setIndex(indices);
 	geometry.computeVertexNormals();
-	return new THREE.Mesh(
+	const road = new THREE.Mesh(
 		geometry,
 		new THREE.MeshLambertMaterial({ color: 0x30342e, side: THREE.DoubleSide }),
 	);
+	road.receiveShadow = true;
+	return road;
 }
 
 function getCarDimensions(values) {
@@ -366,6 +377,45 @@ function tintClone(root, color) {
 	return clone;
 }
 
+function getMaterials(object) {
+	if (!object || !object.material) {
+		return [];
+	}
+	return Array.isArray(object.material) ? object.material : [object.material];
+}
+
+function isShadowExcludedMaterial(material) {
+	if (!material) {
+		return false;
+	}
+	const role = material.userData && material.userData.torcsOverlayRole;
+	return role === "trackShadow" || role === "trackSkid";
+}
+
+function isMostlyTransparentMaterial(material) {
+	return Boolean(material && material.transparent && material.opacity < 0.65);
+}
+
+function configureShadowParticipation(root, { cast = false, receive = false, includeTransparent = false } = {}) {
+	if (!root) {
+		return;
+	}
+	root.traverse((object) => {
+		if (!object.isMesh) {
+			return;
+		}
+		const materials = getMaterials(object);
+		if (materials.some(isShadowExcludedMaterial)) {
+			object.castShadow = false;
+			object.receiveShadow = false;
+			return;
+		}
+		const mostlyTransparent = materials.length > 0 && materials.every(isMostlyTransparentMaterial);
+		object.castShadow = Boolean(cast && (includeTransparent || !mostlyTransparent));
+		object.receiveShadow = Boolean(receive);
+	});
+}
+
 function cloneWheelScene(root, color = null) {
 	return color === null || color === undefined ? root.clone(true) : tintClone(root, color);
 }
@@ -441,7 +491,12 @@ export class TorcsScene {
 
 		this.timeOfDay = DEFAULT_TIME_OF_DAY;
 		this.timeOfDaySun = new THREE.Vector3();
+		this.skyShaderSun = new THREE.Vector3();
 		this.trackLightPosition = new THREE.Vector3(-90, 160, 80);
+		this.cascadedShadowsEnabled = true;
+		this.cascadedShadowsAvailable = false;
+		this.csm = null;
+		this.csmCamera = null;
 		this.addLighting();
 		this.addReferenceGrid();
 		this.car = null;
@@ -467,7 +522,6 @@ export class TorcsScene {
 		this.skyboxLoadPromise = null;
 		this.environmentMode = DEFAULT_ENVIRONMENT_MODE;
 		this.skyShader = null;
-		this.skyShaderSun = new THREE.Vector3();
 		this.trackBackgroundColor = DEFAULT_BACKGROUND.clone();
 		this.trackBackgroundTexture = null;
 		this.lightIntensityScale = 1.0;
@@ -488,6 +542,11 @@ export class TorcsScene {
 		this.renderProfile = normalizeRenderProfile(profile);
 		this.applyToneMappingProfile();
 		this.updatePostProcessPreset();
+	}
+
+	setCascadedShadowsEnabled(enabled) {
+		this.cascadedShadowsEnabled = Boolean(enabled);
+		this.applyCascadedShadowState();
 	}
 
 	setAcesToneMappingEnabled(enabled) {
@@ -537,17 +596,26 @@ export class TorcsScene {
 
 	setTimeOfDay(timeOfDay = DEFAULT_TIME_OF_DAY) {
 		this.timeOfDay = normalizeTimeOfDay(timeOfDay);
+		this.updateSkySunDirection();
 		this.applyTimeOfDaySunPosition();
 		this.applyTrackLightIntensities();
 		this.applySkyShaderSettings();
+	}
+
+	updateSkySunDirection() {
+		getTimeOfDaySunDirection(this.timeOfDay, this.skyShaderSun);
+		this.timeOfDaySun.copy(this.skyShaderSun);
+		return this.skyShaderSun;
 	}
 
 	applyTimeOfDaySunPosition() {
 		if (!this.sunLight) {
 			return;
 		}
-		getTimeOfDaySunDirection(this.timeOfDay, this.timeOfDaySun);
-		this.sunLight.position.copy(this.timeOfDaySun).multiplyScalar(TIME_OF_DAY_SUN_DISTANCE);
+		this.updateSkySunDirection();
+		this.sunLight.position.copy(this.skyShaderSun).multiplyScalar(TIME_OF_DAY_SUN_DISTANCE);
+		this.sunLight.target.position.set(0, 0, 0);
+		this.sunLight.target.updateMatrixWorld();
 	}
 
 	applyTrackLightIntensities() {
@@ -563,8 +631,79 @@ export class TorcsScene {
 		this.ambientLight = new THREE.AmbientLight(DEFAULT_AMBIENT, DEFAULT_AMBIENT_INTENSITY);
 		this.scene.add(this.ambientLight);
 		this.sunLight = new THREE.DirectionalLight(DEFAULT_SUN, DEFAULT_SUN_INTENSITY);
+		this.sunLight.castShadow = true;
+		this.configureSunShadowCamera();
 		this.applyTimeOfDaySunPosition();
 		this.scene.add(this.sunLight);
+		this.scene.add(this.sunLight.target);
+		this.initializeCascadedShadows();
+	}
+
+	configureSunShadowCamera() {
+		if (!this.sunLight || !this.sunLight.shadow) {
+			return;
+		}
+		this.sunLight.shadow.mapSize.width = SHADOW_MAP_SIZE;
+		this.sunLight.shadow.mapSize.height = SHADOW_MAP_SIZE;
+		this.sunLight.shadow.bias = -0.00018;
+		this.sunLight.shadow.normalBias = 0.025;
+		this.sunLight.shadow.camera.near = SHADOW_CAMERA_NEAR;
+		this.sunLight.shadow.camera.far = SHADOW_CAMERA_FAR;
+		this.sunLight.shadow.camera.left = -SHADOW_CAMERA_EXTENT;
+		this.sunLight.shadow.camera.right = SHADOW_CAMERA_EXTENT;
+		this.sunLight.shadow.camera.top = SHADOW_CAMERA_EXTENT;
+		this.sunLight.shadow.camera.bottom = -SHADOW_CAMERA_EXTENT;
+		this.sunLight.shadow.camera.updateProjectionMatrix();
+	}
+
+	initializeCascadedShadows() {
+		if (!this.renderer.shadowMap || !this.sunLight || this.csm) {
+			this.applyCascadedShadowState();
+			return;
+		}
+		try {
+			this.renderer.shadowMap.enabled = true;
+			this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+			this.csm = new CSMShadowNode(this.sunLight, {
+				cascades: SHADOW_CASCADE_COUNT,
+				maxFar: SHADOW_MAX_FAR,
+				mode: "practical",
+			});
+			this.csm.lightMargin = SHADOW_LIGHT_MARGIN;
+			this.sunLight.shadow.shadowNode = this.csm;
+			this.cascadedShadowsAvailable = true;
+		} catch (error) {
+			this.csm = null;
+			this.cascadedShadowsAvailable = false;
+			this.sunLight.castShadow = false;
+			warnOnce("webgpu-csm-shadow-disabled", "TORCS WebGPU cascaded sun shadows disabled; using native car shadow fallback", {
+				reason: error && error.message ? error.message : String(error),
+			});
+		}
+		this.applyCascadedShadowState();
+	}
+
+	applyCascadedShadowState() {
+		const active = Boolean(this.cascadedShadowsEnabled && this.cascadedShadowsAvailable && this.csm);
+		if (this.renderer.shadowMap) {
+			this.renderer.shadowMap.enabled = active;
+		}
+		if (this.sunLight) {
+			this.sunLight.castShadow = active;
+		}
+		this.applyNativeShadowOpacityScale();
+	}
+
+	applyNativeShadowOpacityScale() {
+		const scale = this.cascadedShadowsEnabled && this.cascadedShadowsAvailable ? CSM_NATIVE_SHADOW_OPACITY_SCALE : 1.0;
+		if (!this.carEffects) {
+			return;
+		}
+		for (const effects of this.carEffects) {
+			if (effects) {
+				effects.setShadowOpacityScale(scale);
+			}
+		}
 	}
 
 	async loadEnvironmentMap(relativePath) {
@@ -701,7 +840,7 @@ export class TorcsScene {
 		if (sky.showSunDisc) {
 			sky.showSunDisc.value = SKY_SHADER_SETTINGS.showSunDisc;
 		}
-		getTimeOfDaySunDirection(this.timeOfDay, this.skyShaderSun);
+		this.updateSkySunDirection();
 		sky.sunPosition.value.copy(this.skyShaderSun);
 	}
 
@@ -737,6 +876,7 @@ export class TorcsScene {
 		const effects = new TorcsEffects(this.groups);
 		effects.setCarAsset(this.getCarAssetForIndex(carIndex));
 		effects.setTextures(this.effectTextures);
+		effects.setShadowOpacityScale(this.cascadedShadowsEnabled && this.cascadedShadowsAvailable ? CSM_NATIVE_SHADOW_OPACITY_SCALE : 1.0);
 		effects.setVisible(false);
 		this.carEffects[carIndex] = effects;
 		return effects;
@@ -762,6 +902,7 @@ export class TorcsScene {
 		root.add(makeLine(track.right, 0xe8e2d0, 0.82));
 		root.add(makeLine(track.center, 0x7fc3c9, 0.48, ROAD_Y + 0.03));
 		this.track = root;
+		configureShadowParticipation(root, { cast: false, receive: true });
 		this.groups.land.add(root);
 	}
 
@@ -771,6 +912,7 @@ export class TorcsScene {
 		}
 		this.trackVisual = model;
 		if (this.trackVisual) {
+			configureShadowParticipation(this.trackVisual, { cast: true, receive: true });
 			this.groups.land.add(this.trackVisual);
 		}
 	}
@@ -783,10 +925,10 @@ export class TorcsScene {
 		this.renderer.setClearColor(backgroundColor, 1);
 		this.trackBackgroundColor = backgroundColor.clone();
 		this.trackBackgroundTexture = backgroundTexture;
-			this.scene.fog = new THREE.Fog(fogColor, FOG_NEAR, FOG_FAR);
-			this.ambientLight.color.copy(ambientColor);
-			this.sunLight.color.copy(diffuseColor);
-			this.applyTrackLightIntensities();
+		this.scene.fog = new THREE.Fog(fogColor, FOG_NEAR, FOG_FAR);
+		this.ambientLight.color.copy(ambientColor);
+		this.sunLight.color.copy(diffuseColor);
+		this.applyTrackLightIntensities();
 
 			const lightPosition = entry && Array.isArray(entry.lightPosition)
 			? torcsToThree(entry.lightPosition[0], entry.lightPosition[1], entry.lightPosition[2])
@@ -894,6 +1036,7 @@ export class TorcsScene {
 				.sort((a, b) => b.lod.threshold - a.lod.threshold);
 			for (const item of this.carLods) {
 				item.scene.visible = false;
+				configureShadowParticipation(item.scene, { cast: true, receive: true });
 				this.carVisualRoot.add(item.scene);
 			}
 			this.car.add(this.carVisualRoot);
@@ -922,6 +1065,8 @@ export class TorcsScene {
 		const geometry = new THREE.BoxGeometry(...this.carDimensions);
 		const material = new THREE.MeshLambertMaterial({ color: 0xc9483d });
 		this.carBox = new THREE.Mesh(geometry, material);
+		this.carBox.castShadow = true;
+		this.carBox.receiveShadow = true;
 		this.car.add(this.carBox);
 
 		this.footprint = makeLine([], 0xf3ead6, 0.92, ROAD_Y + 0.08);
@@ -949,6 +1094,8 @@ export class TorcsScene {
 			const spin = new THREE.Group();
 			const { tire, spokes, capTexture } = makeGeneratedWheelVisual(radius, width, wheelTexture);
 			const heat = makeWheelHeatMesh(radius, width, 0.44);
+			configureShadowParticipation(tire, { cast: true, receive: true });
+			configureShadowParticipation(spokes, { cast: true, receive: true });
 			spin.add(tire);
 			if (spokes) {
 				spin.add(spokes);
@@ -993,6 +1140,7 @@ export class TorcsScene {
 			const states = wheelAsset.states.map((state) => {
 				const scene = cloneWheelScene(state.scene, color);
 				scene.visible = false;
+				configureShadowParticipation(scene, { cast: true, receive: true });
 				sideFlip.add(scene);
 				return { ...state, scene };
 			});
@@ -1136,6 +1284,8 @@ export class TorcsScene {
 			new THREE.BoxGeometry(...dimensions),
 			new THREE.MeshLambertMaterial({ color }),
 		);
+		box.castShadow = true;
+		box.receiveShadow = true;
 		root.add(box);
 		const opponent = {
 			root,
@@ -1172,6 +1322,8 @@ export class TorcsScene {
 			const spin = new THREE.Group();
 			const { tire, spokes, capTexture } = makeGeneratedWheelVisual(radius, width, wheelTexture);
 			const heat = makeWheelHeatMesh(radius, width, 0.32);
+			configureShadowParticipation(tire, { cast: true, receive: true });
+			configureShadowParticipation(spokes, { cast: true, receive: true });
 			spin.add(tire);
 			if (spokes) {
 				spin.add(spokes);
@@ -1217,11 +1369,12 @@ export class TorcsScene {
 			if (RIGHT_WHEELS.has(index)) {
 				sideFlip.rotation.y = Math.PI;
 			}
-			const states = wheelAsset.states.map((state) => {
-				const scene = cloneWheelScene(state.scene, opponent.color);
-				scene.visible = false;
-				sideFlip.add(scene);
-				return { ...state, scene };
+				const states = wheelAsset.states.map((state) => {
+					const scene = cloneWheelScene(state.scene, opponent.color);
+					scene.visible = false;
+					configureShadowParticipation(scene, { cast: true, receive: true });
+					sideFlip.add(scene);
+					return { ...state, scene };
 			});
 			const heat = makeWheelHeatMesh(radius, width, 0.32);
 			scale.add(sideFlip);
@@ -1287,6 +1440,7 @@ export class TorcsScene {
 			}));
 		for (const item of opponent.lods) {
 			item.scene.visible = false;
+			configureShadowParticipation(item.scene, { cast: true, receive: true });
 			opponent.visualRoot.add(item.scene);
 		}
 		opponent.root.add(opponent.visualRoot);
@@ -1483,6 +1637,29 @@ export class TorcsScene {
 		return false;
 	}
 
+	updateCascadedShadows(camera) {
+		if (!this.cascadedShadowsEnabled || !this.cascadedShadowsAvailable || !this.csm || !camera) {
+			return;
+		}
+		if (!this.csm.mainFrustum) {
+			return;
+		}
+		camera.updateMatrixWorld();
+		if (this.csm.camera !== camera || this.csmCamera !== camera) {
+			this.csm.camera = camera;
+			this.csmCamera = camera;
+		}
+		try {
+			this.csm.updateFrustums();
+		} catch (error) {
+			this.cascadedShadowsAvailable = false;
+			this.applyCascadedShadowState();
+			warnOnce("webgpu-csm-shadow-update-disabled", "TORCS WebGPU cascaded sun shadow updates disabled; using native car shadow fallback", {
+				reason: error && error.message ? error.message : String(error),
+			});
+		}
+	}
+
 	render(camera, deltaTime = 0) {
 		if (this.backgroundDome && camera) {
 			this.backgroundDome.position.set(
@@ -1491,6 +1668,7 @@ export class TorcsScene {
 				camera.position.z,
 			);
 		}
+		this.updateCascadedShadows(camera);
 		this.postprocess.setCamera(camera);
 		this.postprocess.render(deltaTime);
 	}

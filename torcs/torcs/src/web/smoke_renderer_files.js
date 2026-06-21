@@ -1392,6 +1392,7 @@ requireText(byPath["torcs_web_renderer.html"], "id=\"light-intensity-value\"", "
 requireText(byPath["torcs_web_renderer.html"], "id=\"time-of-day\"", "time-of-day slider");
 requireText(byPath["torcs_web_renderer.html"], "id=\"time-of-day-value\"", "time-of-day value readout");
 requireText(byPath["torcs_web_renderer.html"], "id=\"aces-tone-mapping\"", "ACES tone mapping checkbox");
+requireText(byPath["torcs_web_renderer.html"], "id=\"cascaded-shadows\"", "cascaded sun shadows checkbox");
 requireText(byPath["torcs_web_renderer.html"], "id=\"material-wetness\"", "material wetness slider");
 requireText(byPath["torcs_web_renderer.html"], "id=\"material-wetness-value\"", "material wetness value readout");
 requireText(byPath["torcs_web_renderer.html"], "id=\"material-debug\"", "material class debug checkbox");
@@ -1513,6 +1514,9 @@ requireText(byPath["renderer/main.js"], "getInitialLightIntensity()", "query-str
 requireText(byPath["renderer/main.js"], "getQueryParam(\"lightIntensity\")", "light intensity query parameter");
 requireText(byPath["renderer/main.js"], "getInitialTimeOfDay()", "time-of-day settings initialization");
 requireText(byPath["renderer/main.js"], "getQueryParam(\"timeOfDay\")", "time-of-day query parameter");
+requireText(byPath["renderer/main.js"], "getInitialCascadedShadowsEnabled()", "cascaded shadow settings initialization");
+requireText(byPath["renderer/main.js"], "getQueryParam(\"shadows\")", "cascaded shadow query parameter");
+requireText(byPath["renderer/main.js"], "writeStoredSetting(\"cascadedShadows\"", "persisted cascaded shadow setting");
 requireText(byPath["renderer/main.js"], "getInitialMaterialWetness()", "query-string wetness initialization");
 requireText(byPath["renderer/main.js"], "getQueryParam(\"wetness\")", "material wetness query parameter");
 requireText(byPath["renderer/main.js"], "getInitialMaterialDebugEnabled()", "query-string material debug initialization");
@@ -1542,7 +1546,7 @@ requireText(byPath["renderer/runtime.js"], "shadowZ0: 187", "native shadow Z sna
 requireText(byPath["renderer/runtime.js"], "export class TorcsRuntime", "runtime adapter export");
 requireText(byPath["renderer/runtime.js"], "noInitialRun: true", "renderer suppresses probe main auto-run");
 requireText(byPath["renderer/runtime.js"], "runtimeAssetVersion", "runtime sidecar cache-busting token");
-requireText(byPath["renderer/runtime.js"], "/\\\\.(data|wasm)$/.test(path)", "runtime sidecar cache-busting filter");
+requireText(byPath["renderer/runtime.js"], "/\\.(data|wasm)$/.test(path)", "runtime sidecar cache-busting filter");
 
 requireText(byPath["renderer/showroom.js"], "new THREE.WebGPURenderer", "showroom WebGPU renderer creation");
 requireText(byPath["renderer/showroom.js"], "forceWebGL: params.get(\"renderer\") === \"webgl\"", "showroom forced WebGL fallback option");
@@ -1650,6 +1654,7 @@ requireText(byPath["renderer/main.js"], "scene.setRenderProfile(activeRenderProf
 requireText(byPath["renderer/main.js"], "scene.setPostProcessSettings(activePostProcessPreset, activePostProcessOptions)", "scene postprocess settings handoff");
 requireText(byPath["renderer/main.js"], "scene.setLightIntensityScale(activeLightIntensity)", "scene light intensity handoff");
 requireText(byPath["renderer/main.js"], "scene.setTimeOfDay(activeTimeOfDay)", "scene time-of-day handoff");
+requireText(byPath["renderer/main.js"], "scene.setCascadedShadowsEnabled(cascadedShadowsEnabled)", "scene cascaded shadow handoff");
 requireText(byPath["renderer/main.js"], "assets.setWetness(activeMaterialWetness)", "asset wetness handoff");
 requireText(byPath["renderer/main.js"], "assets.setMaterialDebugEnabled(materialDebugEnabled)", "asset material debug handoff");
 requireText(byPath["renderer/main.js"], "normalizeEnvironmentMode(mode)", "environment mode normalization");
@@ -1671,6 +1676,8 @@ requireText(byPath["renderer/main.js"], "elements.lightIntensity.addEventListene
 requireText(byPath["renderer/main.js"], "elements.timeOfDay.addEventListener", "time-of-day slider binding");
 requireText(byPath["renderer/main.js"], "applyAcesToneMapping(elements.acesToneMapping.checked)", "ACES tone mapping checkbox handoff");
 requireText(byPath["renderer/main.js"], "scene.setAcesToneMappingEnabled(elements.acesToneMapping.checked)", "ACES tone mapping scene binding");
+requireText(byPath["renderer/main.js"], "elements.cascadedShadows.addEventListener", "cascaded shadow checkbox binding");
+requireText(byPath["renderer/main.js"], "applyCascadedShadows(elements.cascadedShadows.checked)", "cascaded shadow checkbox handoff");
 requireText(byPath["renderer/main.js"], "elements.environmentMode.addEventListener", "environment selector binding");
 requireText(byPath["renderer/main.js"], "elements.materialWetness.addEventListener", "material wetness slider binding");
 requireText(byPath["renderer/main.js"], "elements.materialDebug.addEventListener", "material debug checkbox binding");
@@ -1807,14 +1814,18 @@ requireText(byPath["renderer/main.js"], "hapticsTriggerStrength", "DualSense ada
 requireText(byPath["renderer/main.js"], "haptics.setTriggerStrength", "DualSense adaptive trigger strength event handling");
 
 requireText(byPath["renderer/scene.js"], "import * as THREE from \"three/webgpu\"", "Three.js WebGPU module import");
+requireText(byPath["renderer/scene.js"], "import { CSMShadowNode } from \"three/addons/csm/CSMShadowNode.js\"", "Three.js WebGPU CSM shadow node import");
 requireText(byPath["renderer/scene.js"], "import { SkyMesh } from \"three/addons/objects/SkyMesh.js\"", "Three.js WebGPU sky mesh import");
 requireText(byPath["renderer/scene.js"], "import { TorcsEffects } from \"./effects.js\"", "effects module import");
 requireText(byPath["renderer/scene.js"], "TorcsPostProcessPipeline", "main renderer shared postprocess pipeline");
 requireText(byPath["renderer/scene.js"], "setPostProcessSettings(preset = \"auto\", options = {})", "main renderer postprocess settings setter");
 requireText(byPath["renderer/scene.js"], "setEnvironmentMode(mode = DEFAULT_ENVIRONMENT_MODE)", "main renderer environment mode setter");
 requireText(byPath["renderer/scene.js"], "setTimeOfDay(timeOfDay = DEFAULT_TIME_OF_DAY)", "main renderer time-of-day setter");
+requireText(byPath["renderer/scene.js"], "setCascadedShadowsEnabled(enabled)", "main renderer cascaded shadow toggle");
 requireText(byPath["renderer/scene.js"], "getTimeOfDaySunDirection(this.timeOfDay", "time-of-day sun direction mapping");
 requireText(byPath["renderer/scene.js"], "getTimeOfDayDaylight(this.timeOfDay)", "time-of-day light intensity mapping");
+requireText(byPath["renderer/scene.js"], "updateSkySunDirection()", "sky shader sun source synchronization");
+requireText(byPath["renderer/scene.js"], "this.sunLight.position.copy(this.skyShaderSun)", "sky shader sun drives directional light");
 requireText(byPath["renderer/scene.js"], "new SkyMesh()", "sky shader mesh creation");
 requireText(byPath["renderer/scene.js"], "sky.turbidity.value = SKY_SHADER_SETTINGS.turbidity", "sky shader turbidity uniform");
 requireText(byPath["renderer/scene.js"], "sky.sunPosition.value.copy(this.skyShaderSun)", "sky shader sun-position uniform");
@@ -1822,6 +1833,17 @@ requireText(byPath["renderer/scene.js"], "this.postprocess.setSkyboxTexture(this
 requireText(byPath["renderer/scene.js"], "this.postprocess.setSkyboxTexture(null)", "main renderer disabled skybox postprocess handoff");
 requireText(byPath["renderer/scene.js"], "new THREE.WebGPURenderer", "WebGPU renderer creation");
 requireText(byPath["renderer/scene.js"], "await renderer.init()", "async WebGPU renderer initialization");
+requireText(byPath["renderer/scene.js"], "this.renderer.shadowMap.enabled = true", "WebGPU renderer shadow map enablement");
+requireText(byPath["renderer/scene.js"], "this.renderer.shadowMap.type = THREE.PCFSoftShadowMap", "soft sun shadow filtering");
+requireText(byPath["renderer/scene.js"], "this.sunLight.castShadow = true", "directional sun shadow casting");
+requireText(byPath["renderer/scene.js"], "new CSMShadowNode(this.sunLight", "cascaded sun shadow node creation");
+requireText(byPath["renderer/scene.js"], "this.sunLight.shadow.shadowNode = this.csm", "CSM node bound to sun shadow");
+requireText(byPath["renderer/scene.js"], "if (!this.csm.mainFrustum)", "CSM readiness guard before frustum update");
+requireText(byPath["renderer/scene.js"], "this.csm.updateFrustums()", "camera-synchronized CSM frustum update");
+requireText(byPath["renderer/scene.js"], "webgpu-csm-shadow-update-disabled", "CSM update failure fallback warning");
+requireText(byPath["renderer/scene.js"], "configureShadowParticipation(root", "shadow caster/receiver helper");
+requireText(byPath["renderer/scene.js"], "object.castShadow = Boolean(cast", "mesh shadow casting flag assignment");
+requireText(byPath["renderer/scene.js"], "object.receiveShadow = Boolean(receive)", "mesh shadow receiving flag assignment");
 requireText(byPath["renderer/scene.js"], "return new THREE.Line(geometry, material)", "WebGPU-compatible closed line primitive");
 requireText(byPath["renderer/scene.js"], "forceWebGL: params.get(\"renderer\") === \"webgl\"", "forced WebGL fallback option");
 requireText(byPath["renderer/scene.js"], "EXRLoader", "HDRI EXR loader import");
@@ -1930,6 +1952,8 @@ if (byPath["renderer/effects.js"].content.includes("CircleGeometry")) {
 
 requireText(byPath["renderer/effects.js"], "export class TorcsEffects", "effects layer export");
 requireText(byPath["renderer/effects.js"], "createShadow()", "height-adaptive car shadow effect");
+requireText(byPath["renderer/effects.js"], "setShadowOpacityScale(scale = 1.0)", "native shadow opacity fallback scaling");
+requireText(byPath["renderer/effects.js"], "this.shadow.material.opacity = baseOpacity * this.shadowOpacityScale", "CSM native shadow fade-down");
 requireText(byPath["renderer/effects.js"], "new THREE.BufferGeometry()", "dynamic car shadow geometry");
 requireText(byPath["renderer/effects.js"], "SNAPSHOT.shadowX0", "native shadow vertex snapshot use");
 requireText(byPath["renderer/effects.js"], "SHADOW_POINT_COUNT", "native six-point shadow strip");
