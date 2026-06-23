@@ -518,6 +518,8 @@ export class TorcsScene {
 		this.effectTextures = null;
 		this.footprint = null;
 		this.track = null;
+		this.trackSamples = null;
+		this.runtimeTrackVisible = true;
 		this.trackVisual = null;
 		this.backgroundDome = null;
 		this.environmentMap = null;
@@ -895,6 +897,7 @@ export class TorcsScene {
 	}
 
 	setTrack(track) {
+		this.trackSamples = track;
 		for (const effects of this.carEffects) {
 			if (effects) {
 				effects.resetDynamics();
@@ -910,8 +913,41 @@ export class TorcsScene {
 		root.add(makeLine(track.right, 0xe8e2d0, 0.82));
 		root.add(makeLine(track.center, 0x7fc3c9, 0.48, ROAD_Y + 0.03));
 		this.track = root;
+		this.track.visible = this.runtimeTrackVisible;
 		configureShadowParticipation(root, { cast: false, receive: true });
 		this.groups.land.add(root);
+	}
+
+	setRuntimeTrackVisible(visible) {
+		this.runtimeTrackVisible = Boolean(visible);
+		if (this.track) {
+			this.track.visible = this.runtimeTrackVisible;
+		}
+	}
+
+	alignTrackVisualToRuntimeTrack() {
+		if (!this.trackVisual || !this.trackSamples) {
+			return;
+		}
+		const visualBounds = new THREE.Box3().setFromObject(this.trackVisual);
+		if (visualBounds.isEmpty()) {
+			return;
+		}
+		const runtimeBounds = new THREE.Box3();
+		const point = new THREE.Vector3();
+		for (const collection of [this.trackSamples.left, this.trackSamples.right, this.trackSamples.center]) {
+			for (const sample of collection || []) {
+				runtimeBounds.expandByPoint(torcsToThree(sample.x, sample.y, 0, point));
+			}
+		}
+		if (runtimeBounds.isEmpty()) {
+			return;
+		}
+		const visualCenter = visualBounds.getCenter(new THREE.Vector3());
+		const runtimeCenter = runtimeBounds.getCenter(new THREE.Vector3());
+		this.trackVisual.position.x += runtimeCenter.x - visualCenter.x;
+		this.trackVisual.position.y += runtimeBounds.min.y - visualBounds.min.y;
+		this.trackVisual.position.z += runtimeCenter.z - visualCenter.z;
 	}
 
 	setTrackVisual(model) {

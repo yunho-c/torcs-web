@@ -1043,6 +1043,7 @@ async function applyCustomTrackFile(file) {
 		customTrackFile = file;
 		customTrackVisualName = file.name || "custom track";
 		scene.setTrackVisual(model);
+		scene.setRuntimeTrackVisible(false);
 		updateCustomTrackUi();
 		if (snapshot) {
 			readAndRender();
@@ -1174,10 +1175,16 @@ async function loadVisualAssets() {
 			? await assets.loadCarAssetsForSnapshots(snapshots, elements.car.value)
 			: new Map([[selectedCarIndex, selectedCarAsset]]);
 		await warnCarVisualFallbacks(carAssets, selectedCarAsset);
+		let hasTrackVisual = false;
 		if (customTrackFile) {
-			await applyCustomTrackFile(customTrackFile);
+			hasTrackVisual = await applyCustomTrackFile(customTrackFile);
 		} else {
 			scene.setTrackVisual(track ? track.scene : null);
+			hasTrackVisual = Boolean(track);
+		}
+		scene.setRuntimeTrackVisible(!hasTrackVisual);
+		if (hasTrackVisual && runtime && runtime.active && !isTorcsRuntimeAssetPath(trackPath)) {
+			scene.alignTrackVisualToRuntimeTrack();
 		}
 		scene.setTrackAtmosphere(track ? track.entry : null, track ? track.backgroundTexture : null);
 		scene.setCarVisualAssets(carAssets, selectedCarAsset);
@@ -1206,6 +1213,7 @@ async function loadVisualAssets() {
 	} catch (error) {
 		console.warn("TORCS web renderer asset load failed", error);
 		scene.setTrackVisual(null);
+		scene.setRuntimeTrackVisible(true);
 		scene.setTrackAtmosphere(null, null);
 		carAssets = new Map();
 		scene.setCarVisualAssets(carAssets, null);

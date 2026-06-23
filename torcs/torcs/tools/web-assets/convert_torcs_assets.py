@@ -1808,10 +1808,11 @@ def map_conversion_jobs(worker, jobs, job_count):
 			return list(executor.map(worker, jobs))
 	except PermissionError as error:
 		print(
-			f"warning: process-pool conversion unavailable ({error}); falling back to --jobs 1",
+			f"warning: process-pool conversion unavailable ({error}); falling back to {job_count} worker threads",
 			file=sys.stderr,
 		)
-		return [worker(job) for job in jobs]
+		with concurrent.futures.ThreadPoolExecutor(max_workers=job_count) as executor:
+			return list(executor.map(worker, jobs))
 
 
 def prefix_manifest_path(path, prefix):
