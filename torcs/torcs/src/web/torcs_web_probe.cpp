@@ -649,7 +649,7 @@ updateRuntimeRacePositions(void)
 }
 
 static int
-getTrackSample(int sampleIndex, int side, tdble *x, tdble *y)
+getTrackSample(int sampleIndex, int side, tdble *x, tdble *y, tdble *z)
 {
 	tTrackSeg *seg;
 	tTrkLocPos pos;
@@ -692,6 +692,9 @@ getTrackSample(int sampleIndex, int side, tdble *x, tdble *y)
 	}
 
 	RtTrackLocal2Global(&pos, x, y, TR_TORIGHT);
+	if (z) {
+		*z = RtTrackHeightL(&pos);
+	}
 	return 0;
 }
 
@@ -2145,8 +2148,9 @@ torcs_web_runtime_get_track_sample_x(int sampleIndex, int side)
 {
 	tdble x = 0.0f;
 	tdble y = 0.0f;
+	tdble z = 0.0f;
 
-	return getTrackSample(sampleIndex, side, &x, &y) == 0 ? x : 0.0;
+	return getTrackSample(sampleIndex, side, &x, &y, &z) == 0 ? x : 0.0;
 }
 
 EMSCRIPTEN_KEEPALIVE
@@ -2155,8 +2159,20 @@ torcs_web_runtime_get_track_sample_y(int sampleIndex, int side)
 {
 	tdble x = 0.0f;
 	tdble y = 0.0f;
+	tdble z = 0.0f;
 
-	return getTrackSample(sampleIndex, side, &x, &y) == 0 ? y : 0.0;
+	return getTrackSample(sampleIndex, side, &x, &y, &z) == 0 ? y : 0.0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+double
+torcs_web_runtime_get_track_sample_z(int sampleIndex, int side)
+{
+	tdble x = 0.0f;
+	tdble y = 0.0f;
+	tdble z = 0.0f;
+
+	return getTrackSample(sampleIndex, side, &x, &y, &z) == 0 ? z : 0.0;
 }
 
 EMSCRIPTEN_KEEPALIVE

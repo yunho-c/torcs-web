@@ -285,6 +285,7 @@ export class TorcsRuntime {
 		return {
 			x: this.call("torcs_web_runtime_get_track_sample_x", "number", ["number", "number"], [sampleIndex, side]),
 			y: this.call("torcs_web_runtime_get_track_sample_y", "number", ["number", "number"], [sampleIndex, side]),
+			z: this.call("torcs_web_runtime_get_track_sample_z", "number", ["number", "number"], [sampleIndex, side]),
 		};
 	}
 
@@ -301,15 +302,19 @@ export class TorcsRuntime {
 			bounds: {
 				minX: Number.POSITIVE_INFINITY,
 				minY: Number.POSITIVE_INFINITY,
+				minZ: Number.POSITIVE_INFINITY,
 				maxX: Number.NEGATIVE_INFINITY,
 				maxY: Number.NEGATIVE_INFINITY,
+				maxZ: Number.NEGATIVE_INFINITY,
 			},
 		};
 		const extend = (point) => {
 			track.bounds.minX = Math.min(track.bounds.minX, point.x);
 			track.bounds.minY = Math.min(track.bounds.minY, point.y);
+			track.bounds.minZ = Math.min(track.bounds.minZ, point.z);
 			track.bounds.maxX = Math.max(track.bounds.maxX, point.x);
 			track.bounds.maxY = Math.max(track.bounds.maxY, point.y);
+			track.bounds.maxZ = Math.max(track.bounds.maxZ, point.z);
 		};
 
 		for (let i = 0; i < count; i += 1) {

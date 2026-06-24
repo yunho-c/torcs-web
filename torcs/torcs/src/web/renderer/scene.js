@@ -81,6 +81,8 @@ const TORCS_TO_THREE_BASIS = new THREE.Matrix4().set(
 const THREE_TO_TORCS_BASIS = new THREE.Matrix4().copy(TORCS_TO_THREE_BASIS).invert();
 const TORCS_POS_MATRIX = new THREE.Matrix4();
 const CAR_ROTATION_MATRIX = new THREE.Matrix4();
+const TRACK_ALIGNMENT_RAYCASTER = new THREE.Raycaster();
+const TRACK_ALIGNMENT_RAY_DIRECTION = new THREE.Vector3(0, -1, 0);
 
 function torcsToThree(x, y, z = 0, target = new THREE.Vector3()) {
 	return target.set(x, z, -y);
@@ -165,7 +167,7 @@ function makeLine(points, color, opacity, yOffset = ROAD_Y) {
 }
 
 function makeClosedLinePoints(points, yOffset = ROAD_Y) {
-	const linePoints = points.map((point) => torcsToThree(point.x, point.y, yOffset));
+	const linePoints = points.map((point) => torcsToThree(point.x, point.y, (point.z || 0) + yOffset));
 	if (linePoints.length > 1) {
 		linePoints.push(linePoints[0].clone());
 	}
@@ -176,8 +178,8 @@ function makeRoadMesh(track) {
 	const positions = [];
 	const indices = [];
 	for (let i = 0; i < track.left.length; i += 1) {
-		const left = torcsToThree(track.left[i].x, track.left[i].y, 0);
-		const right = torcsToThree(track.right[i].x, track.right[i].y, 0);
+		const left = torcsToThree(track.left[i].x, track.left[i].y, track.left[i].z || 0);
+		const right = torcsToThree(track.right[i].x, track.right[i].y, track.right[i].z || 0);
 		positions.push(left.x, left.y, left.z, right.x, right.y, right.z);
 	}
 	for (let i = 0; i < track.left.length; i += 1) {
@@ -450,6 +452,48 @@ function updateGeneratedWheelTextureState(wheel, values, index) {
 		setWheelTextureAtlasState(wheel.capTexture, nextState);
 		wheel.activeTextureState = nextState;
 	}
+}
+
+function median(values) {
+	if (!values.length) {
+		return null;
+	}
+	const sorted = [...values].sort((a, b) => a - b);
+	const middle = Math.floor(sorted.length / 2);
+	return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) * 0.5;
+}
+
+function estimateTrackVisualHeightOffset(trackVisual, trackSamples) {
+	if (!trackVisual || !trackSamples || !Array.isArray(trackSamples.center) || !trackSamples.center.length) {
+		return null;
+	}
+	trackVisual.updateMatrixWorld(true);
+	const bounds = new THREE.Box3().setFromObject(trackVisual);
+	if (bounds.isEmpty()) {
+		return null;
+	}
+	const height = Math.max(1, bounds.max.y - bounds.min.y);
+	const originY = bounds.max.y + height + 50;
+	const maxDistance = height * 3 + 100;
+	const step = Math.max(1, Math.ceil(trackSamples.center.length / 96));
+	const offsets = [];
+	for (let i = 0; i < trackSamples.center.length; i += step) {
+		const sample = trackSamples.center[i];
+		if (!sample || !Number.isFinite(sample.x) || !Number.isFinite(sample.y) || !Number.isFinite(sample.z)) {
+			continue;
+		}
+		const samplePoint = torcsToThree(sample.x, sample.y, sample.z);
+		TRACK_ALIGNMENT_RAYCASTER.set(
+			new THREE.Vector3(samplePoint.x, originY, samplePoint.z),
+			TRACK_ALIGNMENT_RAY_DIRECTION,
+		);
+		TRACK_ALIGNMENT_RAYCASTER.far = maxDistance;
+		const hit = TRACK_ALIGNMENT_RAYCASTER.intersectObject(trackVisual, true)[0];
+		if (hit && Number.isFinite(hit.point.y)) {
+			offsets.push(samplePoint.y - hit.point.y);
+		}
+	}
+	return median(offsets);
 }
 
 export class TorcsScene {
@@ -937,7 +981,7 @@ export class TorcsScene {
 		const point = new THREE.Vector3();
 		for (const collection of [this.trackSamples.left, this.trackSamples.right, this.trackSamples.center]) {
 			for (const sample of collection || []) {
-				runtimeBounds.expandByPoint(torcsToThree(sample.x, sample.y, 0, point));
+				runtimeBounds.expandByPoint(torcsToThree(sample.x, sample.y, sample.z || 0, point));
 			}
 		}
 		if (runtimeBounds.isEmpty()) {
@@ -946,8 +990,11 @@ export class TorcsScene {
 		const visualCenter = visualBounds.getCenter(new THREE.Vector3());
 		const runtimeCenter = runtimeBounds.getCenter(new THREE.Vector3());
 		this.trackVisual.position.x += runtimeCenter.x - visualCenter.x;
-		this.trackVisual.position.y += runtimeBounds.min.y - visualBounds.min.y;
 		this.trackVisual.position.z += runtimeCenter.z - visualCenter.z;
+		const heightOffset = estimateTrackVisualHeightOffset(this.trackVisual, this.trackSamples);
+		if (Number.isFinite(heightOffset)) {
+			this.trackVisual.position.y += heightOffset;
+		}
 	}
 
 	setTrackVisual(model) {
