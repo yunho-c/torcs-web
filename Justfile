@@ -17,6 +17,10 @@ build: configure
 smoke: configure
 	cmake --build {{wasm_build_dir}} --target torcs_web_probe_smoke
 
+# Run the browser-level Playwright smoke test against an already-served build.
+smoke-browser port=serve_port:
+	TORCS_WEB_URL=http://127.0.0.1:{{port}}/torcs_web_renderer.html npm run smoke:browser
+
 # Remove the wasm build directory for a from-scratch rebuild.
 clean:
 	rm -rf {{wasm_build_dir}}

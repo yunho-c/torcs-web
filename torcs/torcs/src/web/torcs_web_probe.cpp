@@ -315,6 +315,10 @@ loadMergedCarSetup(const char *carFile)
 	snprintf(categoryFile, sizeof(categoryFile), "/torcs/data/cars/categories/%s/%s.xml", category, category);
 	categoryHandle = GfParmReadFile(categoryFile, GFPARM_RMODE_STD | GFPARM_RMODE_REREAD);
 	if (!categoryHandle) {
+		snprintf(categoryFile, sizeof(categoryFile), "/torcs/data/cars/categories/%s.xml", category);
+		categoryHandle = GfParmReadFile(categoryFile, GFPARM_RMODE_STD | GFPARM_RMODE_REREAD);
+	}
+	if (!categoryHandle) {
 		return carHandle;
 	}
 

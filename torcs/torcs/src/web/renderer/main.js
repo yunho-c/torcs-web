@@ -942,6 +942,34 @@ function runtimeAssetPath(manifestPath) {
 	return manifestPath;
 }
 
+function manifestLookupCandidates(assetPath) {
+	const split = splitManifestPath(assetPath);
+	if (split.namespaced) {
+		return [assetPath];
+	}
+	return [`${DEFAULT_ASSET_SOURCE}:${split.path}`, split.path, assetPath];
+}
+
+function resolveManifestAssetEntry(entries, assetPath) {
+	for (const candidate of manifestLookupCandidates(assetPath)) {
+		if (entries && entries[candidate]) {
+			return entries[candidate];
+		}
+	}
+	return null;
+}
+
+function runtimePathForSelection(entries, assetPath, fallbackPath) {
+	const entry = resolveManifestAssetEntry(entries, assetPath);
+	if (entry && entry.runtimeSupported && entry.runtimePath) {
+		return entry.runtimePath;
+	}
+	if (isTorcsRuntimeAssetPath(assetPath)) {
+		return assetPath;
+	}
+	return fallbackPath;
+}
+
 function isTorcsRuntimeAssetPath(assetPath) {
 	return splitManifestPath(assetPath).source === DEFAULT_ASSET_SOURCE;
 }
@@ -1405,10 +1433,39 @@ async function startSession() {
 	const carCount = Math.max(1, Math.min(4, Number(elements.carCount.value) || 1));
 	const trackPath = elements.track.value;
 	const carPath = elements.car.value;
-	const runtimeTrackPath = isTorcsRuntimeAssetPath(trackPath) ? trackPath : DEFAULT_TRACK_PATH;
-	const runtimeCarPath = isTorcsRuntimeAssetPath(carPath) ? carPath : DEFAULT_CAR_PATH;
-	if (runtimeTrackPath !== trackPath || runtimeCarPath !== carPath) {
+	let manifest = null;
+	if (assets) {
+		try {
+			manifest = await assets.loadManifest();
+		} catch (error) {
+			console.warn("TORCS web renderer could not load asset manifest for runtime path resolution", error);
+		}
+	}
+	const trackEntry = resolveManifestAssetEntry(manifest ? manifest.tracks : null, trackPath);
+	const carEntry = resolveManifestAssetEntry(manifest ? manifest.cars : null, carPath);
+	const runtimeTrackPath = runtimePathForSelection(manifest ? manifest.tracks : null, trackPath, DEFAULT_TRACK_PATH);
+	const runtimeCarPath = runtimePathForSelection(manifest ? manifest.cars : null, carPath, DEFAULT_CAR_PATH);
+	const trackUsesFallback = !isTorcsRuntimeAssetPath(trackPath) &&
+		!(trackEntry && trackEntry.runtimeSupported && trackEntry.runtimePath);
+	const carUsesFallback = !isTorcsRuntimeAssetPath(carPath) &&
+		!(carEntry && carEntry.runtimeSupported && carEntry.runtimePath);
+	window.torcsLastRuntimeSelection = {
+		visualTrack: trackPath,
+		visualCar: carPath,
+		runtimeTrack: runtimeTrackPath,
+		runtimeCar: runtimeCarPath,
+		trackUsesFallback,
+		carUsesFallback,
+	};
+	if (trackUsesFallback || carUsesFallback) {
 		console.warn("TORCS web renderer using default TORCS runtime data behind converted visual assets", {
+			visualTrack: trackPath,
+			visualCar: carPath,
+			runtimeTrack: runtimeTrackPath,
+			runtimeCar: runtimeCarPath,
+		});
+	} else if (runtimeTrackPath !== trackPath || runtimeCarPath !== carPath) {
+		console.info("TORCS web renderer using resolved runtime data behind selected visual assets", {
 			visualTrack: trackPath,
 			visualCar: carPath,
 			runtimeTrack: runtimeTrackPath,

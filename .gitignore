@@ -10,6 +10,7 @@ torcs_
 gaga
 tags
 __pycache__/
+node_modules/
 
 # Temporary local screenshot comparisons while browser graphics are still being tuned.
 torcs-screenshot/

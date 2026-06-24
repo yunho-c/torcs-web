@@ -6,13 +6,35 @@ const TR_CURB = 1;
 const RM_CAR_STATE_NO_SIMU = 0x000000FF;
 const VOLUME_CUTOFF = 0.001;
 const AUDIO_ROLLOFF_FACTOR = 0.05;
+const DEFAULT_ASSET_SOURCE = "torcs";
 
 function clamp(value, min, max) {
 	return Math.min(max, Math.max(min, value));
 }
 
 function normalizeRuntimePath(path) {
-	return path.replace(/^\/torcs\//, "");
+	const source = String(path || "");
+	if (source.includes(":")) {
+		return source;
+	}
+	return source.replace(/^\/torcs\//, "");
+}
+
+function manifestKeyCandidates(path) {
+	const normalized = normalizeRuntimePath(path);
+	if (!normalized || normalized.includes(":")) {
+		return normalized ? [normalized] : [];
+	}
+	return [`${DEFAULT_ASSET_SOURCE}:${normalized}`, normalized];
+}
+
+function resolveManifestEntry(entries, path) {
+	for (const key of manifestKeyCandidates(path)) {
+		if (entries && entries[key]) {
+			return entries[key];
+		}
+	}
+	return null;
 }
 
 function torcsToAudioPosition(values, out = [0, 0, 0]) {
@@ -89,7 +111,7 @@ export class AudioAssets {
 
 	async loadRaceAudio(carPath) {
 		const manifest = await this.loadManifest();
-		const car = manifest.cars[normalizeRuntimePath(carPath)];
+		const car = resolveManifestEntry(manifest.cars, carPath);
 		if (!car || !car.sound) {
 			return null;
 		}

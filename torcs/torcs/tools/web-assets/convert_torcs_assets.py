@@ -410,6 +410,35 @@ def manifest_key(label, source_relative_path):
 	return f"{label}:{runtime_path(source_relative_path)}"
 
 
+def source_runtime_path(source, kind, source_relative_path):
+	relative = Path(source_relative_path)
+	if source.primary:
+		return f"/torcs/{relative.as_posix()}"
+	if relative.parts[:2] == ("data", "tracks") or relative.parts[:3] == ("data", "cars", "models"):
+		return f"/torcs/{relative.as_posix()}"
+	if kind == "track":
+		category = "road"
+		try:
+			metadata = parse_track_metadata(source.root, relative)
+			if metadata["category"]:
+				category = metadata["category"]
+		except (OSError, ValueError, ElementTree.ParseError):
+			pass
+		return f"/torcs/data/tracks/{category}/{relative.stem}/{relative.name}"
+	if kind == "car":
+		car_id = relative.parent.name if relative.parent != Path(".") else relative.stem
+		return f"/torcs/data/cars/models/{car_id}/{relative.name}"
+	return ""
+
+
+def add_runtime_metadata(entry, source, kind, source_relative_path):
+	runtime_asset_path = source_runtime_path(source, kind, source_relative_path)
+	if runtime_asset_path:
+		entry["runtimePath"] = runtime_asset_path
+		entry["runtimeSupported"] = True
+	return entry
+
+
 def source_display_name(label):
 	return " ".join(word.capitalize() for word in re.split(r"[-_]+", label) if word) or label
 
@@ -1870,6 +1899,7 @@ def convert_source_assets(source, quick, job_count, cache_enabled, cache_path):
 		for car_xml in car_xmls
 	)
 	for kind, key, entry, textures, sounds in map_conversion_jobs(convert_asset_job, jobs, job_count):
+		add_runtime_metadata(entry, source, kind, key)
 		prefix_manifest_paths(entry, source.manifest_prefix)
 		entry["assetSource"] = source.label
 		if kind == "track":

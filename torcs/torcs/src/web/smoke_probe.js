@@ -7,7 +7,7 @@ const modulePath = path.resolve(process.argv[2] || "torcs_web_probe.js");
 const moduleDir = path.dirname(modulePath);
 const createModule = require(modulePath);
 
-const DEFAULT_CAR_MANIFEST_PATH = "data/cars/models/kc-2000gt/kc-2000gt.xml";
+const DEFAULT_CAR_MANIFEST_PATH = "torcs:data/cars/models/kc-2000gt/kc-2000gt.xml";
 const WHEEL_LAYOUT_TOLERANCE = 0.0001;
 const WHEEL_LAYOUT_Z_TOLERANCE = 0.005;
 
@@ -184,6 +184,35 @@ function readCarSnapshot(module, carIndex) {
 	} finally {
 		module._free(ptr);
 	}
+}
+
+function readRuntimeStartCase(module, trackPath, carPath) {
+	const result = {
+		trackPath,
+		carPath,
+		start: module.ccall(
+			"torcs_web_runtime_start_multi_with_files",
+			"number",
+			["string", "string", "number"],
+			[trackPath, carPath, 1],
+		),
+	};
+	if (result.start === 0) {
+		result.step = module.ccall("torcs_web_runtime_step", "number", ["number"], [1 / 60]);
+		result.trackName = module.ccall("torcs_web_runtime_get_track_name", "string", [], []);
+		result.carName = module.ccall("torcs_web_runtime_get_car_name", "string", [], []);
+		result.trackLength = module.ccall("torcs_web_runtime_get_track_length", "number", [], []);
+		result.trackSamples = module.ccall("torcs_web_runtime_get_track_sample_count", "number", [], []);
+		result.dimensionX = module.ccall("torcs_web_runtime_get_car_dimension_x", "number", [], []);
+		result.dimensionY = module.ccall("torcs_web_runtime_get_car_dimension_y", "number", [], []);
+		result.dimensionZ = module.ccall("torcs_web_runtime_get_car_dimension_z", "number", [], []);
+		const snapshot = readSnapshot(module);
+		result.snapshotWrite = snapshot.write;
+		result.snapshotTrackLength = snapshot.values[SNAPSHOT.trackLength];
+		result.snapshotTrackSamples = snapshot.values[SNAPSHOT.trackSamples];
+	}
+	module.ccall("torcs_web_runtime_shutdown", null, [], []);
+	return result;
 }
 
 createModule()
@@ -470,6 +499,37 @@ createModule()
 		}
 		module.ccall("torcs_web_runtime_shutdown", null, [], []);
 
+		const speedDreams = {};
+		if (manifest.tracks && manifest.tracks["speed-dreams:data/tracks/circuit/jarama/jarama.xml"]) {
+			speedDreams.jarama = readRuntimeStartCase(
+				module,
+				"/torcs/data/tracks/circuit/jarama/jarama.xml",
+				"/torcs/data/cars/models/kc-2000gt/kc-2000gt.xml",
+			);
+		}
+		if (manifest.tracks && manifest.tracks["speed-dreams-nordschleife:nordschleife.xml"]) {
+			speedDreams.nordschleife = readRuntimeStartCase(
+				module,
+				"/torcs/data/tracks/road/nordschleife/nordschleife.xml",
+				"/torcs/data/cars/models/kc-2000gt/kc-2000gt.xml",
+			);
+		}
+		if (manifest.cars && manifest.cars["speed-dreams-sc-boxer-96:sc-boxer-96.xml"]) {
+			speedDreams.boxer96 = readRuntimeStartCase(
+				module,
+				"/torcs/data/tracks/e-track-1/e-track-1.xml",
+				"/torcs/data/cars/models/sc-boxer-96/sc-boxer-96.xml",
+			);
+		}
+		if (manifest.tracks && manifest.tracks["speed-dreams:data/tracks/circuit/jarama/jarama.xml"] &&
+			manifest.cars && manifest.cars["speed-dreams-sc-boxer-96:sc-boxer-96.xml"]) {
+			speedDreams.jaramaBoxer96 = readRuntimeStartCase(
+				module,
+				"/torcs/data/tracks/circuit/jarama/jarama.xml",
+				"/torcs/data/cars/models/sc-boxer-96/sc-boxer-96.xml",
+			);
+		}
+
 		const result = {
 			rc: module.ccall("torcs_web_probe", "number", [], []),
 			rc2: module.ccall("torcs_web_probe", "number", [], []),
@@ -489,6 +549,7 @@ createModule()
 				selected,
 				expanded,
 				multi,
+				speedDreams,
 			};
 
 		console.log(JSON.stringify(result));
@@ -684,6 +745,42 @@ createModule()
 				expanded.dimensionX <= 0 ||
 				expanded.dimensionY <= 0 ||
 				expanded.time <= 0 ||
+				(speedDreams.jarama && (
+					speedDreams.jarama.start !== 0 ||
+					speedDreams.jarama.step !== 0 ||
+					speedDreams.jarama.trackName !== "Jarama" ||
+					speedDreams.jarama.carName !== "kc-2000gt" ||
+					speedDreams.jarama.trackLength <= 0 ||
+					speedDreams.jarama.trackSamples <= 0 ||
+					speedDreams.jarama.snapshotTrackSamples !== speedDreams.jarama.trackSamples
+				)) ||
+				(speedDreams.nordschleife && (
+					speedDreams.nordschleife.start !== 0 ||
+					speedDreams.nordschleife.step !== 0 ||
+					speedDreams.nordschleife.trackName === "E-Track 1" ||
+					speedDreams.nordschleife.carName !== "kc-2000gt" ||
+					speedDreams.nordschleife.trackLength <= 0 ||
+					speedDreams.nordschleife.trackSamples <= 0 ||
+					speedDreams.nordschleife.snapshotTrackSamples !== speedDreams.nordschleife.trackSamples
+				)) ||
+				(speedDreams.boxer96 && (
+					speedDreams.boxer96.start !== 0 ||
+					speedDreams.boxer96.step !== 0 ||
+					speedDreams.boxer96.trackName !== "E-Track 1" ||
+					speedDreams.boxer96.carName !== "sc-boxer-96" ||
+					speedDreams.boxer96.dimensionX <= 0 ||
+					speedDreams.boxer96.dimensionY <= 0 ||
+					speedDreams.boxer96.dimensionZ <= 0
+				)) ||
+				(speedDreams.jaramaBoxer96 && (
+					speedDreams.jaramaBoxer96.start !== 0 ||
+					speedDreams.jaramaBoxer96.step !== 0 ||
+					speedDreams.jaramaBoxer96.trackName !== "Jarama" ||
+					speedDreams.jaramaBoxer96.carName !== "sc-boxer-96" ||
+					speedDreams.jaramaBoxer96.trackLength <= 0 ||
+					speedDreams.jaramaBoxer96.trackSamples <= 0 ||
+					speedDreams.jaramaBoxer96.dimensionX <= 0
+				)) ||
 				multi.start !== 0 ||
 				multi.count !== 4 ||
 				multi.maxCars < 4 ||

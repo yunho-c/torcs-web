@@ -1,0 +1,9 @@
+{
+	"private": true,
+	"scripts": {
+		"smoke:browser": "node torcs/torcs/src/web/smoke_playwright_renderer.js"
+	},
+	"devDependencies": {
+		"playwright": "^1.61.0"
+	}
+}

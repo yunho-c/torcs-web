@@ -1133,7 +1133,51 @@ function assertAudio(condition, label, details = {}) {
 
 async function checkAudioModelBehavior() {
 	const audioModule = await importAudioModuleForSmoke();
-	const { CarAudioModel, SNAPSHOT } = audioModule;
+	const { AudioAssets, CarAudioModel, SNAPSHOT } = audioModule;
+	const oldFetch = globalThis.fetch;
+	const decodedBuffers = [];
+	const manifest = {
+		cars: {
+			"torcs:data/cars/models/kc-2000gt/kc-2000gt.xml": {
+				sound: { engineAsset: "audio/cars/kc-2000gt/engine-1.wav" },
+			},
+			"speed-dreams-sc-boxer-96:sc-boxer-96.xml": {
+				sound: { engineAsset: "sources/speed-dreams-sc-boxer-96/audio/cars/sc-boxer-96/996.wav" },
+			},
+		},
+		effects: {
+			sounds: {
+				axle: { asset: "audio/effects/axle.wav" },
+			},
+			crashes: [
+				{ asset: "audio/effects/crash.wav" },
+			],
+		},
+	};
+	try {
+		globalThis.fetch = async (url) => {
+			if (String(url).endsWith("manifest.json")) {
+				return { ok: true, json: async () => manifest };
+			}
+			return { ok: true, arrayBuffer: async () => new ArrayBuffer(8) };
+		};
+		const loader = new AudioAssets({
+			decodeAudioData: async (data) => {
+				const buffer = { byteLength: data.byteLength, index: decodedBuffers.length };
+				decodedBuffers.push(buffer);
+				return buffer;
+			},
+		}, "./web-assets/");
+		const unqualifiedRaceAudio = await loader.loadRaceAudio("data/cars/models/kc-2000gt/kc-2000gt.xml");
+		assertAudio(Boolean(unqualifiedRaceAudio && unqualifiedRaceAudio.engine), "unqualified TORCS car audio manifest lookup");
+		const runtimeRaceAudio = await loader.loadRaceAudio("/torcs/data/cars/models/kc-2000gt/kc-2000gt.xml");
+		assertAudio(Boolean(runtimeRaceAudio && runtimeRaceAudio.engine), "runtime TORCS car audio manifest lookup");
+		const namespacedRaceAudio = await loader.loadRaceAudio("speed-dreams-sc-boxer-96:sc-boxer-96.xml");
+		assertAudio(Boolean(namespacedRaceAudio && namespacedRaceAudio.engine), "namespaced Speed Dreams car audio manifest lookup");
+		assertAudio(await loader.loadRaceAudio("missing-car.xml") === null, "missing car audio remains unavailable");
+	} finally {
+		globalThis.fetch = oldFetch;
+	}
 	const carSound = {
 		rpmScale: 1.2,
 		turbo: true,
@@ -2131,8 +2175,40 @@ if (manifest.sources["speed-dreams"]) {
 			cars: Object.keys(manifest.cars).filter((key) => key.startsWith("speed-dreams:")),
 		});
 	}
+	if (sdTrack.runtimePath !== "/torcs/data/tracks/circuit/jarama/jarama.xml" || sdTrack.runtimeSupported !== true) {
+		fail("TORCS web renderer smoke test found missing Speed Dreams track runtime metadata", {
+			runtimePath: sdTrack.runtimePath,
+			runtimeSupported: sdTrack.runtimeSupported,
+		});
+	}
+	if (sdCar.runtimePath !== "/torcs/data/cars/models/sc-cavallo-360/sc-cavallo-360.xml" || sdCar.runtimeSupported !== true) {
+		fail("TORCS web renderer smoke test found missing Speed Dreams car runtime metadata", {
+			runtimePath: sdCar.runtimePath,
+			runtimeSupported: sdCar.runtimeSupported,
+		});
+	}
 	checkGlb(sdTrack.asset);
 	checkGlb(sdCar.lods[0].asset);
+}
+if (manifest.sources["speed-dreams-nordschleife"]) {
+	const sdNordschleife = manifest.tracks["speed-dreams-nordschleife:nordschleife.xml"];
+	if (!sdNordschleife ||
+		sdNordschleife.runtimePath !== "/torcs/data/tracks/road/nordschleife/nordschleife.xml" ||
+		sdNordschleife.runtimeSupported !== true) {
+		fail("TORCS web renderer smoke test found missing Nordschleife runtime metadata", {
+			entry: sdNordschleife,
+		});
+	}
+}
+if (manifest.sources["speed-dreams-sc-boxer-96"]) {
+	const sdBoxer = manifest.cars["speed-dreams-sc-boxer-96:sc-boxer-96.xml"];
+	if (!sdBoxer ||
+		sdBoxer.runtimePath !== "/torcs/data/cars/models/sc-boxer-96/sc-boxer-96.xml" ||
+		sdBoxer.runtimeSupported !== true) {
+		fail("TORCS web renderer smoke test found missing Boxer 96 runtime metadata", {
+			entry: sdBoxer,
+		});
+	}
 }
 checkGlb(track.asset);
 checkObjectNames(track, track.source);
