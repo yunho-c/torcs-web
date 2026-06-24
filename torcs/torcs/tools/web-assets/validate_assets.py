@@ -271,7 +271,7 @@ def main():
 				check_texture(require(root, car["materialMask"]))
 			wheel_asset = car.get("wheelAsset")
 			if wheel_asset:
-				if wheel_asset.get("source") != "torcs-detailed-wheel-acc":
+				if wheel_asset.get("source") not in {"torcs-detailed-wheel-acc", "speed-dreams-shared-wheel-acc"}:
 					raise ValueError("car detailed wheel asset has unsupported source")
 				if not wheel_asset.get("directory") or not wheel_asset.get("basename"):
 					raise ValueError("car detailed wheel asset missing directory or basename")

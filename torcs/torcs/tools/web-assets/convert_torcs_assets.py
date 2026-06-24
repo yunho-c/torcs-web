@@ -140,6 +140,8 @@ class AssetSource:
 	output_dir: Path
 	manifest_prefix: str = ""
 	primary: bool = False
+	shared_wheel_root: Path | None = None
+	speed_dreams_wheels: bool = False
 
 
 TEXTURE_ALPHA_INFO_CACHE = {}
@@ -446,8 +448,10 @@ def source_display_name(label):
 def resolve_asset_sources(args, output_dir):
 	sources = []
 	labels = set()
+	shared_wheel_root = None
 
 	def add_source(label, root, primary=False):
+		nonlocal shared_wheel_root
 		if label in labels:
 			raise ValueError(f"duplicate asset source label {label}")
 		resolved_root = root.resolve()
@@ -463,18 +467,25 @@ def resolve_asset_sources(args, output_dir):
 			return
 		labels.add(label)
 		manifest_prefix = "" if primary else f"sources/{label}"
+		has_speed_dreams_shared_wheels = (resolved_root / "data/data/objects/wheel0.acc").exists()
+		if shared_wheel_root is None and has_speed_dreams_shared_wheels:
+			shared_wheel_root = resolved_root
 		sources.append(AssetSource(
 			label=label,
 			root=resolved_root,
 			output_dir=output_dir if primary else output_dir / "sources" / label,
 			manifest_prefix=manifest_prefix,
 			primary=primary,
+			shared_wheel_root=shared_wheel_root,
+			speed_dreams_wheels=has_speed_dreams_shared_wheels or label.startswith("speed-dreams"),
 		))
 
 	add_source(args.source_label, args.source_root, primary=True)
 	if not args.quick:
 		for label, root in args.extra_source:
 			add_source(label, root)
+	for source in sources:
+		source.shared_wheel_root = shared_wheel_root
 	return sources
 
 
@@ -591,6 +602,8 @@ def parse_car_metadata(source_root, car_xml):
 		"wheelTexture": attstr(objects, "wheel texture"),
 		"wheel3dBasename": attstr(objects, "3d wheel basename"),
 		"wheel3dDirectory": attstr(objects, "3d wheel directory"),
+		"speedDreamsWheelBasename": attstr(objects, "3d wheel"),
+		"hasSeparateWheels": any(lod["wheels"] for lod in lods),
 		"wheelLayout": parse_car_wheel_layout(root),
 		"shadowTexture": attstr(objects, "shadow texture"),
 		"lights": parse_car_lights(objects),
@@ -720,6 +733,21 @@ def resolve_texture(source_root, asset_source_dir, texture):
 	if not texture or texture == EMPTY_TEXTURE:
 		return None
 	candidates = [
+		asset_source_dir / texture,
+		source_root / "data/data/textures" / texture,
+		source_root / "data/data/objects" / texture,
+	]
+	for candidate in candidates:
+		if candidate.exists():
+			return candidate
+	return None
+
+
+def resolve_speed_dreams_wheel_texture(source_root, car_source_dir, asset_source_dir, texture):
+	if not texture or texture == EMPTY_TEXTURE:
+		return None
+	candidates = [
+		car_source_dir / texture,
 		asset_source_dir / texture,
 		source_root / "data/data/textures" / texture,
 		source_root / "data/data/objects" / texture,
@@ -1039,7 +1067,7 @@ def add_triangle_to_primitive(target, obj, triangle, texture_layer=0, normal_off
 		target["uvs"].append([u, 1.0 - v])
 
 
-def convert_ac_to_glb(source_root, source_path, output_path, object_classifier=None, include_track_shadow_overlays=False, include_track_skid_overlays=False):
+def convert_ac_to_glb(source_root, source_path, output_path, object_classifier=None, include_track_shadow_overlays=False, include_track_skid_overlays=False, texture_resolver=None):
 	objects = parse_ac3d(source_path)
 	primitives = {}
 	asset_source_dir = source_path.parent
@@ -1052,7 +1080,7 @@ def convert_ac_to_glb(source_root, source_path, output_path, object_classifier=N
 		texture = obj.texture
 		material_class = object_classifier(obj.name, obj.texture) if object_classifier else ""
 		if texture:
-			resolved = resolve_texture(source_root, asset_source_dir, texture)
+			resolved = texture_resolver(source_root, asset_source_dir, texture) if texture_resolver else resolve_texture(source_root, asset_source_dir, texture)
 			if resolved:
 				texture_sources[texture] = resolved
 			else:
@@ -1659,7 +1687,76 @@ def convert_track(source_root, output_dir, track_xml):
 	return track_meta["xml"], entry, texture_outputs
 
 
-def convert_car(source_root, output_dir, car_xml):
+def source_relative_path(path, roots):
+	for root in roots:
+		if not root:
+			continue
+		try:
+			return runtime_path(path.relative_to(root))
+		except ValueError:
+			continue
+	return runtime_path(path)
+
+
+def convert_wheel_asset(source_root, output_dir, car_dir, wheel_root, wheel_sources, wheel_kind, wheel_dir, wheel_basename, texture_resolver=None):
+	wheel_states = []
+	texture_sources = {}
+	source_roots = [source_root]
+	if wheel_root != source_root:
+		source_roots.append(wheel_root)
+	for speed_index, wheel_source in enumerate(wheel_sources):
+		wheel_glb = car_dir / f"{wheel_dir}-{wheel_basename}{speed_index}.glb"
+		result = convert_ac_to_glb(
+			wheel_root,
+			wheel_source,
+			wheel_glb,
+			classify_wheel_object,
+			texture_resolver=texture_resolver,
+		)
+		texture_sources.update(result["textureSources"])
+		wheel_states.append({
+			"speedIndex": speed_index,
+			"source": source_relative_path(wheel_source, source_roots),
+			"asset": relative_to_output(wheel_glb, output_dir),
+			"primitiveCount": result["primitives"],
+			"objectNames": result["objects"],
+			"materialClasses": sorted({material["class"] for material in result["materials"]}),
+			"materials": result["materials"],
+		})
+	return {
+		"source": wheel_kind,
+		"directory": wheel_dir,
+		"basename": wheel_basename,
+		"speedThresholds": [20.0, 40.0, 70.0],
+		"states": wheel_states,
+	}, texture_sources
+
+
+def resolve_explicit_torcs_wheel_sources(source_root, car_meta):
+	wheel_dir = car_meta["wheel3dDirectory"]
+	wheel_basename = car_meta["wheel3dBasename"]
+	if not wheel_dir or not wheel_basename:
+		return None
+	wheel_source_dir = source_root / "data/cars/wheels" / wheel_dir
+	wheel_sources = [wheel_source_dir / f"{wheel_basename}{index}.acc" for index in range(4)]
+	if all(path.exists() for path in wheel_sources):
+		return source_root, wheel_sources, wheel_dir, wheel_basename
+	return None
+
+
+def resolve_speed_dreams_wheel_sources(source_root, shared_wheel_root, car_meta):
+	wheel_basename = car_meta["speedDreamsWheelBasename"] or ("wheel" if car_meta["hasSeparateWheels"] else "")
+	if not wheel_basename:
+		return None
+	for wheel_root in dict.fromkeys(root for root in [source_root, shared_wheel_root] if root):
+		wheel_source_dir = wheel_root / "data/data/objects"
+		wheel_sources = [wheel_source_dir / f"{wheel_basename}{index}.acc" for index in range(4)]
+		if all(path.exists() for path in wheel_sources):
+			return wheel_root, wheel_sources, "speed-dreams-shared", wheel_basename
+	return None
+
+
+def convert_car(source_root, output_dir, car_xml, shared_wheel_root=None, enable_speed_dreams_wheels=False):
 	car_meta = parse_car_metadata(source_root, car_xml)
 	car_source_dir = source_root / car_xml.parent
 	car_dir = output_dir / "cars" / car_meta["id"]
@@ -1680,40 +1777,39 @@ def convert_car(source_root, output_dir, car_xml):
 		lod["materials"] = result["materials"]
 
 	wheel_asset = None
-	wheel_dir = car_meta["wheel3dDirectory"]
-	wheel_basename = car_meta["wheel3dBasename"]
-	if wheel_dir and wheel_basename:
-		wheel_source_dir = source_root / "data/cars/wheels" / wheel_dir
-		wheel_sources = [wheel_source_dir / f"{wheel_basename}{index}.acc" for index in range(4)]
-		if all(path.exists() for path in wheel_sources):
-			wheel_states = []
-			for speed_index, wheel_source in enumerate(wheel_sources):
-				wheel_glb = car_dir / f"{wheel_dir}-{wheel_basename}{speed_index}.glb"
-				result = convert_ac_to_glb(
-					source_root,
-					wheel_source,
-					wheel_glb,
-					classify_wheel_object,
-				)
-				car_texture_sources.update(result["textureSources"])
-				wheel_states.append({
-					"speedIndex": speed_index,
-					"source": runtime_path(wheel_source.relative_to(source_root)),
-					"asset": relative_to_output(wheel_glb, output_dir),
-					"primitiveCount": result["primitives"],
-					"objectNames": result["objects"],
-					"materialClasses": sorted({material["class"] for material in result["materials"]}),
-					"materials": result["materials"],
-				})
-			wheel_asset = {
-				"source": "torcs-detailed-wheel-acc",
-				"directory": wheel_dir,
-				"basename": wheel_basename,
-				"speedThresholds": [20.0, 40.0, 70.0],
-				"states": wheel_states,
-			}
+	explicit_wheels = resolve_explicit_torcs_wheel_sources(source_root, car_meta)
+	if explicit_wheels:
+		wheel_root, wheel_sources, wheel_dir, wheel_basename = explicit_wheels
+		wheel_asset, wheel_textures = convert_wheel_asset(
+			source_root,
+			output_dir,
+			car_dir,
+			wheel_root,
+			wheel_sources,
+			"torcs-detailed-wheel-acc",
+			wheel_dir,
+			wheel_basename,
+		)
+		car_texture_sources.update(wheel_textures)
+	else:
+		speed_dreams_wheels = resolve_speed_dreams_wheel_sources(source_root, shared_wheel_root, car_meta) if enable_speed_dreams_wheels else None
+		if speed_dreams_wheels:
+			wheel_root, wheel_sources, wheel_dir, wheel_basename = speed_dreams_wheels
+			wheel_asset, wheel_textures = convert_wheel_asset(
+				source_root,
+				output_dir,
+				car_dir,
+				wheel_root,
+				wheel_sources,
+				"speed-dreams-shared-wheel-acc",
+				wheel_dir,
+				wheel_basename,
+				texture_resolver=lambda root, asset_dir, texture: resolve_speed_dreams_wheel_texture(root, car_source_dir, asset_dir, texture),
+			)
+			car_texture_sources.update(wheel_textures)
 
-	for texture in [car_meta["wheelTexture"], car_meta["shadowTexture"]]:
+	wheel_fallback_texture = car_meta["wheelTexture"] or ("wheel3d.png" if enable_speed_dreams_wheels and car_meta["hasSeparateWheels"] else "")
+	for texture in [wheel_fallback_texture, car_meta["shadowTexture"]]:
 		resolved = resolve_texture(source_root, car_source_dir, texture)
 		if resolved:
 			car_texture_sources[texture] = resolved
@@ -1732,11 +1828,11 @@ def convert_car(source_root, output_dir, car_xml):
 	engine_sample_output = relative_to_output(copy_audio_sample(engine_sample_source, car_audio_dir), output_dir)
 	entry = {
 		"name": car_meta["name"],
-		"wheelTexture": car_meta["wheelTexture"],
+		"wheelTexture": wheel_fallback_texture,
 		"shadowTexture": car_meta["shadowTexture"],
 		"wheelFallback": {
 			"source": "runtime-snapshot",
-			"texture": car_meta["wheelTexture"],
+			"texture": wheel_fallback_texture,
 			"radiusScale": 1.0,
 			"widthScale": 1.0,
 		},
@@ -1808,19 +1904,19 @@ def convert_track_job(job):
 
 
 def convert_car_job(job):
-	source_root, output_dir, car_xml = job
-	return convert_car(source_root, output_dir, car_xml)
+	source_root, output_dir, car_xml, shared_wheel_root, enable_speed_dreams_wheels = job
+	return convert_car(source_root, output_dir, car_xml, shared_wheel_root, enable_speed_dreams_wheels)
 
 
 def convert_asset_job(job):
-	kind, source_root, output_dir, asset_xml, cache_enabled, cache_path = job
+	kind, source_root, output_dir, asset_xml, cache_enabled, cache_path, shared_wheel_root, enable_speed_dreams_wheels = job
 	configure_texture_alpha_cache(cache_enabled, cache_path)
 	try:
 		if kind == "track":
 			key, entry, textures = convert_track(source_root, output_dir, asset_xml)
 			return kind, key, entry, textures, set()
 		if kind == "car":
-			key, entry, textures, sounds = convert_car(source_root, output_dir, asset_xml)
+			key, entry, textures, sounds = convert_car(source_root, output_dir, asset_xml, shared_wheel_root, enable_speed_dreams_wheels)
 			return kind, key, entry, textures, sounds
 		raise ValueError(f"unknown conversion job kind {kind}")
 	finally:
@@ -1891,11 +1987,11 @@ def convert_source_assets(source, quick, job_count, cache_enabled, cache_path):
 	texture_outputs = set()
 	sound_outputs = set()
 	jobs = [
-		("track", source.root, source.output_dir, track_xml, cache_enabled, cache_path)
+		("track", source.root, source.output_dir, track_xml, cache_enabled, cache_path, None, False)
 		for track_xml in track_xmls
 	]
 	jobs.extend(
-		("car", source.root, source.output_dir, car_xml, cache_enabled, cache_path)
+		("car", source.root, source.output_dir, car_xml, cache_enabled, cache_path, source.shared_wheel_root, source.speed_dreams_wheels)
 		for car_xml in car_xmls
 	)
 	for kind, key, entry, textures, sounds in map_conversion_jobs(convert_asset_job, jobs, job_count):

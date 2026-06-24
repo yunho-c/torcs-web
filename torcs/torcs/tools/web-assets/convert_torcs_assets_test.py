@@ -987,6 +987,173 @@ kids 0
 				self.assertTrue((output_dir / state["asset"]).exists())
 			self.assertIn("cars/demo-car/wheel3d.png", textures)
 
+	def test_convert_car_emits_speed_dreams_default_wheel_assets(self):
+		car_xml = Path("data/cars/models/sd-car/sd-car.xml")
+		content = """<?xml version="1.0"?>
+<params name="sd-car">
+<section name="Graphic Objects">
+<attstr name="shadow texture" val="shadow.png"/>
+<section name="Ranges">
+<section name="1">
+<attnum name="threshold" val="0"/>
+<attstr name="car" val="sd-car.acc"/>
+<attstr name="wheels" val="yes"/>
+</section>
+</section>
+</section>
+<section name="Sound">
+<attstr name="engine sample" val="engine.wav"/>
+</section>
+</params>
+"""
+		asset = """AC3Db
+OBJECT poly
+name "BODY_s_1"
+texture "body.png" base
+numvert 3
+0 0 0
+1 0 0
+0 1 0
+numsurf 1
+SURF 0x14
+mat 0
+refs 3
+0 0 0
+1 1 0
+2 0 1
+kids 0
+"""
+		wheel_asset = """AC3Db
+OBJECT poly
+name "TIRE_s_1"
+texture "wheel3d.png" base
+numvert 3
+0 0 0
+1 0 0
+0 1 0
+numsurf 1
+SURF 0x14
+mat 0
+refs 3
+0 0 0
+1 1 0
+2 0 1
+kids 0
+"""
+		with tempfile.TemporaryDirectory() as tmp_dir:
+			source_root = Path(tmp_dir) / "source"
+			output_dir = Path(tmp_dir) / "out"
+			car_dir = source_root / car_xml.parent
+			car_dir.mkdir(parents=True)
+			(car_dir / car_xml.name).write_text(content, encoding="utf-8")
+			(car_dir / "sd-car.acc").write_text(asset, encoding="latin-1")
+			for name in ["body.png", "shadow.png", "wheel3d.png"]:
+				convert.write_png(car_dir / name, 1, 1, b"\xff\0\0\xff")
+			(car_dir / "engine.wav").write_bytes(b"RIFFxxxxWAVE" + b"\0" * 32)
+			wheel_dir = source_root / "data/data/objects"
+			wheel_dir.mkdir(parents=True)
+			for index in range(4):
+				(wheel_dir / f"wheel{index}.acc").write_text(wheel_asset, encoding="latin-1")
+
+			_, disabled_entry, _, _ = convert.convert_car(source_root, Path(tmp_dir) / "out-disabled", car_xml)
+			self.assertEqual(disabled_entry["wheelTexture"], "")
+			self.assertEqual(disabled_entry["wheelFallback"]["texture"], "")
+			self.assertIsNone(disabled_entry["wheelAsset"])
+
+			_, entry, textures, _ = convert.convert_car(source_root, output_dir, car_xml, enable_speed_dreams_wheels=True)
+
+			self.assertEqual(entry["wheelTexture"], "wheel3d.png")
+			self.assertEqual(entry["wheelFallback"]["texture"], "wheel3d.png")
+			self.assertEqual(entry["wheelAsset"]["source"], "speed-dreams-shared-wheel-acc")
+			self.assertEqual(entry["wheelAsset"]["directory"], "speed-dreams-shared")
+			self.assertEqual(entry["wheelAsset"]["basename"], "wheel")
+			self.assertEqual([state["speedIndex"] for state in entry["wheelAsset"]["states"]], [0, 1, 2, 3])
+			for index, state in enumerate(entry["wheelAsset"]["states"]):
+				self.assertEqual(state["source"], f"data/data/objects/wheel{index}.acc")
+				self.assertEqual(state["asset"], f"cars/sd-car/speed-dreams-shared-wheel{index}.glb")
+				self.assertTrue((output_dir / state["asset"]).exists())
+			self.assertEqual(entry["textures"]["wheel3d.png"], "cars/sd-car/wheel3d.png")
+			self.assertIn("cars/sd-car/wheel3d.png", textures)
+
+	def test_convert_standalone_speed_dreams_car_uses_shared_wheel_root(self):
+		car_xml = Path("sd-car.xml")
+		content = """<?xml version="1.0"?>
+<params name="sd-car">
+<section name="Graphic Objects">
+<attstr name="shadow texture" val="shadow.png"/>
+<section name="Ranges">
+<section name="1">
+<attnum name="threshold" val="0"/>
+<attstr name="car" val="sd-car.acc"/>
+<attstr name="wheels" val="yes"/>
+</section>
+</section>
+</section>
+<section name="Sound">
+<attstr name="engine sample" val="engine.wav"/>
+</section>
+</params>
+"""
+		asset = """AC3Db
+OBJECT poly
+name "BODY_s_1"
+texture "body.png" base
+numvert 3
+0 0 0
+1 0 0
+0 1 0
+numsurf 1
+SURF 0x14
+mat 0
+refs 3
+0 0 0
+1 1 0
+2 0 1
+kids 0
+"""
+		wheel_asset = """AC3Db
+OBJECT poly
+name "TIRE_s_1"
+texture "wheel3d.png" base
+numvert 3
+0 0 0
+1 0 0
+0 1 0
+numsurf 1
+SURF 0x14
+mat 0
+refs 3
+0 0 0
+1 1 0
+2 0 1
+kids 0
+"""
+		with tempfile.TemporaryDirectory() as tmp_dir:
+			source_root = Path(tmp_dir) / "standalone"
+			shared_root = Path(tmp_dir) / "shared"
+			output_dir = Path(tmp_dir) / "out"
+			source_root.mkdir()
+			(source_root / car_xml.name).write_text(content, encoding="utf-8")
+			(source_root / "sd-car.acc").write_text(asset, encoding="latin-1")
+			for name in ["body.png", "shadow.png", "wheel3d.png"]:
+				convert.write_png(source_root / name, 1, 1, b"\xff\0\0\xff")
+			(source_root / "engine.wav").write_bytes(b"RIFFxxxxWAVE" + b"\0" * 32)
+			wheel_dir = shared_root / "data/data/objects"
+			wheel_dir.mkdir(parents=True)
+			for index in range(4):
+				(wheel_dir / f"wheel{index}.acc").write_text(wheel_asset, encoding="latin-1")
+
+			_, entry, textures, _ = convert.convert_car(source_root, output_dir, car_xml, shared_root, enable_speed_dreams_wheels=True)
+
+			self.assertEqual(entry["wheelAsset"]["source"], "speed-dreams-shared-wheel-acc")
+			self.assertEqual([state["speedIndex"] for state in entry["wheelAsset"]["states"]], [0, 1, 2, 3])
+			for index, state in enumerate(entry["wheelAsset"]["states"]):
+				self.assertEqual(state["source"], f"data/data/objects/wheel{index}.acc")
+				self.assertEqual(state["asset"], f"cars/sd-car/speed-dreams-shared-wheel{index}.glb")
+				self.assertTrue((output_dir / state["asset"]).exists())
+			self.assertEqual(entry["textures"]["wheel3d.png"], "cars/sd-car/wheel3d.png")
+			self.assertIn("cars/sd-car/wheel3d.png", textures)
+
 	def test_parse_track_metadata_includes_material_controls(self):
 		content = """<?xml version="1.0"?>
 <params name="Test Track">
@@ -1173,7 +1340,7 @@ kids 0
 				calls.append((worker.__name__, list(jobs), job_count))
 				self.assertIs(worker, convert.convert_asset_job)
 				results = []
-				for kind, _, _, runtime_path, cache_enabled, cache_path in jobs:
+				for kind, _, _, runtime_path, cache_enabled, cache_path, _, _ in jobs:
 					self.assertTrue(cache_enabled)
 					self.assertIsNotNone(cache_path)
 					if kind == "track":
