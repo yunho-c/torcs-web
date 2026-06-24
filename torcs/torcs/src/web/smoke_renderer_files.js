@@ -1942,6 +1942,8 @@ requireText(byPath["renderer/scene.js"], "this.scene.environment = this.skyboxMa
 requireText(byPath["renderer/scene.js"], "DEFAULT_SKYBOX_FACES = [\"rt\", \"lf\", \"up\", \"dn\", \"ft\", \"bk\"]", "skybox face order");
 requireText(byPath["renderer/scene.js"], "new THREE.BoxGeometry", "simulated car box");
 requireText(byPath["renderer/scene.js"], "makeRoadMesh(track)", "sampled track road mesh");
+requireText(byPath["renderer/scene.js"], "const RUNTIME_TRACK_OVERLAY_Y = 0.01", "sampled track overlay height offset");
+requireText(byPath["renderer/scene.js"], "const RUNTIME_TRACK_OVERLAY_OPACITY = 0.8", "sampled track overlay opacity");
 requireText(byPath["renderer/scene.js"], "setTrackVisual(model)", "converted track mesh hook");
 requireText(byPath["renderer/scene.js"], "setTrackAtmosphere(entry, backgroundTexture = null)", "track atmosphere hook");
 requireText(byPath["renderer/scene.js"], "setRenderProfile(profile)", "scene render profile setter");

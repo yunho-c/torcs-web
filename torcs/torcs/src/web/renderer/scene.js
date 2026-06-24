@@ -14,6 +14,8 @@ import { SNAPSHOT } from "./runtime.js";
 import { warnOnce } from "./diagnostics.js";
 
 const ROAD_Y = 0.03;
+const RUNTIME_TRACK_OVERLAY_Y = 0.01;
+const RUNTIME_TRACK_OVERLAY_OPACITY = 0.8;
 const WHEEL_ORDER = [0, 1, 2, 3];
 const RIGHT_WHEELS = new Set([0, 2]);
 const WHEEL_SPEED_THRESHOLDS = [20, 40, 70];
@@ -178,8 +180,8 @@ function makeRoadMesh(track) {
 	const positions = [];
 	const indices = [];
 	for (let i = 0; i < track.left.length; i += 1) {
-		const left = torcsToThree(track.left[i].x, track.left[i].y, track.left[i].z || 0);
-		const right = torcsToThree(track.right[i].x, track.right[i].y, track.right[i].z || 0);
+		const left = torcsToThree(track.left[i].x, track.left[i].y, (track.left[i].z || 0) + RUNTIME_TRACK_OVERLAY_Y);
+		const right = torcsToThree(track.right[i].x, track.right[i].y, (track.right[i].z || 0) + RUNTIME_TRACK_OVERLAY_Y);
 		positions.push(left.x, left.y, left.z, right.x, right.y, right.z);
 	}
 	for (let i = 0; i < track.left.length; i += 1) {
@@ -197,7 +199,12 @@ function makeRoadMesh(track) {
 	geometry.computeVertexNormals();
 	const road = new THREE.Mesh(
 		geometry,
-		new THREE.MeshLambertMaterial({ color: 0x30342e, side: THREE.DoubleSide }),
+		new THREE.MeshLambertMaterial({
+			color: 0x30342e,
+			opacity: RUNTIME_TRACK_OVERLAY_OPACITY,
+			side: THREE.DoubleSide,
+			transparent: true,
+		}),
 	);
 	road.receiveShadow = true;
 	return road;
