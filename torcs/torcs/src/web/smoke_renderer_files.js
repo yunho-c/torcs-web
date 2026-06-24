@@ -1442,6 +1442,8 @@ requireText(byPath["torcs_web_renderer.html"], "id=\"rumble-config-copy\"", "Dua
 requireText(byPath["torcs_web_renderer.html"], "id=\"rumble-config-paste\"", "DualSense rumble config paste button");
 requireText(byPath["torcs_web_renderer.html"], "https://esm.sh/dualsense-ts@6.15.0?bundle", "pinned dualsense-ts import map");
 requireText(byPath["torcs_web_renderer.html"], "id=\"track-map\"", "Phase 5 track map canvas");
+requireText(byPath["torcs_web_renderer.html"], "id=\"debug-panel\"", "renderer debug terrain panel");
+requireText(byPath["torcs_web_renderer.html"], "id=\"debug-wheels\"", "renderer debug wheel surface panel");
 requireText(byPath["torcs_web_renderer.html"], "id=\"car-count\"", "Phase 6 car count control");
 requireText(byPath["torcs_web_renderer.html"], "id=\"current-car\"", "Phase 6 current car selector");
 requireText(byPath["torcs_web_renderer.html"], "id=\"standings\"", "Phase 6 standings panel");
@@ -1570,6 +1572,10 @@ requireText(byPath["renderer/main.js"], "SETTINGS_STORAGE_KEY", "renderer settin
 requireText(byPath["renderer/main.js"], "writeStoredSetting(\"volume\"", "persisted audio volume setting");
 requireText(byPath["renderer/main.js"], "writeStoredSetting(\"hapticsIntensity\"", "persisted haptics intensity setting");
 requireText(byPath["renderer/main.js"], "writeStoredSetting(\"showControlSliders\"", "persisted control slider visibility setting");
+requireText(byPath["renderer/main.js"], "RENDERER_DEBUG_TOGGLE_CODES", "renderer debug shortcut registry");
+requireText(byPath["renderer/main.js"], "setRendererDebugEnabled(!rendererDebugEnabled)", "minus key renderer debug toggle");
+requireText(byPath["renderer/main.js"], "SNAPSHOT.wheelSurfaceKind0", "renderer debug wheel surface snapshot usage");
+requireText(byPath["renderer/main.js"], "scene.setRuntimeTrackVisible(rendererDebugEnabled || !activeTrackVisualAvailable)", "renderer debug road mesh visibility override");
 requireText(byPath["renderer/main.js"], "getInitialRenderProfile()", "query-string render profile initialization");
 requireText(byPath["renderer/main.js"], "getQueryParam(\"profile\")", "render profile query parameter");
 requireText(byPath["renderer/main.js"], "getInitialPostProcessPreset()", "postprocess settings initialization");

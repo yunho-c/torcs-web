@@ -94,6 +94,72 @@
 			backdrop-filter: blur(8px);
 		}
 
+		.debug-panel {
+			display: grid;
+			gap: 8px;
+			padding: 10px;
+			border: 1px solid var(--gold);
+			background: rgba(20, 18, 10, 0.72);
+		}
+
+		.debug-panel[hidden] {
+			display: none;
+		}
+
+		.debug-panel header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 8px;
+			color: var(--gold);
+			text-transform: uppercase;
+			font-size: 0.72rem;
+		}
+
+		.debug-shortcut {
+			color: var(--muted);
+			font-size: 0.68rem;
+		}
+
+		.debug-track {
+			display: grid;
+			grid-template-columns: repeat(3, minmax(0, 1fr));
+			gap: 6px;
+		}
+
+		.debug-track div,
+		.debug-wheel {
+			min-width: 0;
+			padding: 7px;
+			border: 1px solid rgba(212, 173, 95, 0.35);
+			background: rgba(8, 10, 8, 0.72);
+		}
+
+		.debug-track span,
+		.debug-wheel span {
+			display: block;
+			color: var(--muted);
+			text-transform: uppercase;
+			font-size: 0.62rem;
+		}
+
+		.debug-track strong,
+		.debug-wheel strong {
+			display: block;
+			margin-top: 3px;
+			overflow: hidden;
+			color: var(--ink);
+			text-overflow: ellipsis;
+			white-space: nowrap;
+			font-size: 0.76rem;
+		}
+
+		.debug-wheels {
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 6px;
+		}
+
 		.row {
 			display: grid;
 			grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -694,6 +760,23 @@
 	</div>
 
 	<form class="controls" onsubmit="return false">
+		<section class="debug-panel" id="debug-panel" hidden aria-live="polite">
+			<header>
+				<strong>Debug Terrain</strong>
+				<span class="debug-shortcut">- toggles mesh</span>
+			</header>
+			<div class="debug-track">
+				<div><span>Segment</span><strong id="debug-segment">--</strong></div>
+				<div><span>Type</span><strong id="debug-segment-type">--</strong></div>
+				<div><span>Offset</span><strong id="debug-offset">--</strong></div>
+			</div>
+			<div class="debug-wheels" id="debug-wheels">
+				<div class="debug-wheel"><span>Front Right</span><strong id="debug-wheel-0">--</strong></div>
+				<div class="debug-wheel"><span>Front Left</span><strong id="debug-wheel-1">--</strong></div>
+				<div class="debug-wheel"><span>Rear Right</span><strong id="debug-wheel-2">--</strong></div>
+				<div class="debug-wheel"><span>Rear Left</span><strong id="debug-wheel-3">--</strong></div>
+			</div>
+		</section>
 		<div class="row">
 			<button id="start" type="button">Start</button>
 			<button id="run" type="button">Run</button>

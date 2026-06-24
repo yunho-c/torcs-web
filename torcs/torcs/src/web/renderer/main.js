@@ -4,7 +4,7 @@ import { InputController } from "./input.js";
 import { AssetManager } from "./assets.js";
 import { TorcsAudio } from "./audio.js";
 import { DualSenseHaptics } from "./haptics.js";
-import { createTorcsRuntime } from "./runtime.js";
+import { SNAPSHOT, createTorcsRuntime } from "./runtime.js";
 import { TorcsScene } from "./scene.js";
 import { getPostProcessOptions, normalizePostProcessOptions, normalizePostProcessPreset } from "./postprocess.js";
 import { warnOnce } from "./diagnostics.js";
@@ -16,6 +16,16 @@ const elements = {
 	run: document.getElementById("run"),
 	step: document.getElementById("step"),
 	reset: document.getElementById("reset"),
+	debugPanel: document.getElementById("debug-panel"),
+	debugSegment: document.getElementById("debug-segment"),
+	debugSegmentType: document.getElementById("debug-segment-type"),
+	debugOffset: document.getElementById("debug-offset"),
+	debugWheels: [
+		document.getElementById("debug-wheel-0"),
+		document.getElementById("debug-wheel-1"),
+		document.getElementById("debug-wheel-2"),
+		document.getElementById("debug-wheel-3"),
+	],
 	settingsOpen: document.getElementById("settings-open"),
 	settingsModal: document.getElementById("settings-modal"),
 	settingsClose: document.getElementById("settings-close"),
@@ -143,11 +153,20 @@ let selectedCarIndex = 0;
 let customTrackFile = null;
 let customTrackVisualName = "";
 let cascadedShadowsEnabled = getInitialCascadedShadowsEnabled();
+let rendererDebugEnabled = false;
+let activeTrackVisualAvailable = false;
 const DEBUG_FPS_TOGGLE_CODES = new Set(["Equal", "NumpadEqual"]);
 const DEBUG_FPS_CONTROL_CODES = new Set([
 	"KeyW", "KeyA", "KeyS", "KeyD", "KeyQ", "KeyE", "ShiftLeft", "ShiftRight",
 ]);
 const debugFpsKeys = new Set();
+const RENDERER_DEBUG_TOGGLE_CODES = new Set(["Minus", "NumpadSubtract"]);
+const SURFACE_KIND_LABELS = ["asphalt", "sand", "dirt", "mud", "gravel", "grass"];
+const TRACK_SEGMENT_TYPE_LABELS = {
+	1: "straight",
+	2: "left",
+	3: "right",
+};
 
 const RUMBLE_CONFIG_SOURCES = [
 	{
@@ -457,6 +476,86 @@ function setControlSlidersVisible(visible, persist = false) {
 	}
 	if (persist) {
 		writeStoredSetting("showControlSliders", show);
+	}
+}
+
+function formatSurfaceKind(kind) {
+	const index = Math.trunc(Number(kind) || 0);
+	return SURFACE_KIND_LABELS[index] || `kind ${index}`;
+}
+
+function formatSegmentType(type) {
+	const index = Math.trunc(Number(type) || 0);
+	return TRACK_SEGMENT_TYPE_LABELS[index] || `type ${index}`;
+}
+
+function formatDebugNumber(value, digits = 2) {
+	return Number.isFinite(value) ? value.toFixed(digits) : "--";
+}
+
+function formatWheelSurface(values, index) {
+	if (!values) {
+		return "--";
+	}
+	const mainKind = values[SNAPSHOT.wheelSurfaceKind0 + index];
+	const mainStyle = values[SNAPSHOT.wheelSurfaceStyle0 + index];
+	const roughness = values[SNAPSHOT.wheelRoughness0 + index];
+	const otherContribution = values[SNAPSHOT.wheelOtherSurfaceContribution0 + index];
+	const otherKind = values[SNAPSHOT.wheelOtherSurfaceKind0 + index];
+	const otherStyle = values[SNAPSHOT.wheelOtherSurfaceStyle0 + index];
+	const parts = [
+		`${formatSurfaceKind(mainKind)} s${Math.trunc(Number(mainStyle) || 0)}`,
+		`r${formatDebugNumber(roughness, 3)}`,
+	];
+	if (Number.isFinite(otherContribution) && otherContribution > 0.01) {
+		parts.push(`${Math.round(otherContribution * 100)}% ${formatSurfaceKind(otherKind)} s${Math.trunc(Number(otherStyle) || 0)}`);
+	}
+	return parts.join(" / ");
+}
+
+function updateRuntimeTrackVisibility() {
+	if (!scene) {
+		return;
+	}
+	scene.setRuntimeTrackVisible(rendererDebugEnabled || !activeTrackVisualAvailable);
+}
+
+function updateDebugPanel(values = snapshot) {
+	if (!elements.debugPanel) {
+		return;
+	}
+	elements.debugPanel.hidden = !rendererDebugEnabled;
+	if (!rendererDebugEnabled) {
+		return;
+	}
+	if (!values) {
+		elements.debugSegment.textContent = "--";
+		elements.debugSegmentType.textContent = "--";
+		elements.debugOffset.textContent = "--";
+		for (const wheel of elements.debugWheels) {
+			if (wheel) {
+				wheel.textContent = "--";
+			}
+		}
+		return;
+	}
+	elements.debugSegment.textContent = `${Math.trunc(values[SNAPSHOT.trackSegmentId] || 0)}`;
+	elements.debugSegmentType.textContent = formatSegmentType(values[SNAPSHOT.trackSegmentType]);
+	elements.debugOffset.textContent = `${formatDebugNumber(values[SNAPSHOT.trackToMiddle])} m`;
+	for (let index = 0; index < elements.debugWheels.length; index += 1) {
+		const wheel = elements.debugWheels[index];
+		if (wheel) {
+			wheel.textContent = formatWheelSurface(values, index);
+		}
+	}
+}
+
+function setRendererDebugEnabled(enabled) {
+	rendererDebugEnabled = Boolean(enabled);
+	updateRuntimeTrackVisibility();
+	updateDebugPanel();
+	if (snapshot) {
+		readAndRender();
 	}
 }
 
@@ -1071,7 +1170,8 @@ async function applyCustomTrackFile(file) {
 		customTrackFile = file;
 		customTrackVisualName = file.name || "custom track";
 		scene.setTrackVisual(model);
-		scene.setRuntimeTrackVisible(false);
+		activeTrackVisualAvailable = true;
+		updateRuntimeTrackVisibility();
 		updateCustomTrackUi();
 		if (snapshot) {
 			readAndRender();
@@ -1112,6 +1212,7 @@ function readAndRender(deltaTime = 0) {
 		return;
 	}
 	hud.update(snapshot, snapshots, selectedCarIndex);
+	updateDebugPanel(snapshot);
 	if (cameras.isDebugFpsEnabled()) {
 		cameras.updateDebugFps(deltaTime, debugFpsKeys);
 	} else {
@@ -1210,7 +1311,8 @@ async function loadVisualAssets() {
 			scene.setTrackVisual(track ? track.scene : null);
 			hasTrackVisual = Boolean(track);
 		}
-		scene.setRuntimeTrackVisible(!hasTrackVisual);
+		activeTrackVisualAvailable = hasTrackVisual;
+		updateRuntimeTrackVisibility();
 		if (hasTrackVisual && runtime && runtime.active && !isTorcsRuntimeAssetPath(trackPath)) {
 			scene.alignTrackVisualToRuntimeTrack();
 		}
@@ -1241,7 +1343,8 @@ async function loadVisualAssets() {
 	} catch (error) {
 		console.warn("TORCS web renderer asset load failed", error);
 		scene.setTrackVisual(null);
-		scene.setRuntimeTrackVisible(true);
+		activeTrackVisualAvailable = false;
+		updateRuntimeTrackVisibility();
 		scene.setTrackAtmosphere(null, null);
 		carAssets = new Map();
 		scene.setCarVisualAssets(carAssets, null);
@@ -1486,6 +1589,7 @@ async function startSession() {
 	applyControls();
 	const trackSamples = runtime.readTrackSamples();
 	scene.setTrack(trackSamples);
+	updateRuntimeTrackVisibility();
 	cameras.setTrack(trackSamples);
 	hud.setTrack(trackSamples);
 	snapshots = runtime.readSnapshots();
@@ -1507,6 +1611,14 @@ function bindUi() {
 		cameras.setMode(elements.camera.value);
 	}
 	window.addEventListener("keydown", (event) => {
+		if (RENDERER_DEBUG_TOGGLE_CODES.has(event.code) && !isEditableTarget(event.target)) {
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			if (!event.repeat) {
+				setRendererDebugEnabled(!rendererDebugEnabled);
+			}
+			return;
+		}
 		if (DEBUG_FPS_TOGGLE_CODES.has(event.code) && !isEditableTarget(event.target)) {
 			event.preventDefault();
 			event.stopImmediatePropagation();
