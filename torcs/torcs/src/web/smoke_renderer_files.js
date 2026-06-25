@@ -2151,6 +2151,7 @@ const manifest = JSON.parse(read("web-assets/manifest.json"));
 const track = manifest.tracks["torcs:data/tracks/e-track-1/e-track-1.xml"];
 const car = manifest.cars["torcs:data/cars/models/kc-2000gt/kc-2000gt.xml"];
 const car7Trb1 = manifest.cars["torcs:data/cars/models/car7-trb1/car7-trb1.xml"];
+const focusWrc = manifest.cars["torcs:data/cars/models/pw-focuswrc/pw-focuswrc.xml"];
 if (!track || !car) {
 	fail("TORCS web renderer smoke test missing Phase 1 manifest entries");
 }
@@ -2161,6 +2162,11 @@ if (!manifest.sources || !manifest.sources.torcs || manifest.sources.torcs.prima
 }
 if (!car7Trb1 || !Array.isArray(car7Trb1.lods) || car7Trb1.lods.length === 0) {
 	fail("TORCS web renderer smoke test missing car7-trb1 remaster reference asset");
+}
+if (!focusWrc || !Array.isArray(focusWrc.lods) || !focusWrc.lods[0] || focusWrc.lods[0].wheels !== true) {
+	fail("TORCS web renderer smoke test found first car LOD without native runtime wheels", {
+		car: focusWrc,
+	});
 }
 if (car7Trb1.materialMask !== "cars/car7-trb1/car7-trb1-material-mask.png") {
 	fail("TORCS web renderer smoke test found missing car7-trb1 material mask metadata", {

@@ -588,10 +588,11 @@ def parse_car_metadata(source_root, car_xml):
 	for child in ranges:
 		if child.tag != "section":
 			continue
+		is_first_lod = child.attrib.get("name") == "1"
 		lods.append({
 			"threshold": attnum(child, "threshold"),
 			"model": attstr(child, "car"),
-			"wheels": attstr(child, "wheels") == "yes",
+			"wheels": is_first_lod or attstr(child, "wheels") == "yes",
 		})
 	lods.sort(key=lambda lod: lod["threshold"], reverse=True)
 	car_id = car_xml.parent.name if car_xml.parent != Path(".") else car_xml.stem

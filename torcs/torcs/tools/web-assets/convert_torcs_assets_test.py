@@ -704,6 +704,48 @@ kids 0
 		for material in glass_materials:
 			self.assertEqual(material["alphaMode"], "BLEND")
 
+	def test_first_lod_uses_runtime_wheels_when_xml_omits_wheels_flag(self):
+		car_xml = Path("data/cars/models/demo-car/demo-car.xml")
+		content = """<?xml version="1.0"?>
+<params name="demo-car">
+<section name="Graphic Objects">
+<attstr name="wheel texture" val="wheel.png"/>
+<section name="Ranges">
+<section name="1">
+<attnum name="threshold" val="30"/>
+<attstr name="car" val="demo-car.acc"/>
+</section>
+<section name="2">
+<attnum name="threshold" val="15"/>
+<attstr name="car" val="demo-car-lod1.acc"/>
+</section>
+<section name="3">
+<attnum name="threshold" val="0"/>
+<attstr name="car" val="demo-car-lod2.acc"/>
+<attstr name="wheels" val="yes"/>
+</section>
+</section>
+</section>
+</params>
+"""
+		with tempfile.TemporaryDirectory() as tmp_dir:
+			source_root = Path(tmp_dir) / "source"
+			car_dir = source_root / car_xml.parent
+			car_dir.mkdir(parents=True)
+			(car_dir / car_xml.name).write_text(content, encoding="utf-8")
+
+			metadata = convert.parse_car_metadata(source_root, car_xml)
+
+			self.assertEqual(
+				[(lod["model"], lod["wheels"]) for lod in metadata["lods"]],
+				[
+					("demo-car.acc", True),
+					("demo-car-lod1.acc", False),
+					("demo-car-lod2.acc", True),
+				],
+			)
+			self.assertTrue(metadata["hasSeparateWheels"])
+
 	def test_convert_car_copies_optional_material_mask(self):
 		car_xml = Path("data/cars/models/demo-car/demo-car.xml")
 		content = """<?xml version="1.0"?>
