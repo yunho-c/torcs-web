@@ -85,6 +85,12 @@ const TORCS_POS_MATRIX = new THREE.Matrix4();
 const CAR_ROTATION_MATRIX = new THREE.Matrix4();
 const TRACK_ALIGNMENT_RAYCASTER = new THREE.Raycaster();
 const TRACK_ALIGNMENT_RAY_DIRECTION = new THREE.Vector3(0, -1, 0);
+const TRACK_ALIGNMENT_ROAD_CLASSES = new Set(["road", "curb"]);
+const TRACK_ALIGNMENT_MAX_VISUAL_POINTS = 4096;
+const TRACK_ALIGNMENT_MIN_MATCHES = 24;
+const TRACK_ALIGNMENT_GRID_SIZE = 50;
+const TRACK_ALIGNMENT_GRID_SEARCH_RADIUS = 4;
+const TRACK_ALIGNMENT_MAX_MATCH_DISTANCE = 80;
 
 function torcsToThree(x, y, z = 0, target = new THREE.Vector3()) {
 	return target.set(x, z, -y);
@@ -470,6 +476,237 @@ function median(values) {
 	return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) * 0.5;
 }
 
+function isRoadLikeTrackMaterial(material) {
+	const userData = material && material.userData;
+	if (!userData || userData.torcsOverlayRole) {
+		return false;
+	}
+	const materialClass = userData.torcsMaterialClass;
+	return TRACK_ALIGNMENT_ROAD_CLASSES.has(materialClass);
+}
+
+function hasRoadLikeTrackMaterial(object) {
+	if (!object || !object.isMesh || !object.material || !object.geometry) {
+		return false;
+	}
+	const materials = Array.isArray(object.material) ? object.material : [object.material];
+	return materials.some(isRoadLikeTrackMaterial);
+}
+
+function countVisualRoadVertices(trackVisual) {
+	let count = 0;
+	trackVisual.traverse((object) => {
+		if (!hasRoadLikeTrackMaterial(object)) {
+			return;
+		}
+		const position = object.geometry && object.geometry.attributes && object.geometry.attributes.position;
+		if (position) {
+			count += position.count;
+		}
+	});
+	return count;
+}
+
+function computeVisualRoadBounds(trackVisual) {
+	if (!trackVisual) {
+		return null;
+	}
+	trackVisual.updateMatrixWorld(true);
+	const bounds = new THREE.Box3();
+	const point = new THREE.Vector3();
+	trackVisual.traverse((object) => {
+		if (!hasRoadLikeTrackMaterial(object)) {
+			return;
+		}
+		const position = object.geometry && object.geometry.attributes && object.geometry.attributes.position;
+		if (!position) {
+			return;
+		}
+		for (let i = 0; i < position.count; i += 1) {
+			point.fromBufferAttribute(position, i).applyMatrix4(object.matrixWorld);
+			bounds.expandByPoint(point);
+		}
+	});
+	return bounds.isEmpty() ? null : bounds;
+}
+
+function collectVisualRoadPoints(trackVisual, maxPoints = TRACK_ALIGNMENT_MAX_VISUAL_POINTS) {
+	if (!trackVisual) {
+		return [];
+	}
+	trackVisual.updateMatrixWorld(true);
+	const totalVertices = countVisualRoadVertices(trackVisual);
+	if (!totalVertices) {
+		return [];
+	}
+	const stride = Math.max(1, Math.ceil(totalVertices / maxPoints));
+	const point = new THREE.Vector3();
+	const points = [];
+	let seen = 0;
+	trackVisual.traverse((object) => {
+		if (!hasRoadLikeTrackMaterial(object)) {
+			return;
+		}
+		const position = object.geometry && object.geometry.attributes && object.geometry.attributes.position;
+		if (!position) {
+			return;
+		}
+		for (let i = 0; i < position.count; i += 1) {
+			if (seen % stride === 0) {
+				point.fromBufferAttribute(position, i).applyMatrix4(object.matrixWorld);
+				points.push({ x: point.x, z: point.z });
+			}
+			seen += 1;
+		}
+	});
+	return points;
+}
+
+function makeAlignmentGridKey(x, z, gridSize = TRACK_ALIGNMENT_GRID_SIZE) {
+	return `${Math.floor(x / gridSize)},${Math.floor(z / gridSize)}`;
+}
+
+function closestPointOnSegment2D(point, segment) {
+	const abx = segment.bx - segment.ax;
+	const abz = segment.bz - segment.az;
+	const lengthSq = abx * abx + abz * abz;
+	const t = lengthSq > 0
+		? THREE.MathUtils.clamp(((point.x - segment.ax) * abx + (point.z - segment.az) * abz) / lengthSq, 0, 1)
+		: 0;
+	return {
+		x: segment.ax + abx * t,
+		z: segment.az + abz * t,
+	};
+}
+
+function buildRuntimeRoadSectionIndex(trackSamples) {
+	const leftSamples = (trackSamples && trackSamples.left) || [];
+	const rightSamples = (trackSamples && trackSamples.right) || [];
+	const count = Math.min(leftSamples.length, rightSamples.length);
+	if (!count) {
+		return null;
+	}
+	const sections = [];
+	const widths = [];
+	const grid = new Map();
+	for (let i = 0; i < count; i += 1) {
+		const left = leftSamples[i];
+		const right = rightSamples[i];
+		if (!left || !right) {
+			continue;
+		}
+		const leftPoint = torcsToThree(left.x, left.y, left.z || 0);
+		const rightPoint = torcsToThree(right.x, right.y, right.z || 0);
+		if (!Number.isFinite(leftPoint.x) || !Number.isFinite(leftPoint.z) ||
+			!Number.isFinite(rightPoint.x) || !Number.isFinite(rightPoint.z)) {
+			continue;
+		}
+		const centerX = (leftPoint.x + rightPoint.x) * 0.5;
+		const centerZ = (leftPoint.z + rightPoint.z) * 0.5;
+		const section = {
+			ax: leftPoint.x,
+			az: leftPoint.z,
+			bx: rightPoint.x,
+			bz: rightPoint.z,
+			centerX,
+			centerZ,
+		};
+		sections.push(section);
+		widths.push(Math.hypot(rightPoint.x - leftPoint.x, rightPoint.z - leftPoint.z));
+		const key = makeAlignmentGridKey(centerX, centerZ);
+		if (!grid.has(key)) {
+			grid.set(key, []);
+		}
+		grid.get(key).push(section);
+	}
+	if (!sections.length) {
+		return null;
+	}
+	return {
+		grid,
+		medianWidth: median(widths) || 12,
+	};
+}
+
+function findClosestRuntimeRoadPoint(point, roadIndex) {
+	const baseCellX = Math.floor(point.x / TRACK_ALIGNMENT_GRID_SIZE);
+	const baseCellZ = Math.floor(point.z / TRACK_ALIGNMENT_GRID_SIZE);
+	let best = null;
+	let bestDistanceSq = Number.POSITIVE_INFINITY;
+	for (let radius = 0; radius <= TRACK_ALIGNMENT_GRID_SEARCH_RADIUS; radius += 1) {
+		for (let ix = baseCellX - radius; ix <= baseCellX + radius; ix += 1) {
+			for (let iz = baseCellZ - radius; iz <= baseCellZ + radius; iz += 1) {
+				if (radius > 0 &&
+					ix > baseCellX - radius && ix < baseCellX + radius &&
+					iz > baseCellZ - radius && iz < baseCellZ + radius) {
+					continue;
+				}
+				const candidates = roadIndex.grid.get(`${ix},${iz}`);
+				if (!candidates) {
+					continue;
+				}
+				for (const section of candidates) {
+					const closest = closestPointOnSegment2D(point, section);
+					const dx = closest.x - point.x;
+					const dz = closest.z - point.z;
+					const distanceSq = dx * dx + dz * dz;
+					if (distanceSq < bestDistanceSq) {
+						bestDistanceSq = distanceSq;
+						best = closest;
+					}
+				}
+			}
+		}
+	}
+	return best ? { ...best, distance: Math.sqrt(bestDistanceSq) } : null;
+}
+
+function estimateTrackVisualHorizontalOffset(trackVisual, trackSamples) {
+	const visualPoints = collectVisualRoadPoints(trackVisual);
+	const roadIndex = buildRuntimeRoadSectionIndex(trackSamples);
+	if (!visualPoints.length || !roadIndex) {
+		return null;
+	}
+	const maxDistance = Math.max(TRACK_ALIGNMENT_MAX_MATCH_DISTANCE, roadIndex.medianWidth * 4);
+	const offsets = [];
+	for (const visualPoint of visualPoints) {
+		const runtimePoint = findClosestRuntimeRoadPoint(visualPoint, roadIndex);
+		if (!runtimePoint || runtimePoint.distance > maxDistance) {
+			continue;
+		}
+		offsets.push({
+			x: runtimePoint.x - visualPoint.x,
+			z: runtimePoint.z - visualPoint.z,
+			distance: runtimePoint.distance,
+		});
+	}
+	if (offsets.length < TRACK_ALIGNMENT_MIN_MATCHES) {
+		return null;
+	}
+	const firstX = median(offsets.map((offset) => offset.x));
+	const firstZ = median(offsets.map((offset) => offset.z));
+	const residuals = offsets.map((offset) => Math.hypot(offset.x - firstX, offset.z - firstZ));
+	const residualMedian = median(residuals) || 0;
+	const residualLimit = Math.max(roadIndex.medianWidth * 0.75, residualMedian * 3, 2);
+	const filtered = offsets.filter((offset) => Math.hypot(offset.x - firstX, offset.z - firstZ) <= residualLimit);
+	if (filtered.length < TRACK_ALIGNMENT_MIN_MATCHES) {
+		return {
+			x: firstX,
+			z: firstZ,
+			samples: offsets.length,
+			filteredSamples: offsets.length,
+			medianDistance: median(offsets.map((offset) => offset.distance)) || 0,
+		};
+	}
+	return {
+		x: median(filtered.map((offset) => offset.x)),
+		z: median(filtered.map((offset) => offset.z)),
+		samples: offsets.length,
+		filteredSamples: filtered.length,
+		medianDistance: median(filtered.map((offset) => offset.distance)) || 0,
+	};
+}
+
 function estimateTrackVisualHeightOffset(trackVisual, trackSamples) {
 	if (!trackVisual || !trackSamples || !Array.isArray(trackSamples.center) || !trackSamples.center.length) {
 		return null;
@@ -572,6 +809,7 @@ export class TorcsScene {
 		this.trackSamples = null;
 		this.runtimeTrackVisible = true;
 		this.trackVisual = null;
+		this.trackAlignmentDiagnostics = null;
 		this.backgroundDome = null;
 		this.environmentMap = null;
 		this.skyboxMap = null;
@@ -980,6 +1218,7 @@ export class TorcsScene {
 		if (!this.trackVisual || !this.trackSamples) {
 			return;
 		}
+		this.trackAlignmentDiagnostics = null;
 		const visualBounds = new THREE.Box3().setFromObject(this.trackVisual);
 		if (visualBounds.isEmpty()) {
 			return;
@@ -994,13 +1233,35 @@ export class TorcsScene {
 		if (runtimeBounds.isEmpty()) {
 			return;
 		}
-		const visualCenter = visualBounds.getCenter(new THREE.Vector3());
+		const visualHorizontalBounds = computeVisualRoadBounds(this.trackVisual) || visualBounds;
+		const visualCenter = visualHorizontalBounds.getCenter(new THREE.Vector3());
 		const runtimeCenter = runtimeBounds.getCenter(new THREE.Vector3());
-		this.trackVisual.position.x += runtimeCenter.x - visualCenter.x;
-		this.trackVisual.position.z += runtimeCenter.z - visualCenter.z;
+		const coarseOffsetX = runtimeCenter.x - visualCenter.x;
+		const coarseOffsetZ = runtimeCenter.z - visualCenter.z;
+		this.trackVisual.position.x += coarseOffsetX;
+		this.trackVisual.position.z += coarseOffsetZ;
+		const horizontalOffset = estimateTrackVisualHorizontalOffset(this.trackVisual, this.trackSamples);
+		if (horizontalOffset && Number.isFinite(horizontalOffset.x) && Number.isFinite(horizontalOffset.z)) {
+			this.trackVisual.position.x += horizontalOffset.x;
+			this.trackVisual.position.z += horizontalOffset.z;
+		}
 		const heightOffset = estimateTrackVisualHeightOffset(this.trackVisual, this.trackSamples);
 		if (Number.isFinite(heightOffset)) {
 			this.trackVisual.position.y += heightOffset;
+		}
+		this.trackAlignmentDiagnostics = {
+			coarseOffsetX,
+			coarseOffsetZ,
+			horizontalOffsetX: horizontalOffset ? horizontalOffset.x : null,
+			horizontalOffsetZ: horizontalOffset ? horizontalOffset.z : null,
+			horizontalSamples: horizontalOffset ? horizontalOffset.samples : 0,
+			horizontalFilteredSamples: horizontalOffset ? horizontalOffset.filteredSamples : 0,
+			horizontalMedianDistance: horizontalOffset ? horizontalOffset.medianDistance : null,
+			horizontalBoundsSource: visualHorizontalBounds === visualBounds ? "full" : "road",
+			heightOffset: Number.isFinite(heightOffset) ? heightOffset : null,
+		};
+		if (horizontalOffset) {
+			console.info("TORCS web renderer aligned non-TORCS track visual to runtime road surface", this.trackAlignmentDiagnostics);
 		}
 	}
 

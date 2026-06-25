@@ -302,6 +302,10 @@ if(EMSCRIPTEN)
 			"${TORCS_ROOT}/src/web/torcs_web_showroom.html"
 			"$<TARGET_FILE_DIR:torcs_web_probe>/torcs_web_showroom.html"
 		COMMAND
+			"${CMAKE_COMMAND}" -E copy_if_different
+			"${TORCS_ROOT}/src/web/analyze_track_alignment.js"
+			"$<TARGET_FILE_DIR:torcs_web_probe>/analyze_track_alignment.js"
+		COMMAND
 			"${CMAKE_COMMAND}" -E copy_directory
 			"${TORCS_ROOT}/src/web/renderer"
 			"$<TARGET_FILE_DIR:torcs_web_probe>/renderer"
@@ -320,6 +324,7 @@ if(EMSCRIPTEN)
 		DEPENDS torcs_web_probe
 			"${TORCS_ROOT}/src/web/torcs_web_renderer.html"
 			"${TORCS_ROOT}/src/web/torcs_web_showroom.html"
+			"${TORCS_ROOT}/src/web/analyze_track_alignment.js"
 			"${TORCS_ROOT}/src/web/local-showroom-assets/README.md"
 			"${TORCS_ROOT}/data/web/hdri/120_hdrmaps_com_free_2K.exr"
 			"${TORCS_ROOT}/data/web/skybox/arid2_bk.jpg"

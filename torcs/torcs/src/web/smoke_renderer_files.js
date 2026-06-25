@@ -1391,6 +1391,7 @@ const files = [
 	"renderer/postprocess.js",
 	"renderer/runtime.js",
 	"renderer/scene.js",
+	"analyze_track_alignment.js",
 	"renderer/effects.js",
 	"renderer/audio.js",
 	"renderer/haptics.js",
@@ -1944,6 +1945,14 @@ requireText(byPath["renderer/scene.js"], "new THREE.BoxGeometry", "simulated car
 requireText(byPath["renderer/scene.js"], "makeRoadMesh(track)", "sampled track road mesh");
 requireText(byPath["renderer/scene.js"], "const RUNTIME_TRACK_OVERLAY_Y = 0.01", "sampled track overlay height offset");
 requireText(byPath["renderer/scene.js"], "const RUNTIME_TRACK_OVERLAY_OPACITY = 0.8", "sampled track overlay opacity");
+requireText(byPath["renderer/scene.js"], "estimateTrackVisualHorizontalOffset", "road-surface track horizontal alignment");
+requireText(byPath["renderer/scene.js"], "computeVisualRoadBounds(this.trackVisual) || visualBounds", "road-bounds track horizontal alignment");
+requireText(byPath["renderer/scene.js"], "TRACK_ALIGNMENT_ROAD_CLASSES = new Set([\"road\", \"curb\"])", "road-like visual material alignment filter");
+requireText(byPath["renderer/scene.js"], "userData.torcsOverlayRole", "alignment ignores generated track overlays");
+requireText(byPath["renderer/scene.js"], "this.trackAlignmentDiagnostics", "track alignment diagnostics");
+requireText(byPath["analyze_track_alignment.js"], "searchOffsets(", "track alignment analyzer translation search");
+requireText(byPath["analyze_track_alignment.js"], "torcs_web_runtime_get_track_sample_x", "track alignment analyzer runtime sample extraction");
+requireText(byPath["analyze_track_alignment.js"], "torcsMaterialClass", "track alignment analyzer visual road extraction");
 requireText(byPath["renderer/scene.js"], "setTrackVisual(model)", "converted track mesh hook");
 requireText(byPath["renderer/scene.js"], "setTrackAtmosphere(entry, backgroundTexture = null)", "track atmosphere hook");
 requireText(byPath["renderer/scene.js"], "setRenderProfile(profile)", "scene render profile setter");
